@@ -10,12 +10,13 @@ var TZ = 'Europe/Amsterdam';
 /**
  * Identity function — formula passes through unchanged.
  *
- * Apps Script setFormula() handles locale-conversion automatically:
- * input must be in US-notation ("." decimal, "," separator) and rendering
- * uses the spreadsheet's locale (NL → "," decimal, ";" separator).
+ * Empirisch: Apps Script setFormula() converteert separators NIET
+ * automatisch voor NL-locale. Formules moeten als NL-stijl strings
+ * worden meegegeven: '.' als decimaal, ';' als argument-separator.
+ * Voorbeeld: '=ROUND(A1*0.75;0)' werkt correct in NL-Sheets.
  *
- * @deprecated Behoud van call-sites tot een latere refactor — de helper
- * doet effectief niets meer, maar voorkomt dat we nu overal moeten editen.
+ * Deze helper blijft bestaan als legacy-stub om call-sites niet te
+ * hoeven aanpassen, maar doet effectief niets meer.
  */
 function dutchFormula(formula) {
   return formula;

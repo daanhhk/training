@@ -3,8 +3,7 @@
  *
  * Toont power-zones (Coggan 7-zones) en HR-zones (Friel) als
  * auto-berekende tabellen met formules die naar Instellingen verwijzen.
- * Formules zijn in pure US-notatie ('.' decimaal, ',' separator);
- * Apps Script setFormula() converteert automatisch naar NL bij render.
+ * Formules in NL-Sheets stijl: '.' als decimaal, ';' als argument-separator.
  */
 
 var ZONES_SHEET = 'Zones';
@@ -44,8 +43,8 @@ function buildZones(ss) {
     sh.getRange(r, 2).setValue(z[1]);
     sh.getRange(r, 3).setValue(z[2] + '%');
     sh.getRange(r, 4).setValue(z[3] + '%');
-    sh.getRange(r, 5).setFormula(dutchFormula('=ROUND(' + ftpRef + '*' + (z[2] / 100) + ',0)'));
-    sh.getRange(r, 6).setFormula(dutchFormula('=ROUND(' + ftpRef + '*' + (z[3] / 100) + ',0)'));
+    sh.getRange(r, 5).setFormula(dutchFormula('=ROUND(' + ftpRef + '*' + (z[2] / 100) + ';0)'));
+    sh.getRange(r, 6).setFormula(dutchFormula('=ROUND(' + ftpRef + '*' + (z[3] / 100) + ';0)'));
     sh.getRange(r, 1, 1, 6).setBackground(z[4]);
   });
 
@@ -76,8 +75,8 @@ function buildZones(ss) {
     sh.getRange(r, 2).setValue(z[1]);
     sh.getRange(r, 3).setValue(z[2] + '%');
     sh.getRange(r, 4).setValue(z[3] + '%');
-    sh.getRange(r, 5).setFormula(dutchFormula('=ROUND(' + lthrRef + '*' + (z[2] / 100) + ',0)'));
-    sh.getRange(r, 6).setFormula(dutchFormula('=ROUND(' + lthrRef + '*' + (z[3] / 100) + ',0)'));
+    sh.getRange(r, 5).setFormula(dutchFormula('=ROUND(' + lthrRef + '*' + (z[2] / 100) + ';0)'));
+    sh.getRange(r, 6).setFormula(dutchFormula('=ROUND(' + lthrRef + '*' + (z[3] / 100) + ';0)'));
     sh.getRange(r, 1, 1, 6).setBackground(z[4]);
   });
 
