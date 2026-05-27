@@ -11,6 +11,10 @@
 
 var INTERVALS_BASE_URL = 'https://intervals.icu/api/v1';
 
+/** Prefix voor workout/event-namen — identifier voor onze gegenereerde
+ *  workouts (gebruikt om bij re-push idempotent te kunnen verwijderen). */
+var COACH_NAME_PREFIX = '🚴 Coach: ';
+
 /**
  * Private helper — bouwt URL, voegt auth toe, parsed JSON, vertaalt
  * HTTP-fouten naar leesbare exceptions.
@@ -173,11 +177,13 @@ function pushWorkout(workout, dateISO, type) {
   }
   type = type || 'Ride';
 
+  var prefixedName = COACH_NAME_PREFIX + workout.naam;
+
   var payload = {
     category: 'WORKOUT',
     start_date_local: dateISO + 'T00:00:00',
     type: type,
-    name: workout.naam,
+    name: prefixedName,
     description: buildWorkoutDescription_(workout),
     targets: ['POWER']
   };
