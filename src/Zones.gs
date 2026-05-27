@@ -1,68 +1,92 @@
 /**
  * Zones.gs — Tab "Zones".
  *
- * Toont power-zones (Coggan 7-zones) en HR-zones (Friel) als
- * auto-berekende tabellen met formules die naar Instellingen verwijzen.
- * Formules in pure NL-Sheets stijl: ',' decimaal + ';' separator.
+ * Twee tabellen + één referentie-rij:
+ *   1) Power zones (7-zone systeem, intervals.icu-compatibel).
+ *      API levert boundaries als percentages van FTP, watts berekend via × FTP.
+ *   2) Sweet Spot referentie-rij (apart, niet in 7-zone systeem).
+ *      Uit icu_sweet_spot_min/max — alleen na sync zichtbaar.
+ *   3) HR zones. LET OP: intervals.icu levert hr_zones als RAW BPM
+ *      (bv. [143, 158, ...]), niet als percentages. BPM-kolommen tonen
+ *      array-waardes; %-kolommen berekenen bpm/lthr×100 via formule.
  *
- * Indien intervals.icu zones gesynct zijn (DocumentProperty
- * 'api_power_zones' / 'api_hr_zones' bevat een JSON array van
- * boundary-percentages), gebruikt deze module die boundaries i.p.v.
- * de hardcoded defaults.
+ * Top-zone bovengrens >= 500% → render als "∞" (anders 999% × FTP = 2747W).
  */
 
 var ZONES_SHEET = 'Zones';
 
-var DEFAULT_POWER_ZONES = [
-  ['Z1',  'Active Recovery', 0,   55,  '#cbd5e1'],
-  ['Z2',  'Endurance',       56,  75,  '#93c5fd'],
-  ['Z3',  'Tempo',           76,  87,  '#86efac'],
-  ['Z4',  'Sweet Spot',      88,  94,  '#fde68a'],
-  ['Z4+', 'Threshold',       95,  105, '#fdba74'],
-  ['Z5',  'VO2max',          106, 120, '#fca5a5'],
-  ['Z6',  'Anaerobic',       121, 150, '#f472b6'],
-  ['Z7',  'Neuromuscular',   151, 250, '#a78bfa']
-];
-
-var DEFAULT_HR_ZONES = [
-  ['Z1',  'Recovery',  0,   84,  '#cbd5e1'],
-  ['Z2',  'Aerobic',   85,  89,  '#93c5fd'],
-  ['Z3',  'Tempo',     90,  94,  '#86efac'],
-  ['Z4',  'Threshold', 95,  99,  '#fde68a'],
-  ['Z5a', 'VO2 onder', 100, 102, '#fdba74'],
-  ['Z5b', 'VO2 boven', 103, 106, '#fca5a5'],
-  ['Z5c', 'Anaerobic', 107, 130, '#f472b6']
-];
-
 var POWER_ZONE_NAMES = [
-  ['Z1', 'Active Recovery'], ['Z2', 'Endurance'], ['Z3', 'Tempo'],
-  ['Z4', 'Sweet Spot'], ['Z4+', 'Threshold'], ['Z5', 'VO2max'],
-  ['Z6', 'Anaerobic'], ['Z7', 'Neuromuscular'], ['Z8', 'Sprint']
+  ['Z1', 'Active Recovery'],
+  ['Z2', 'Endurance'],
+  ['Z3', 'Tempo'],
+  ['Z4', 'Threshold'],
+  ['Z5', 'VO2max'],
+  ['Z6', 'Anaerobic'],
+  ['Z7', 'Neuromuscular']
 ];
-var POWER_ZONE_COLORS = ['#cbd5e1', '#93c5fd', '#86efac', '#fde68a', '#fdba74',
-                         '#fca5a5', '#f472b6', '#a78bfa', '#7c3aed'];
+var POWER_ZONE_COLORS = ['#cbd5e1', '#93c5fd', '#86efac', '#fde68a', '#fca5a5', '#f472b6', '#a78bfa'];
 
 var HR_ZONE_NAMES = [
-  ['Z1', 'Recovery'], ['Z2', 'Aerobic'], ['Z3', 'Tempo'],
-  ['Z4', 'Threshold'], ['Z5a', 'VO2 onder'], ['Z5b', 'VO2 boven'],
+  ['Z1',  'Recovery'],
+  ['Z2',  'Aerobic'],
+  ['Z3',  'Tempo'],
+  ['Z4',  'Threshold'],
+  ['Z5a', 'VO2 onder'],
+  ['Z5b', 'VO2 boven'],
   ['Z5c', 'Anaerobic']
 ];
-var HR_ZONE_COLORS = ['#cbd5e1', '#93c5fd', '#86efac', '#fde68a',
-                      '#fdba74', '#fca5a5', '#f472b6'];
+var HR_ZONE_COLORS = ['#cbd5e1', '#93c5fd', '#86efac', '#fde68a', '#fdba74', '#fca5a5', '#f472b6'];
 
-/**
- * Converteert een array van boundary-percentages (intervals.icu format)
- * naar het [naam, display, min%, max%, kleur] formaat dat buildZones gebruikt.
- * boundaries = [55, 75, 90, 105, 120, 150, 200] → 7 zones gesplitst.
- */
-function zonesFromBoundaries(boundaries, names, colors) {
-  if (!Array.isArray(boundaries) || !boundaries.length) return null;
+var DEFAULT_POWER_ZONES = [
+  ['Z1', 'Active Recovery', 0,   55,  '#cbd5e1'],
+  ['Z2', 'Endurance',       55,  75,  '#93c5fd'],
+  ['Z3', 'Tempo',           75,  87,  '#86efac'],
+  ['Z4', 'Threshold',       87,  105, '#fde68a'],
+  ['Z5', 'VO2max',          105, 120, '#fca5a5'],
+  ['Z6', 'Anaerobic',       120, 150, '#f472b6'],
+  ['Z7', 'Neuromuscular',   150, 999, '#a78bfa']
+];
+
+var DEFAULT_HR_PCT_ZONES = [
+  ['Z1',  'Recovery',  0,   84,  '#cbd5e1'],
+  ['Z2',  'Aerobic',   84,  89,  '#93c5fd'],
+  ['Z3',  'Tempo',     89,  94,  '#86efac'],
+  ['Z4',  'Threshold', 94,  99,  '#fde68a'],
+  ['Z5a', 'VO2 onder', 99,  102, '#fdba74'],
+  ['Z5b', 'VO2 boven', 102, 106, '#fca5a5'],
+  ['Z5c', 'Anaerobic', 106, 130, '#f472b6']
+];
+
+var INF_PCT = 500; // >= 500% → render als ∞
+
+function powerZonesFromPct_(pctBoundaries) {
   var zones = [];
   var prev = 0;
-  for (var i = 0; i < boundaries.length; i++) {
-    var name = names[i] || ['Z' + (i + 1), ''];
-    zones.push([name[0], name[1] || '', prev, boundaries[i], colors[i] || '#e5e7eb']);
-    prev = boundaries[i];
+  for (var i = 0; i < pctBoundaries.length && i < POWER_ZONE_NAMES.length; i++) {
+    zones.push([
+      POWER_ZONE_NAMES[i][0],
+      POWER_ZONE_NAMES[i][1],
+      prev,
+      pctBoundaries[i],
+      POWER_ZONE_COLORS[i] || '#e5e7eb'
+    ]);
+    prev = pctBoundaries[i];
+  }
+  return zones;
+}
+
+function hrZonesFromBpm_(bpmBoundaries) {
+  var zones = [];
+  var prev = 0;
+  for (var i = 0; i < bpmBoundaries.length && i < HR_ZONE_NAMES.length; i++) {
+    zones.push([
+      HR_ZONE_NAMES[i][0],
+      HR_ZONE_NAMES[i][1],
+      prev,
+      bpmBoundaries[i],
+      HR_ZONE_COLORS[i] || '#e5e7eb'
+    ]);
+    prev = bpmBoundaries[i];
   }
   return zones;
 }
@@ -73,11 +97,10 @@ function loadApiZones_(propKey) {
   try {
     var parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || !parsed.length) return null;
-    // Filter: alleen numerieke entries (intervals.icu kan ook objecten geven)
     if (typeof parsed[0] === 'object') {
-      // Object-vorm — pak 'max' percentage
-      parsed = parsed.map(function (z) { return z.max || z.upper || z.maxPct || null; })
-                     .filter(function (v) { return v != null; });
+      parsed = parsed.map(function (z) {
+        return z.max ?? z.upper ?? z.maxPct ?? z.upperPct ?? z.high ?? null;
+      }).filter(function (v) { return v != null; });
     }
     return parsed.length ? parsed : null;
   } catch (e) {
@@ -93,13 +116,11 @@ function buildZones(ss) {
   var lthrRef  = SETTINGS_SHEET + '!B' + SETTINGS_FIELDS.LTHR.row;
   var hrMaxRef = SETTINGS_SHEET + '!B' + SETTINGS_FIELDS.HR_MAX.row;
 
-  // Resolve zones: API-gesynct heeft voorrang, fallback op defaults.
   var apiPower = loadApiZones_('api_power_zones');
   var apiHr    = loadApiZones_('api_hr_zones');
-  var powerZones = apiPower ? zonesFromBoundaries(apiPower, POWER_ZONE_NAMES, POWER_ZONE_COLORS) : DEFAULT_POWER_ZONES;
-  var hrZones    = apiHr    ? zonesFromBoundaries(apiHr,    HR_ZONE_NAMES,    HR_ZONE_COLORS)    : DEFAULT_HR_ZONES;
+  var powerZones = apiPower ? powerZonesFromPct_(apiPower) : DEFAULT_POWER_ZONES;
 
-  // ── POWER ZONES ──
+  // ── POWER ZONES ────────────────────────────────────────
   sh.getRange(1, 1, 1, 6).merge()
     .setValue('⚡  Power zones' + (apiPower ? ' (intervals.icu)' : '') + ' — % van FTP')
     .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff')
@@ -111,19 +132,45 @@ function buildZones(ss) {
 
   powerZones.forEach(function (z, i) {
     var r = 3 + i;
+    var min = z[2], max = z[3];
+    var isInf = max >= INF_PCT;
+
     sh.getRange(r, 1).setValue(z[0]).setFontWeight('bold');
     sh.getRange(r, 2).setValue(z[1]);
-    sh.getRange(r, 3).setValue(z[2] + '%');
-    sh.getRange(r, 4).setValue(z[3] + '%');
-    sh.getRange(r, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(z[2] / 100) + ';0)');
-    sh.getRange(r, 6).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(z[3] / 100) + ';0)');
+    sh.getRange(r, 3).setValue(min + '%');
+    sh.getRange(r, 4).setValue(isInf ? '∞' : (max + '%'));
+    sh.getRange(r, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(min / 100) + ';0)');
+    if (isInf) {
+      sh.getRange(r, 6).setValue('∞').setHorizontalAlignment('center');
+    } else {
+      sh.getRange(r, 6).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(max / 100) + ';0)');
+    }
     sh.getRange(r, 1, 1, 6).setBackground(z[4]);
   });
 
-  // ── HR ZONES ──
-  var hrStart = 3 + powerZones.length + 2;
+  // ── SWEET SPOT REFERENTIE ROW ───────────────────────────
+  var ssMinRaw = getDocProp('sweet_spot_min', '');
+  var ssMaxRaw = getDocProp('sweet_spot_max', '');
+  var ssMin = ssMinRaw === '' ? null : Number(ssMinRaw);
+  var ssMax = ssMaxRaw === '' ? null : Number(ssMaxRaw);
+  var nextRow = 3 + powerZones.length + 1;
+  if (ssMin != null && !isNaN(ssMin) && ssMax != null && !isNaN(ssMax)) {
+    sh.getRange(nextRow, 1).setValue('📍').setHorizontalAlignment('center');
+    sh.getRange(nextRow, 2).setValue('Sweet Spot').setFontWeight('bold');
+    sh.getRange(nextRow, 3).setValue(ssMin + '%');
+    sh.getRange(nextRow, 4).setValue(ssMax + '%');
+    sh.getRange(nextRow, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMin / 100) + ';0)');
+    sh.getRange(nextRow, 6).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMax / 100) + ';0)');
+    sh.getRange(nextRow, 1, 1, 6).setBackground('#fef3c7')
+      .setBorder(true, true, true, true, false, false, '#92400e',
+                 SpreadsheetApp.BorderStyle.SOLID);
+    nextRow += 1;
+  }
+
+  // ── HR ZONES ───────────────────────────────────────────
+  var hrStart = nextRow + 1;
   sh.getRange(hrStart, 1, 1, 6).merge()
-    .setValue('❤️  HR zones' + (apiHr ? ' (intervals.icu)' : '') + ' — % van LTHR')
+    .setValue('❤️  HR zones' + (apiHr ? ' (intervals.icu)' : '') + ' — BPM en % van LTHR')
     .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff')
     .setHorizontalAlignment('left');
 
@@ -131,19 +178,38 @@ function buildZones(ss) {
     ['Zone', 'Naam', '% min', '% max', 'BPM min', 'BPM max']
   ]).setFontWeight('bold').setBackground('#e5e7eb');
 
-  hrZones.forEach(function (z, i) {
-    var r = hrStart + 2 + i;
-    sh.getRange(r, 1).setValue(z[0]).setFontWeight('bold');
-    sh.getRange(r, 2).setValue(z[1]);
-    sh.getRange(r, 3).setValue(z[2] + '%');
-    sh.getRange(r, 4).setValue(z[3] + '%');
-    sh.getRange(r, 5).setFormula('=ROUND(' + lthrRef + '*' + nlNumber(z[2] / 100) + ';0)');
-    sh.getRange(r, 6).setFormula('=ROUND(' + lthrRef + '*' + nlNumber(z[3] / 100) + ';0)');
-    sh.getRange(r, 1, 1, 6).setBackground(z[4]);
-  });
+  if (apiHr) {
+    // API levert RAW BPM-boundaries — BPM-kolommen direct, %-kolommen via formule
+    var hrZones = hrZonesFromBpm_(apiHr);
+    hrZones.forEach(function (z, i) {
+      var r = hrStart + 2 + i;
+      var bpmMin = z[2], bpmMax = z[3];
+
+      sh.getRange(r, 1).setValue(z[0]).setFontWeight('bold');
+      sh.getRange(r, 2).setValue(z[1]);
+      sh.getRange(r, 3).setFormula('=ROUND(' + nlNumber(bpmMin) + '/' + lthrRef + '*100;0) & "%"');
+      sh.getRange(r, 4).setFormula('=ROUND(' + nlNumber(bpmMax) + '/' + lthrRef + '*100;0) & "%"');
+      sh.getRange(r, 5).setValue(bpmMin);
+      sh.getRange(r, 6).setValue(bpmMax);
+      sh.getRange(r, 1, 1, 6).setBackground(z[4]);
+    });
+  } else {
+    // Default: percentages drive BPM-formules
+    DEFAULT_HR_PCT_ZONES.forEach(function (z, i) {
+      var r = hrStart + 2 + i;
+      sh.getRange(r, 1).setValue(z[0]).setFontWeight('bold');
+      sh.getRange(r, 2).setValue(z[1]);
+      sh.getRange(r, 3).setValue(z[2] + '%');
+      sh.getRange(r, 4).setValue(z[3] + '%');
+      sh.getRange(r, 5).setFormula('=ROUND(' + lthrRef + '*' + nlNumber(z[2] / 100) + ';0)');
+      sh.getRange(r, 6).setFormula('=ROUND(' + lthrRef + '*' + nlNumber(z[3] / 100) + ';0)');
+      sh.getRange(r, 1, 1, 6).setBackground(z[4]);
+    });
+  }
 
   // Referenties onderaan
-  var refRow = hrStart + 2 + hrZones.length + 2;
+  var hrZonesCount = apiHr ? Math.min(apiHr.length, HR_ZONE_NAMES.length) : DEFAULT_HR_PCT_ZONES.length;
+  var refRow = hrStart + 2 + hrZonesCount + 2;
   sh.getRange(refRow, 1).setValue('Referentie HR max:').setFontWeight('bold');
   sh.getRange(refRow, 2).setFormula('=' + hrMaxRef);
   sh.getRange(refRow, 3).setValue('bpm').setFontColor('#6b7280');
