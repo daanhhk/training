@@ -193,10 +193,15 @@ function pushWorkout(workout, dateISO, type) {
     console.log('pushWorkout: description-only (kon structuur niet mappen)');
   }
 
-  return intervalsRequest_('/athlete/{id}/events', {
+  var response = intervalsRequest_('/athlete/{id}/events', {
     method: 'post',
     payload: payload
   });
+
+  Logger.log('POST /events RAW RESPONSE:');
+  Logger.log(JSON.stringify(response, null, 2));
+
+  return response;
 }
 
 /**
