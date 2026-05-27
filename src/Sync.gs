@@ -43,6 +43,7 @@ function syncAll(e) {
  */
 function syncAthleteZones() {
   var info = getAthleteInfo();
+  var raw  = info.raw || {};
   var ss = SpreadsheetApp.getActive();
 
   if (info.ftp)    setDocProp('ftp',     info.ftp);
@@ -50,8 +51,12 @@ function syncAthleteZones() {
   if (info.maxHr)  setDocProp('hr_max',  info.maxHr);
   if (info.restHr) setDocProp('hr_rest', info.restHr);
 
-  if (info.power_zones) setDocProp('api_power_zones', JSON.stringify(info.power_zones));
-  if (info.hr_zones)    setDocProp('api_hr_zones',    JSON.stringify(info.hr_zones));
+  // Robuuste zone-resolutie: probeer meerdere structuren in de athlete-respons
+  var powerBoundaries = resolvePowerZones_(raw);
+  var hrBoundaries    = resolveHrZones_(raw);
+
+  if (powerBoundaries) setDocProp('api_power_zones', JSON.stringify(powerBoundaries));
+  if (hrBoundaries)    setDocProp('api_hr_zones',    JSON.stringify(hrBoundaries));
 
   // Sync cellen in Instellingen-tab
   var sh = ss.getSheetByName(SETTINGS_SHEET);
@@ -62,8 +67,8 @@ function syncAthleteZones() {
     if (info.restHr) sh.getRange(SETTINGS_FIELDS.HR_RUST.row, 2).setValue(info.restHr);
   }
 
-  // Herbouw Zones-tab met API zones (als we ze hebben)
-  if (info.power_zones || info.hr_zones) {
+  // Herbouw Zones-tab als we (nieuwe) zones hebben
+  if (powerBoundaries || hrBoundaries) {
     buildZones(ss);
   }
 }
@@ -86,19 +91,27 @@ function syncActivities() {
   });
 
   var rows = data.map(function (a) {
+    var avg  = powerAvg_(a);
+    var norm = powerNorm_(a);
+    var ifv  = a.icu_intensity ?? a.intensity ?? null;
+    var tss  = a.icu_training_load ?? a.training_load ?? a.tss ?? null;
+    var pi   = a.polarization_index ?? a.icu_polarization_index ?? null;
+    var ahr  = a.average_heartrate ?? a.avg_hr ?? null;
+    var mhr  = a.max_heartrate ?? a.max_hr ?? null;
+
     return [
       a.start_date_local ? new Date(a.start_date_local) : '',
       a.type || '',
       a.name || '',
       a.moving_time != null ? Math.round(a.moving_time / 60) : '',
-      a.distance     != null ? Math.round(a.distance / 100) / 10 : '',
-      a.average_watts          != null ? a.average_watts          : '',
-      a.weighted_average_watts != null ? a.weighted_average_watts : '',
-      a.icu_intensity          != null ? Math.round(a.icu_intensity * 100) / 100 : '',
-      a.icu_training_load      != null ? Math.round(a.icu_training_load) : '',
-      a.average_heartrate      != null ? a.average_heartrate      : '',
-      a.max_heartrate          != null ? a.max_heartrate          : '',
-      a.polarization_index     != null ? Math.round(a.polarization_index * 100) / 100 : ''
+      a.distance    != null ? Math.round(a.distance / 100) / 10 : '',
+      avg  != null ? avg  : '',
+      norm != null ? norm : '',
+      ifv  != null ? Math.round(ifv  * 100) / 100 : '',
+      tss  != null ? Math.round(tss) : '',
+      ahr  != null ? ahr  : '',
+      mhr  != null ? mhr  : '',
+      pi   != null ? Math.round(pi   * 100) / 100 : ''
     ];
   });
 
@@ -159,6 +172,107 @@ function syncWellness() {
 
 function blankIfNull_(v) {
   return (v == null || v === '') ? '' : v;
+}
+
+// ── Activity field fallback helpers ──────────────────────────────
+
+/**
+ * Gemiddeld vermogen — probeert meerdere veldnaam-varianten.
+ * intervals.icu gebruikt soms icu_average_watts (eigen berekening),
+ * soms average_watts (Strava-pulled), soms avg_power (legacy).
+ */
+function powerAvg_(act) {
+  return act.icu_average_watts ?? act.average_watts ?? act.avg_power ?? null;
+}
+
+/**
+ * Normalized Power — idem, meerdere mogelijke veldnamen.
+ */
+function powerNorm_(act) {
+  return act.icu_weighted_avg_watts ?? act.weighted_average_watts
+      ?? act.normalized_power ?? act.icu_normalized_power ?? null;
+}
+
+// ── Zone resolver ────────────────────────────────────────────────
+
+/**
+ * Normaliseert een zone-array naar een boundary-array (numbers).
+ * - [55, 75, 90, ...] → return as-is
+ * - [{min,max,name}, ...] → extract .max (of .upper) per zone
+ */
+function normalizeZones_(zones) {
+  if (!Array.isArray(zones) || !zones.length) return null;
+  if (typeof zones[0] === 'number') return zones;
+  if (typeof zones[0] === 'object') {
+    var mapped = zones.map(function (z) {
+      return z.max ?? z.upper ?? z.maxPct ?? z.upperPct ?? z.high ?? null;
+    }).filter(function (v) { return v != null; });
+    return mapped.length ? mapped : null;
+  }
+  return null;
+}
+
+/**
+ * Probeert in volgorde meerdere mogelijke locaties voor power_zones in
+ * het athlete-object. Logt welke variant getroffen werd; bij geen match
+ * logt het de top-level keys zodat we kunnen zien wat we missen.
+ */
+function resolvePowerZones_(athlete) {
+  return resolveZones_(athlete, 'power_zones');
+}
+
+function resolveHrZones_(athlete) {
+  return resolveZones_(athlete, 'hr_zones');
+}
+
+function resolveZones_(athlete, kind) {
+  if (!athlete) return null;
+  var icuKey = 'icu_' + kind;
+
+  var candidates = [];
+  // Variant a/b: direct op athlete (icu_ prefix of plain)
+  candidates.push({ source: icuKey, value: athlete[icuKey] });
+  candidates.push({ source: kind,   value: athlete[kind] });
+  // Variant c: bio-nested
+  if (athlete.bio) {
+    candidates.push({ source: 'bio.' + icuKey, value: athlete.bio[icuKey] });
+    candidates.push({ source: 'bio.' + kind,   value: athlete.bio[kind] });
+  }
+  // Variant d: sportSettings array — pak de entry waar types 'Ride' bevat
+  if (Array.isArray(athlete.sportSettings)) {
+    for (var i = 0; i < athlete.sportSettings.length; i++) {
+      var s = athlete.sportSettings[i];
+      var types = s && s.types;
+      var isRide = Array.isArray(types) && types.indexOf('Ride') >= 0;
+      if (isRide) {
+        candidates.push({ source: 'sportSettings[Ride].' + icuKey, value: s[icuKey] });
+        candidates.push({ source: 'sportSettings[Ride].' + kind,   value: s[kind] });
+        break;
+      }
+    }
+  }
+
+  for (var j = 0; j < candidates.length; j++) {
+    var normalized = normalizeZones_(candidates[j].value);
+    if (normalized) {
+      console.log(kind + ' bron: ' + candidates[j].source + ' → ' + JSON.stringify(normalized));
+      return normalized;
+    }
+  }
+
+  console.warn('Geen ' + kind + ' gevonden. Athlete keys: ' +
+               Object.keys(athlete).sort().join(', '));
+  if (athlete.bio) {
+    console.warn('  bio keys: ' + Object.keys(athlete.bio).sort().join(', '));
+  }
+  if (Array.isArray(athlete.sportSettings)) {
+    console.warn('  sportSettings: ' + athlete.sportSettings.length + ' entries');
+    athlete.sportSettings.forEach(function (s, i) {
+      console.warn('    [' + i + '] types=' + JSON.stringify(s && s.types) +
+                   ' keys=' + (s ? Object.keys(s).sort().join(',') : ''));
+    });
+  }
+  return null;
 }
 
 // ── Trigger management ───────────────────────────────────────────
