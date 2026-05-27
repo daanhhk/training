@@ -58,15 +58,33 @@ function syncAthleteZones() {
   if (powerBoundaries) setDocProp('api_power_zones', JSON.stringify(powerBoundaries));
   if (hrBoundaries)    setDocProp('api_hr_zones',    JSON.stringify(hrBoundaries));
 
-  // Sweet Spot range (geen zone in het 7-zone systeem, maar workout-library
-  // gebruikt deze range — los cachen voor de referentie-rij in Zones-tab).
+  // Sweet Spot range — drie-laagse resolutie:
+  //   1. Uit athlete-object (icu_sweet_spot_min/max). Vaak null voor users.
+  //   2. Uit meest recente activity met power-data (intervals.icu vult deze
+  //      velden per activity in op basis van de athlete's instellingen).
+  //   3. Hardcoded defaults 84/97 (intervals.icu standaard).
   var ssMin = raw.icu_sweet_spot_min ?? raw.sweet_spot_min ?? null;
   var ssMax = raw.icu_sweet_spot_max ?? raw.sweet_spot_max ?? null;
-  if (ssMin != null) setDocProp('sweet_spot_min', ssMin);
-  if (ssMax != null) setDocProp('sweet_spot_max', ssMax);
-  if (ssMin != null && ssMax != null) {
-    console.log('Sweet Spot range: ' + ssMin + '% – ' + ssMax + '% FTP');
+  var ssSource = 'athlete object';
+
+  if (ssMin == null || ssMax == null) {
+    try {
+      var fromActivity = sweetSpotFromActivity_();
+      if (fromActivity) {
+        if (ssMin == null) ssMin = fromActivity.min;
+        if (ssMax == null) ssMax = fromActivity.max;
+        ssSource = 'recent activity ("' + fromActivity.activityName + '")';
+      }
+    } catch (e) {
+      console.warn('sweetSpotFromActivity_ failed:', e.message);
+    }
   }
+  if (ssMin == null) { ssMin = 84; ssSource = 'hardcoded default'; }
+  if (ssMax == null) { ssMax = 97; ssSource = 'hardcoded default'; }
+
+  setDocProp('sweet_spot_min', ssMin);
+  setDocProp('sweet_spot_max', ssMax);
+  console.log('Sweet Spot: ' + ssMin + '% – ' + ssMax + '% FTP (bron: ' + ssSource + ')');
 
   // Sync cellen in Instellingen-tab
   var sh = ss.getSheetByName(SETTINGS_SHEET);
@@ -201,6 +219,27 @@ function powerAvg_(act) {
 function powerNorm_(act) {
   return act.icu_weighted_avg_watts ?? act.weighted_average_watts
       ?? act.normalized_power ?? act.icu_normalized_power ?? null;
+}
+
+/**
+ * Fallback: pakt sweet_spot_min/max uit de meest recente activity die
+ * power-data heeft. intervals.icu vult per activity icu_sweet_spot_min/max
+ * in op basis van de athlete's huidige instellingen, ook al staan ze niet
+ * direct op het athlete-object.
+ */
+function sweetSpotFromActivity_() {
+  var data = getActivities(14);
+  if (!Array.isArray(data) || !data.length) return null;
+  // getActivities sorteert oldest-first → iterate van eind voor nieuwste eerst.
+  for (var i = data.length - 1; i >= 0; i--) {
+    var a = data[i];
+    var min = a.icu_sweet_spot_min ?? a.sweet_spot_min ?? null;
+    var max = a.icu_sweet_spot_max ?? a.sweet_spot_max ?? null;
+    if (min != null && max != null) {
+      return { min: min, max: max, activityName: a.name || '?' };
+    }
+  }
+  return null;
 }
 
 // ── Zone resolver ────────────────────────────────────────────────
