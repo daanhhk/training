@@ -8,7 +8,7 @@
 
 var PROPOSAL_SHEET = 'Voorstel';
 
-function renderProposal(ss, days, voltooid, settings, mesoWeek, macro, dekking) {
+function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, dekking, wellness) {
   var sh = getOrCreateSheet(ss, PROPOSAL_SHEET);
   var r = 1;
   var COLS = 5;
@@ -53,12 +53,55 @@ function renderProposal(ss, days, voltooid, settings, mesoWeek, macro, dekking) 
       .setBackground('#ede9fe').setFontStyle('italic');
     r += 1;
   }
+
+  // Wellness banner
+  if (wellness) {
+    var wText, wBg, wFg;
+    var diag = wellness.hrvRecent != null
+      ? 'HRV ' + wellness.hrvRecent + '/' + wellness.hrvBaseline + ' (' +
+        (wellness.hrvDeficit != null ? (wellness.hrvDeficit > 0 ? '+' : '') + wellness.hrvDeficit + '%' : 'n/a') +
+        ')   slaap ' + (wellness.sleepLastNight != null ? wellness.sleepLastNight + 'u' : 'n/a')
+      : 'geen wellness data';
+
+    if (wellness.signal === 'recovery') {
+      wText = '🛑  Wellness: ' + wellness.reason + ' — ALLE workouts → recovery.   (' + diag + ')';
+      wBg = '#fee2e2'; wFg = '#991b1b';
+    } else if (wellness.signal === 'demote') {
+      wText = '⚠️  Wellness: ' + wellness.reason + ' — intensiteit gedemoot.   (' + diag + ')';
+      wBg = '#fef3c7'; wFg = '#92400e';
+    } else if (wellness.signal === 'warning') {
+      wText = '🟡  Wellness: ' + wellness.reason + ' — geen demotie maar let op herstel.   (' + diag + ')';
+      wBg = '#fefce8'; wFg = '#854d0e';
+    } else {
+      wText = '✅  Wellness: ' + wellness.reason + ' — geen aanpassingen.   (' + diag + ')';
+      wBg = '#dcfce7'; wFg = '#166534';
+    }
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue(wText)
+      .setBackground(wBg).setFontColor(wFg).setFontWeight('bold').setWrap(true);
+    r += 1;
+  }
+
+  // Gemiste dagen — 1-regel notitie per dag
+  if (missed && missed.length) {
+    missed.forEach(function (d) {
+      var dateStr = d.datum ? formatDate(d.datum, 'EEE dd-MM') : '';
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('❌  ' + d.dag + ' ' + dateStr + ': gepland maar niet gedaan — zone-dekking herverdeeld.')
+        .setBackground('#fef2f2').setFontColor('#b91c1c').setFontStyle('italic');
+      r += 1;
+    });
+  }
   r += 1;
 
   // ── Per dag ──
+  var missedIdxSet = {};
+  (missed || []).forEach(function (m) { missedIdxSet[m.dagIdx] = true; });
+
   var totalTss = 0, totalMin = 0;
   days.forEach(function (d) {
     if (!d.train) return;
+    if (missedIdxSet[d.dagIdx]) return; // al getoond in missed-banner
     var wo = d.voorgesteldType
       ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase)
       : null;
