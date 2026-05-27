@@ -403,6 +403,118 @@ function dslRestFromNote_(note) {
   };
 }
 
+// ── ZWO XML builder ──────────────────────────────────────────────
+
+/**
+ * Genereert een ZWO (Zwift Workout) XML string uit workout.structuur.
+ * intervals.icu zet ZWO om naar structured FIT die Garmin Epix als
+ * multi-step workout aanvaardt (met laps per step).
+ *
+ * Element-mapping:
+ *   - Warmup row    → <Warmup Duration=S PowerLow=X PowerHigh=Y/>
+ *   - Cooldown row  → <Cooldown Duration=S PowerLow=X PowerHigh=Y/>
+ *   - Repeat row    → <IntervalsT Repeat=N OnDuration OnPower OffDuration OffPower/>
+ *   - Steady row    → <SteadyState Duration=S Power=X/>
+ *
+ * Power als decimal (0.55, niet "55%"). Duration in seconden.
+ * Returnt null als één segment niet parsed kan worden.
+ */
+function buildWorkoutZwo_(workout) {
+  if (!workout || !Array.isArray(workout.structuur) || !workout.structuur.length) return null;
+
+  var ftp = Number(getDocProp('ftp', '275')) || 275;
+  var stepXmls = [];
+
+  for (var i = 0; i < workout.structuur.length; i++) {
+    var xml = zwoStepFromRow_(workout.structuur[i], ftp);
+    if (!xml) {
+      console.log('buildWorkoutZwo_: kon segment niet parsen, terugval op DSL: ' +
+                  JSON.stringify(workout.structuur[i]));
+      return null;
+    }
+    stepXmls.push(xml);
+  }
+
+  var name = xmlEscape_(workout.naam || 'Workout');
+  var desc = xmlEscape_(workout.focus || workout.eindopmerking || '');
+
+  return [
+    '<workout_file>',
+    '  <author>Coach</author>',
+    '  <name>' + name + '</name>',
+    '  <description>' + desc + '</description>',
+    '  <sportType>bike</sportType>',
+    '  <tags/>',
+    '  <workout>',
+    '    ' + stepXmls.join('\n    '),
+    '  </workout>',
+    '</workout_file>'
+  ].join('\n');
+}
+
+function zwoStepFromRow_(row, ftp) {
+  var name   = String(row[0] || '');
+  var durStr = String(row[1] || '');
+  var powStr = String(row[2] || '');
+  var note   = String(row[4] || '');
+
+  // Repeat-loop
+  var repMatch = /^\s*(\d+)\s*x\s*(\d+)\s*(min|sec|s)\b/i.exec(durStr);
+  if (repMatch) {
+    var reps    = parseInt(repMatch[1], 10);
+    var workDur = parseInt(repMatch[2], 10);
+    var workSec = /min/i.test(repMatch[3]) ? workDur * 60 : workDur;
+    var workRange = dslPowerRange_(powStr, ftp);
+    if (!workRange) return null;
+
+    var rest    = dslRestFromNote_(note);
+    var restSec = rest ? rest.duration : 0;
+    var restPct = rest ? rest.pct      : 50;
+
+    return '<IntervalsT Repeat="' + reps + '" ' +
+           'OnDuration="'  + workSec + '" OnPower="'  + zwoPct_(workRange.mid) + '" ' +
+           'OffDuration="' + restSec + '" OffPower="' + zwoPct_(restPct)        + '"/>';
+  }
+
+  // Enkele step
+  var seconds = dslDurationSec_(durStr);
+  if (!seconds) return null;
+  var range = dslPowerRange_(powStr, ftp);
+  if (!range) return null;
+
+  var isWarmup   = /warm[ -]?up|inrijden|opbouw/i.test(name + ' ' + note);
+  var isCooldown = /cool[ -]?down|uitrijden|easy uit/i.test(name + ' ' + note);
+
+  if (isWarmup) {
+    var lo = range.lo, hi = range.hi;
+    if (lo === hi) lo = Math.max(40, hi - 20); // synthesize ramp als geen range
+    return '<Warmup Duration="' + seconds + '" ' +
+           'PowerLow="' + zwoPct_(lo) + '" PowerHigh="' + zwoPct_(hi) + '"/>';
+  }
+  if (isCooldown) {
+    var clo = range.lo, chi = range.hi;
+    if (clo === chi) chi = clo; // steady cooldown — beide attrs gelijk
+    return '<Cooldown Duration="' + seconds + '" ' +
+           'PowerLow="' + zwoPct_(clo) + '" PowerHigh="' + zwoPct_(chi) + '"/>';
+  }
+
+  // Default: steady state op midpoint
+  return '<SteadyState Duration="' + seconds + '" Power="' + zwoPct_(range.mid) + '"/>';
+}
+
+function zwoPct_(pct) {
+  return (pct / 100).toFixed(2);
+}
+
+function xmlEscape_(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 /**
  * Kiest de key-intensity workout voor een vrije dag op basis van doel,
  * macro-fase en wat nog open staat in dekking.
