@@ -188,6 +188,155 @@ function pushWorkout(workout, dateISO, type) {
 }
 
 /**
+ * Vertaalt onze workout.structuur (5-koloms array per segment) naar
+ * intervals.icu's workout_doc format. Returnt null als één of meer
+ * segmenten niet geparsed kunnen worden — caller valt dan terug op
+ * description-only push.
+ *
+ * Step formats (uit JOIN voorbeeld geverifieerd):
+ *   - Steady:  { power: {units:'%ftp', value: N}, duration: seconds }
+ *   - Ramp:    { ramp:true, power: {start, end, units:'%ftp'}, warmup, duration }
+ *   - Repeat:  { reps: N, text: 'Nx', steps: [work, rest], duration: total }
+ *
+ * Targets unit = %ftp (intervals.icu canonical); watts uit structuur
+ * worden naar %FTP omgezet via de FTP uit DocumentProperties.
+ */
+function buildWorkoutDoc_(workout) {
+  if (!workout || !Array.isArray(workout.structuur) || !workout.structuur.length) return null;
+
+  var ftp = Number(getDocProp('ftp', '275')) || 275;
+  var steps = [];
+
+  for (var i = 0; i < workout.structuur.length; i++) {
+    var row = workout.structuur[i];
+    var step = parseStructStep_(row, ftp);
+    if (!step) {
+      console.log('buildWorkoutDoc_: kon segment niet parsen, val terug op description: ' + JSON.stringify(row));
+      return null;
+    }
+    steps.push(step);
+  }
+
+  var totalSec = steps.reduce(function (sum, s) { return sum + (s.duration || 0); }, 0);
+  return {
+    steps: steps,
+    options: {},
+    distance: 0,
+    duration: totalSec,
+    description: workout.eindopmerking || ''
+  };
+}
+
+function parseStructStep_(row, ftp) {
+  var name   = String(row[0] || '');
+  var durStr = String(row[1] || '');
+  var powStr = String(row[2] || '');
+  var note   = String(row[4] || '');
+
+  // Repeat-loop: "Nx M min" of "Nx M sec"
+  var repMatch = /^\s*(\d+)\s*x\s*(\d+)\s*(min|sec|s)\b/i.exec(durStr);
+  if (repMatch) {
+    var reps    = parseInt(repMatch[1], 10);
+    var workDur = parseInt(repMatch[2], 10);
+    var workSec = /min/i.test(repMatch[3]) ? workDur * 60 : workDur;
+
+    var workPow = parsePowerToPct_(powStr, ftp);
+    if (!workPow) return null;
+    var workStep = { duration: workSec, power: workPow };
+
+    var rest = parseRestFromNote_(note);
+    var children = [workStep];
+    if (rest && rest.duration > 0) {
+      children.push({ duration: rest.duration, power: { units: '%ftp', value: rest.pct } });
+    }
+
+    var perRepSec = workSec + (rest ? rest.duration : 0);
+    return {
+      reps: reps,
+      text: reps + 'x',
+      steps: children,
+      distance: 0,
+      duration: reps * perRepSec
+    };
+  }
+
+  // Enkele step — parse duur
+  var seconds = parseDurationSec_(durStr);
+  if (!seconds) return null;
+
+  var isWarmup   = /warm[ -]?up|inrijden|opbouw/i.test(name + ' ' + note);
+  var isCooldown = /cool[ -]?down|uitrijden|easy uit/i.test(name + ' ' + note);
+
+  var step = { duration: seconds };
+  var pow  = parsePowerToPct_(powStr, ftp);
+
+  if (isWarmup && pow && pow.value != null) {
+    // Warmup: convert single midpoint naar ramp van laag → midden
+    step.ramp = true;
+    step.warmup = true;
+    step.power = {
+      units: '%ftp',
+      start: Math.max(40, pow.value - 20),
+      end:   pow.value
+    };
+  } else {
+    if (pow) step.power = pow;
+    if (isCooldown) step.cooldown = true;
+  }
+
+  return step;
+}
+
+/**
+ * Parse "151-192W" / "240W" / "> 240W" → {units:'%ftp', value:pct}.
+ * Range → midpoint. Returnt null bij parse-failure (lege string, HR-only,
+ * placeholder '—').
+ */
+function parsePowerToPct_(powStr, ftp) {
+  if (!powStr || powStr === '—') return null;
+
+  var rangeMatch = /(\d+)\s*[-–]\s*(\d+)\s*W/i.exec(powStr);
+  if (rangeMatch) {
+    var lo = parseInt(rangeMatch[1], 10);
+    var hi = parseInt(rangeMatch[2], 10);
+    var midWatt = (lo + hi) / 2;
+    return { units: '%ftp', value: Math.round(midWatt / ftp * 100) };
+  }
+
+  var singleMatch = />?\s*(\d+)\s*W/i.exec(powStr);
+  if (singleMatch) {
+    var w = parseInt(singleMatch[1], 10);
+    return { units: '%ftp', value: Math.round(w / ftp * 100) };
+  }
+
+  return null;
+}
+
+function parseDurationSec_(str) {
+  if (!str) return 0;
+  // "15 min" of "15min"
+  var m = /(\d+)\s*min/i.exec(str);
+  if (m) return parseInt(m[1], 10) * 60;
+  // "30s" of "30 s"
+  var s = /(\d+)\s*s\b/i.exec(str);
+  if (s) return parseInt(s[1], 10);
+  return 0;
+}
+
+/**
+ * Parse rest spec uit toelichting: "5 min rust @ 50%" / "3 min rust" / "5 min rust @ 50% tussen reps".
+ * Default rest pct = 50%.
+ */
+function parseRestFromNote_(note) {
+  if (!note) return null;
+  var m = /(\d+)\s*min\s+(rust|pauze|recovery)/i.exec(note);
+  if (!m) return null;
+  var minutes = parseInt(m[1], 10);
+  var pctMatch = /@\s*(\d+)\s*%/i.exec(note);
+  return { duration: minutes * 60, pct: pctMatch ? parseInt(pctMatch[1], 10) : 50 };
+}
+
+/**
  * Bouwt een multi-line description string die zowel in intervals.icu's
  * kalender als op Garmin Epix leesbaar is. Per segment één regel:
  *   "Warmup 15 min @ 150-200W"
