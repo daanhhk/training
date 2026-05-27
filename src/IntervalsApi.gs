@@ -158,8 +158,10 @@ function getWellness(daysBack) {
 
 /**
  * Bouwt één event-payload voor de /events/bulk endpoint.
- * external_id maakt de push idempotent: re-push met dezelfde external_id
- * triggert een UPDATE in plaats van INSERT (?upsert=true).
+ * external_id maakt de push idempotent: re-push triggert UPDATE.
+ *
+ * Primary route: ZWO-XML als file_contents_base64. intervals.icu zet dit
+ * om naar structured FIT → Garmin Epix krijgt multi-step workout.
  */
 function buildEventPayload(workout, dateISO, type) {
   if (!workout || !workout.naam) throw new Error('buildEventPayload: geen geldig workout-object.');
@@ -168,20 +170,28 @@ function buildEventPayload(workout, dateISO, type) {
   }
   type = type || 'Ride';
 
-  var dsl = buildWorkoutDsl_(workout);
-  var description = dsl != null ? dsl : buildWorkoutDescription_(workout);
+  var zwo = buildWorkoutZwo_(workout);
+  if (!zwo) {
+    throw new Error('buildEventPayload: ZWO generation faalde voor "' + workout.naam + '"');
+  }
 
   return {
     category: 'WORKOUT',
     start_date_local: dateISO + 'T00:00:00',
     type: type,
     name: COACH_NAME_PREFIX + workout.naam,
-    description: description,
-    moving_time: (workout.totaalMin || 0) * 60,
-    target: 'POWER',
-    workout_doc: {},
+    filename: sanitizeFilename_(workout.naam) + '.zwo',
+    file_contents_base64: Utilities.base64Encode(zwo),
     external_id: 'coach_' + dateISO + '_' + type.toLowerCase()
   };
+}
+
+/**
+ * Sanitize voor ZWO filenames: alleen alfanumeriek + underscore + dash,
+ * max 100 chars. Voorkomt issues met spaces, emoji's, accenten.
+ */
+function sanitizeFilename_(s) {
+  return String(s).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 100);
 }
 
 /**
