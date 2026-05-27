@@ -7,8 +7,18 @@
 
 var TZ = 'Europe/Amsterdam';
 
+/**
+ * Identity function — formula passes through unchanged.
+ *
+ * Apps Script setFormula() handles locale-conversion automatically:
+ * input must be in US-notation ("." decimal, "," separator) and rendering
+ * uses the spreadsheet's locale (NL → "," decimal, ";" separator).
+ *
+ * @deprecated Behoud van call-sites tot een latere refactor — de helper
+ * doet effectief niets meer, maar voorkomt dat we nu overal moeten editen.
+ */
 function dutchFormula(formula) {
-  return formula.replace(/,/g, ';');
+  return formula;
 }
 
 function getDocProp(key, def) {

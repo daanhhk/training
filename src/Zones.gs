@@ -3,7 +3,8 @@
  *
  * Toont power-zones (Coggan 7-zones) en HR-zones (Friel) als
  * auto-berekende tabellen met formules die naar Instellingen verwijzen.
- * Gebruikt dutchFormula() voor NL ';' separator.
+ * Formules zijn in pure US-notatie ('.' decimaal, ',' separator);
+ * Apps Script setFormula() converteert automatisch naar NL bij render.
  */
 
 var ZONES_SHEET = 'Zones';
