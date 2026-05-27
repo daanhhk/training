@@ -167,3 +167,37 @@ function pushWorkout(workoutObj, date) {
               JSON.stringify({ name: workoutObj && workoutObj.naam, date: date }));
   return null;
 }
+
+/**
+ * Diagnostiek: logt het volledige athlete-object + eerste activity zodat
+ * we kunnen zien welke veldnamen intervals.icu gebruikt voor deze account.
+ * Resultaat staat in Apps Script Editor → Executions → expand console output.
+ */
+function debugApiResponse() {
+  var athleteId = getDocProp('intervals_athlete_id', '');
+  if (!athleteId) throw new Error('Athlete ID niet ingesteld in Instellingen.');
+
+  console.log('=== ATHLETE OBJECT (volledige JSON) ===');
+  var athlete = intervalsRequest_('/athlete/' + athleteId);
+  console.log(JSON.stringify(athlete, null, 2));
+
+  var today = Utilities.formatDate(new Date(), 'Europe/Amsterdam', 'yyyy-MM-dd');
+  var weekAgo = Utilities.formatDate(
+    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    'Europe/Amsterdam', 'yyyy-MM-dd');
+  var activities = intervalsRequest_(
+    '/athlete/' + athleteId + '/activities?oldest=' + weekAgo + '&newest=' + today);
+
+  console.log('=== EERSTE ACTIVITY (volledige JSON) ===');
+  if (Array.isArray(activities) && activities.length) {
+    console.log(JSON.stringify(activities[0], null, 2));
+    console.log('=== ACTIVITY KEYS ===');
+    console.log(Object.keys(activities[0]).sort().join(', '));
+  } else {
+    console.log('Geen activiteiten in de laatste 7 dagen.');
+  }
+
+  SpreadsheetApp.getActive().toast(
+    'Debug log geschreven — Apps Script Editor → Executions',
+    '🚴 Coach', 8);
+}
