@@ -178,8 +178,20 @@ function pushWorkout(workout, dateISO, type) {
     start_date_local: dateISO + 'T00:00:00',
     type: type,
     name: workout.naam,
-    description: buildWorkoutDescription_(workout)
+    description: buildWorkoutDescription_(workout),
+    targets: ['POWER']
   };
+
+  // Probeer structured workout_doc — bij parse-failure val terug op
+  // description-only zodat de push toch landt.
+  var doc = buildWorkoutDoc_(workout);
+  if (doc) {
+    payload.workout_doc = doc;
+    payload.moving_time = doc.duration;
+    console.log('pushWorkout: structured ' + doc.steps.length + ' steps, ' + doc.duration + 's totaal');
+  } else {
+    console.log('pushWorkout: description-only (kon structuur niet mappen)');
+  }
 
   return intervalsRequest_('/athlete/{id}/events', {
     method: 'post',
