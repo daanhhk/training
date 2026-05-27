@@ -22,6 +22,15 @@ function syncAll(e) {
   try { syncWellness(); }
   catch (err) { errors.push('Wellness: ' + err.message); console.error('syncWellness', err); }
 
+  // Reconcile planner — tick Gedaan-checkboxes voor activities die matchen
+  try {
+    var marked = reconcilePlannerWithActivities();
+    if (marked > 0) console.log('Reconcile: ' + marked + ' planner-rij(en) auto-marked als Gedaan.');
+  } catch (err) {
+    errors.push('Reconcile: ' + err.message);
+    console.error('reconcilePlannerWithActivities', err);
+  }
+
   setDocProp('last_sync', formatDate(new Date(), 'dd-MM-yyyy HH:mm'));
 
   if (!fromTrigger) {
@@ -322,6 +331,61 @@ function resolveZones_(athlete, kind) {
     });
   }
   return null;
+}
+
+// ── Reconcile planner met activities ─────────────────────────────
+
+/**
+ * Loopt door alle planner-rijen waar Train=TRUE en Gedaan=FALSE; checkt
+ * of er een matching activity bestaat in de Activiteiten-tab. Match-criteria:
+ *   - Datum: activity start_date_local valt binnen de plannerdag
+ *   - Type:  activity type bevat 'ride' of 'run'
+ *   - Duur:  activity duur ≥ 50% van geplande duur
+ * Bij match → tikt de Gedaan-checkbox aan.
+ *
+ * @return aantal rijen dat auto-marked werd
+ */
+function reconcilePlannerWithActivities() {
+  var ss = SpreadsheetApp.getActive();
+  var planner = readPlanner(ss);
+  var actSheet = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  if (!actSheet) return 0;
+
+  var lastRow = actSheet.getLastRow();
+  if (lastRow < 2) return 0;
+
+  // Activiteiten kolommen: A=Datum B=Type C=Naam D=Duur(min) ...
+  var actData = actSheet.getRange(2, 1, lastRow - 1, ACT_HEADERS.length).getValues();
+  var pSheet = ss.getSheetByName(PLANNER_SHEET);
+  var marked = 0;
+
+  planner.forEach(function (d) {
+    if (!d.train || d.gedaan || !d.datum) return;
+
+    var dayStart = new Date(d.datum.getFullYear(), d.datum.getMonth(), d.datum.getDate());
+    var dayEnd   = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    for (var i = 0; i < actData.length; i++) {
+      var actDate = actData[i][0];
+      if (!(actDate instanceof Date)) continue;
+      if (actDate < dayStart || actDate >= dayEnd) continue;
+
+      var actType = String(actData[i][1] || '').toLowerCase();
+      if (actType.indexOf('ride') < 0 && actType.indexOf('run') < 0) continue;
+
+      var actMin = Number(actData[i][3]) || 0;
+      if (d.minuten > 0 && actMin < d.minuten * 0.5) continue;
+
+      // Match — tik Gedaan aan
+      pSheet.getRange(3 + d.dagIdx, 8).setValue(true);
+      console.log('Auto-marked Gedaan: ' + d.dag + ' ' + formatDate(d.datum, 'dd-MM') +
+                  ' (matched: ' + actData[i][2] + ', ' + actMin + ' min)');
+      marked++;
+      break;
+    }
+  });
+
+  return marked;
 }
 
 // ── Trigger management ───────────────────────────────────────────
