@@ -178,36 +178,91 @@ function pushWorkout(workout, dateISO, type) {
   type = type || 'Ride';
 
   var prefixedName = COACH_NAME_PREFIX + workout.naam;
+  var description  = buildWorkoutDescription_(workout);
+  var doc          = buildWorkoutDoc_(workout);
 
-  var payload = {
-    category: 'WORKOUT',
-    start_date_local: dateISO + 'T00:00:00',
-    type: type,
+  // Library-route is verplicht voor structured workouts: /events negeert
+  // het embedded workout_doc veld stilletjes. We maken eerst een library
+  // workout aan, dan een event dat ernaar verwijst via workout_id.
+  var folderId = ensureCoachFolderId_();
+
+  var libPayload = {
     name: prefixedName,
-    description: buildWorkoutDescription_(workout),
-    targets: ['POWER']
+    type: type,
+    description: description
   };
-
-  // Probeer structured workout_doc — bij parse-failure val terug op
-  // description-only zodat de push toch landt.
-  var doc = buildWorkoutDoc_(workout);
   if (doc) {
-    payload.workout_doc = doc;
-    payload.moving_time = doc.duration;
+    libPayload.workout_doc = doc;
+    libPayload.moving_time = doc.duration;
     console.log('pushWorkout: structured ' + doc.steps.length + ' steps, ' + doc.duration + 's totaal');
   } else {
     console.log('pushWorkout: description-only (kon structuur niet mappen)');
   }
 
-  var response = intervalsRequest_('/athlete/{id}/events', {
+  var libWorkout = intervalsRequest_(
+    '/athlete/{id}/folders/' + folderId + '/workouts',
+    { method: 'post', payload: libPayload }
+  );
+  Logger.log('POST /folders/{id}/workouts RAW RESPONSE:');
+  Logger.log(JSON.stringify(libWorkout, null, 2));
+
+  // Step 2: maak event dat de library workout pakt
+  var eventPayload = {
+    category: 'WORKOUT',
+    start_date_local: dateISO + 'T00:00:00',
+    type: type,
+    name: prefixedName,
+    workout_id: libWorkout && libWorkout.id,
+    targets: ['POWER']
+  };
+
+  var event = intervalsRequest_('/athlete/{id}/events', {
     method: 'post',
-    payload: payload
+    payload: eventPayload
   });
-
   Logger.log('POST /events RAW RESPONSE:');
-  Logger.log(JSON.stringify(response, null, 2));
+  Logger.log(JSON.stringify(event, null, 2));
 
-  return response;
+  return { library_workout: libWorkout, event: event };
+}
+
+/**
+ * Vindt of creëert de "Coach Generated" folder in de library.
+ * Folder-id wordt gecached in DocProps voor hergebruik.
+ */
+function ensureCoachFolderId_() {
+  var cached = getDocProp('coach_folder_id', '');
+  if (cached) return Number(cached);
+
+  // Zoek bestaande folder met "coach" in de naam
+  try {
+    var folders = intervalsRequest_('/athlete/{id}/folders');
+    if (Array.isArray(folders)) {
+      for (var i = 0; i < folders.length; i++) {
+        if (/coach/i.test(folders[i].name || '')) {
+          console.log('ensureCoachFolderId_: hergebruik bestaande folder "' +
+                      folders[i].name + '" (id ' + folders[i].id + ')');
+          setDocProp('coach_folder_id', folders[i].id);
+          return folders[i].id;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('ensureCoachFolderId_: folders lookup failed: ' + e.message);
+  }
+
+  // Niet gevonden → creëer nieuw
+  var created = intervalsRequest_('/athlete/{id}/folders', {
+    method: 'post',
+    payload: { name: 'Coach Generated', type: 'FOLDER' }
+  });
+  if (!created || !created.id) {
+    throw new Error('Kon "Coach Generated" folder niet aanmaken.');
+  }
+  console.log('ensureCoachFolderId_: created folder "' + created.name +
+              '" (id ' + created.id + ')');
+  setDocProp('coach_folder_id', created.id);
+  return created.id;
 }
 
 /**
