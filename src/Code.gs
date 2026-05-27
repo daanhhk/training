@@ -12,6 +12,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('🚴 Coach')
     .addItem('Genereer voorstel voor deze week', 'generateProposal')
+    .addItem('Push voorstel naar Garmin', 'pushAllPendingWorkouts')
     .addSeparator()
     .addItem('Sync nu (intervals.icu)', 'syncAll')
     .addItem('Test API verbinding', 'menuTestConnection')

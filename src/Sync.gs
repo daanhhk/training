@@ -333,6 +333,67 @@ function resolveZones_(athlete, kind) {
   return null;
 }
 
+// ── Push voorstel naar Garmin via intervals.icu ─────────────────
+
+/**
+ * Pakt alle toekomstige Train=TRUE/Gedaan=FALSE dagen uit Weekplanner,
+ * leest het opgeslagen workout-voorstel uit DocProps en pusht via
+ * IntervalsApi.pushWorkout naar intervals.icu kalender.
+ *
+ * Vereist: eerst Menu → Genereer voorstel (vult de DocProps).
+ */
+function pushAllPendingWorkouts() {
+  var ss = SpreadsheetApp.getActive();
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+
+  var planner = readPlanner(ss);
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  var pending = planner.filter(function (d) {
+    if (!d.train || d.gedaan || !d.datum) return false;
+    var day = new Date(d.datum.getFullYear(), d.datum.getMonth(), d.datum.getDate());
+    return day >= today;
+  });
+
+  if (!pending.length) {
+    if (ui) ui.alert('Geen workouts om te pushen — alle toekomstige dagen zijn al gedaan of leeg.');
+    return;
+  }
+
+  var ok = 0, fail = 0;
+  var errors = [];
+
+  pending.forEach(function (d, idx) {
+    var dateISO = formatDate(d.datum, 'yyyy-MM-dd');
+    var raw = getDocProp('proposal_' + dateISO, '');
+    if (!raw) {
+      fail++;
+      errors.push(d.dag + ' (' + dateISO + '): geen opgeslagen voorstel — Genereer voorstel eerst.');
+      return;
+    }
+    ss.toast('Pushing ' + (idx + 1) + '/' + pending.length + ' (' + d.dag + ')...', '🚴 Coach', 3);
+    try {
+      var wo = JSON.parse(raw);
+      pushWorkout(wo, dateISO, 'Ride');
+      console.log('Pushed: ' + d.dag + ' ' + dateISO + ' — ' + wo.naam);
+      ok++;
+    } catch (e) {
+      fail++;
+      errors.push(d.dag + ' (' + dateISO + '): ' + e.message);
+      console.error('pushAllPendingWorkouts ' + dateISO, e);
+    }
+  });
+
+  var msg = '✅ ' + ok + ' workouts gepusht naar intervals.icu kalender.\n' +
+            'Synct binnen 1-2 minuten naar Garmin Epix als geplande training.';
+  if (fail > 0) {
+    msg += '\n\n❌ ' + fail + ' mislukt:\n' + errors.join('\n');
+  }
+  if (ui) ui.alert('Push voltooid', msg, ui.ButtonSet.OK);
+}
+
 // ── Reconcile planner met activities ─────────────────────────────
 
 /**
