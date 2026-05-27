@@ -37,28 +37,31 @@ var HR_ZONE_NAMES = [
 ];
 var HR_ZONE_COLORS = ['#cbd5e1', '#93c5fd', '#86efac', '#fde68a', '#fdba74', '#fca5a5', '#f472b6'];
 
+// +1 boundary conventie (parity met intervals.icu): Z2.min = Z1.max + 1, etc.
+// Z1 ondergrens blijft 0.
 var DEFAULT_POWER_ZONES = [
   ['Z1', 'Active Recovery', 0,   55,  '#cbd5e1'],
-  ['Z2', 'Endurance',       55,  75,  '#93c5fd'],
-  ['Z3', 'Tempo',           75,  87,  '#86efac'],
-  ['Z4', 'Threshold',       87,  105, '#fde68a'],
-  ['Z5', 'VO2max',          105, 120, '#fca5a5'],
-  ['Z6', 'Anaerobic',       120, 150, '#f472b6'],
-  ['Z7', 'Neuromuscular',   150, 999, '#a78bfa']
+  ['Z2', 'Endurance',       56,  75,  '#93c5fd'],
+  ['Z3', 'Tempo',           76,  87,  '#86efac'],
+  ['Z4', 'Threshold',       88,  105, '#fde68a'],
+  ['Z5', 'VO2max',          106, 120, '#fca5a5'],
+  ['Z6', 'Anaerobic',       121, 150, '#f472b6'],
+  ['Z7', 'Neuromuscular',   151, 999, '#a78bfa']
 ];
 
 var DEFAULT_HR_PCT_ZONES = [
   ['Z1',  'Recovery',  0,   84,  '#cbd5e1'],
-  ['Z2',  'Aerobic',   84,  89,  '#93c5fd'],
-  ['Z3',  'Tempo',     89,  94,  '#86efac'],
-  ['Z4',  'Threshold', 94,  99,  '#fde68a'],
-  ['Z5a', 'VO2 onder', 99,  102, '#fdba74'],
-  ['Z5b', 'VO2 boven', 102, 106, '#fca5a5'],
-  ['Z5c', 'Anaerobic', 106, 130, '#f472b6']
+  ['Z2',  'Aerobic',   85,  89,  '#93c5fd'],
+  ['Z3',  'Tempo',     90,  94,  '#86efac'],
+  ['Z4',  'Threshold', 95,  99,  '#fde68a'],
+  ['Z5a', 'VO2 onder', 100, 102, '#fdba74'],
+  ['Z5b', 'VO2 boven', 103, 106, '#fca5a5'],
+  ['Z5c', 'Anaerobic', 107, 130, '#f472b6']
 ];
 
 var INF_PCT = 500; // >= 500% → render als ∞
 
+// +1 conventie voor min waardes (behalve Z1).
 function powerZonesFromPct_(pctBoundaries) {
   var zones = [];
   var prev = 0;
@@ -66,7 +69,7 @@ function powerZonesFromPct_(pctBoundaries) {
     zones.push([
       POWER_ZONE_NAMES[i][0],
       POWER_ZONE_NAMES[i][1],
-      prev,
+      i === 0 ? 0 : prev + 1,
       pctBoundaries[i],
       POWER_ZONE_COLORS[i] || '#e5e7eb'
     ]);
@@ -82,7 +85,7 @@ function hrZonesFromBpm_(bpmBoundaries) {
     zones.push([
       HR_ZONE_NAMES[i][0],
       HR_ZONE_NAMES[i][1],
-      prev,
+      i === 0 ? 0 : prev + 1,
       bpmBoundaries[i],
       HR_ZONE_COLORS[i] || '#e5e7eb'
     ]);
@@ -139,7 +142,14 @@ function buildZones(ss) {
     sh.getRange(r, 2).setValue(z[1]);
     sh.getRange(r, 3).setValue(min + '%');
     sh.getRange(r, 4).setValue(isInf ? '∞' : (max + '%'));
-    sh.getRange(r, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(min / 100) + ';0)');
+
+    // Watt min: Z1 = ROUND(FTP * 0/100) = 0. Z2+ = vorige rij Watt max + 1.
+    if (i === 0) {
+      sh.getRange(r, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(min / 100) + ';0)');
+    } else {
+      sh.getRange(r, 5).setFormula('=F' + (r - 1) + '+1');
+    }
+
     if (isInf) {
       sh.getRange(r, 6).setValue('∞').setHorizontalAlignment('center');
     } else {
@@ -194,14 +204,19 @@ function buildZones(ss) {
       sh.getRange(r, 1, 1, 6).setBackground(z[4]);
     });
   } else {
-    // Default: percentages drive BPM-formules
+    // Default: percentages drive BPM-formules.
+    // +1 conventie: BPM min van Z2+ = vorige BPM max + 1.
     DEFAULT_HR_PCT_ZONES.forEach(function (z, i) {
       var r = hrStart + 2 + i;
       sh.getRange(r, 1).setValue(z[0]).setFontWeight('bold');
       sh.getRange(r, 2).setValue(z[1]);
       sh.getRange(r, 3).setValue(z[2] + '%');
       sh.getRange(r, 4).setValue(z[3] + '%');
-      sh.getRange(r, 5).setFormula('=ROUND(' + lthrRef + '*' + nlNumber(z[2] / 100) + ';0)');
+      if (i === 0) {
+        sh.getRange(r, 5).setFormula('=ROUND(' + lthrRef + '*' + nlNumber(z[2] / 100) + ';0)');
+      } else {
+        sh.getRange(r, 5).setFormula('=F' + (r - 1) + '+1');
+      }
       sh.getRange(r, 6).setFormula('=ROUND(' + lthrRef + '*' + nlNumber(z[3] / 100) + ';0)');
       sh.getRange(r, 1, 1, 6).setBackground(z[4]);
     });
