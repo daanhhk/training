@@ -36,13 +36,20 @@ function buildPlanner(ss) {
     .setFontWeight('bold').setBackground('#e5e7eb')
     .setHorizontalAlignment('center');
 
-  var monday = weekStartDate(new Date());
+  // Bereken maandag van deze week. JS getDay(): 0=zo, 1=ma, ..., 6=za.
+  // Voor zondag → 6 dagen terug; voor andere dagen → (1 - dow) dagen schuiven.
+  var today = new Date();
+  var dow = today.getDay();
+  var daysToMonday = (dow === 0) ? -6 : 1 - dow;
+  var monday = new Date(today);
+  monday.setDate(today.getDate() + daysToMonday);
 
   // 7 rijen
   for (var i = 0; i < 7; i++) {
     var r = 3 + i;
     var def = PLANNER_DEFAULTS[i] || { train: false, min: '', type: '', note: '' };
-    var date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+    var date = new Date(monday);
+    date.setDate(monday.getDate() + i);
 
     sh.getRange(r, 1).insertCheckboxes();
     sh.getRange(r, 1).setValue(def.train);
