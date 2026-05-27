@@ -11,14 +11,6 @@
 
 var INTERVALS_BASE_URL = 'https://intervals.icu/api/v1';
 
-/** Activity fields die we ophalen. */
-var ACTIVITY_FIELDS = [
-  'name', 'type', 'start_date_local', 'moving_time', 'distance',
-  'average_watts', 'weighted_average_watts',
-  'average_heartrate', 'max_heartrate',
-  'icu_training_load', 'icu_intensity', 'polarization_index'
-].join(',');
-
 /**
  * Private helper — bouwt URL, voegt auth toe, parsed JSON, vertaalt
  * HTTP-fouten naar leesbare exceptions.
@@ -123,11 +115,13 @@ function getActivities(daysBack) {
   var today = new Date();
   var oldest = new Date(today.getTime() - daysBack * 86400000);
 
+  // Geen 'fields' parameter — we halen volledige activity-objecten
+  // zodat we via fallback-helpers (powerAvg_/powerNorm_) alternatieve
+  // veldnamen kunnen proberen. 28 dagen rides past prima in één call.
   var data = intervalsRequest_('/athlete/{id}/activities', {
     query: {
       oldest: formatDate(oldest, 'yyyy-MM-dd'),
-      newest: formatDate(today, 'yyyy-MM-dd'),
-      fields: ACTIVITY_FIELDS
+      newest: formatDate(today, 'yyyy-MM-dd')
     }
   });
 
