@@ -18,50 +18,80 @@ function mesoFactor(week) {
  * Entry point — gekoppeld aan menu item "Genereer voorstel voor deze week".
  */
 function generateProposal() {
+  cleanupOldProposals_();
+
   var ss = SpreadsheetApp.getActive();
   var settings  = readSettings(ss);
   var macro     = computeMacroPhase(settings.doelStart, new Date());
   var mesoWeek  = getMesoWeek();
   var days      = readPlanner(ss);
+  var wellness  = getWellnessSignal(ss);
+  var today     = stripTime_(new Date());
 
-  // Split voltooid vs te plannen
-  var voltooid = days.filter(function (d) { return d.train && d.gedaan; });
-  var tePlannen = days.filter(function (d) { return d.train && !d.gedaan; });
+  // Split: voltooid / gemist / te plannen
+  var voltooid  = days.filter(function (d) { return d.train && d.gedaan; });
+  var missed    = days.filter(function (d) {
+    return d.train && !d.gedaan && d.datum && stripTime_(d.datum) < today;
+  });
+  var tePlannen = days.filter(function (d) {
+    return d.train && !d.gedaan && (!d.datum || stripTime_(d.datum) >= today);
+  });
 
   // Dekking obv voltooide trainingen
   var dekking = { low: false, high: false, anaerobic: false };
   voltooid.forEach(function (d) {
-    var zones = workoutZones(d.voorgesteldType, settings.doel);
-    zones.forEach(function (z) { dekking[z] = true; });
+    workoutZones(d.voorgesteldType, settings.doel).forEach(function (z) { dekking[z] = true; });
   });
 
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking);
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness);
+
+  // Persisteer gegenereerde workouts per datum naar DocProps (voor push-to-Garmin)
+  tePlannen.forEach(function (d) {
+    if (!d.voorgesteldType || !d.datum) return;
+    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase);
+    if (!wo) return;
+    setDocProp('proposal_' + formatDate(d.datum, 'yyyy-MM-dd'), JSON.stringify(wo));
+  });
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
   tePlannen.forEach(function (d) { byIdx[d.dagIdx] = d.voorgesteldType; });
   voltooid.forEach(function (d) { byIdx[d.dagIdx] = d.voorgesteldType; });
+  missed.forEach(function (d) { byIdx[d.dagIdx] = ''; }); // gemist → leeg
   days.forEach(function (d) {
     if (byIdx.hasOwnProperty(d.dagIdx)) d.voorgesteldType = byIdx[d.dagIdx];
     else d.voorgesteldType = '';
   });
   writeVoorgesteldType(ss, days);
 
-  // Render proposal
-  renderProposal(ss, days, voltooid, settings, mesoWeek, macro, dekking);
+  renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, dekking, wellness);
 
-  // Activeer Voorstel-tab
   var prop = ss.getSheetByName(PROPOSAL_SHEET);
   if (prop) ss.setActiveSheet(prop);
 
-  ss.toast('Voorstel gegenereerd ✓ — doel: ' + settings.doel + ', fase: ' + macro.fase, '🚴 Coach', 6);
+  ss.toast('Voorstel gegenereerd ✓ — doel: ' + settings.doel + ', fase: ' + macro.fase +
+           ' — wellness: ' + wellness.signal, '🚴 Coach', 7);
+}
+
+function stripTime_(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function cleanupOldProposals_() {
+  var props = PropertiesService.getDocumentProperties();
+  props.getKeys().forEach(function (k) {
+    if (k.indexOf('proposal_') === 0) props.deleteProperty(k);
+  });
 }
 
 /**
  * Wijst per dag een workout-type toe. Muteert days in-place (voorgesteldType
  * + tss-hint) en update dekking.
+ *
+ * @param wellness  resultaat van getWellnessSignal(); demote/recovery
+ *                  signal overschrijft de assignment cascade.
  */
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness) {
   var doel = settings.doel;
   var isRecovery = mesoWeek === 4;
   var isTestWeek = macroFase === 'Test';
@@ -103,6 +133,140 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking) {
     var zones = workoutZones(type, doel);
     zones.forEach(function (z) { dekking[z] = true; });
   });
+
+  // Wellness-demotie pass: pas type aan op basis van HRV/slaap-signaal
+  if (wellness && (wellness.signal === 'demote' || wellness.signal === 'recovery')) {
+    days.forEach(function (d) {
+      if (!d.voorgesteldType) return;
+      if (wellness.signal === 'recovery') {
+        d.voorgesteldType = 'recovery';
+      } else {
+        d.voorgesteldType = demoteType_(d.voorgesteldType);
+      }
+    });
+  }
+}
+
+// ── Wellness signal + demotion ─────────────────────────────
+
+/**
+ * Maps high-intensity workout types naar lichtere alternatieven voor
+ * 'demote' signal. Types die niet in de map staan blijven onveranderd.
+ */
+var DEMOTE_MAP = {
+  // FTP
+  'sweet_spot': 'tempo',
+  'threshold':  'tempo',
+  // VO2max
+  'vo2_short':  'tempo',
+  'vo2_medium': 'tempo',
+  'vo2_long':   'tempo',
+  'vo2_3015':   'long_z2',
+  'microbursts':'long_z2',
+  'vo2max':     'tempo',
+  // Beklimmingen
+  'big_gear':   'tempo',
+  'bergsim':    'tempo',
+  'ss_lang':    'tempo',
+  'low_cad':    'tempo',
+  // Conditie
+  'fatox':      'long_z2',
+  // Combos
+  'combo_z2_vo2':     'long_z2',
+  'combo_ss_sprints': 'tempo',
+  'combo_all_three':  'combo_long_with_efforts',
+  // Pendel — terug-intervallen vervangen door pendel_z2
+  'pendel_ftp_intervals':      'pendel_z2',
+  'pendel_vo2_intervals':      'pendel_z2',
+  'pendel_conditie_intervals': 'pendel_z2',
+  'pendel_climb_intervals':    'pendel_z2',
+  // Test → recovery (geen testen tijdens slechte recovery)
+  'test': 'recovery'
+};
+
+function demoteType_(type) {
+  return DEMOTE_MAP[type] || type;
+}
+
+/**
+ * Leest Wellness tab + berekent HRV/slaap-signaal voor het algoritme.
+ *
+ * Returnt object met diagnostiek + signal ∈ {normal, warning, demote, recovery}.
+ * Bij ontbrekende wellness-data → signal='normal'.
+ */
+function getWellnessSignal(ss) {
+  var sh = ss.getSheetByName(WELLNESS_SHEET);
+  if (!sh) return wellnessFallback_('geen Wellness tab');
+
+  var maxDataRow = Math.min(sh.getLastRow(), WELL_STATS_ROW - 2);
+  if (maxDataRow < 2) return wellnessFallback_('geen wellness data');
+
+  // Kolommen: A=Datum B=RHR C=HRV D=Slaap
+  var data = sh.getRange(2, 1, maxDataRow - 1, 4).getValues();
+  var hrvSeries = data.map(function (r) {
+    var v = Number(r[2]); return isNaN(v) || v === 0 ? null : v;
+  });
+  var sleepSeries = data.map(function (r) {
+    var v = Number(r[3]); return isNaN(v) || v === 0 ? null : v;
+  });
+
+  function avgNonNull(arr) {
+    var sum = 0, n = 0;
+    arr.forEach(function (v) { if (v != null) { sum += v; n++; } });
+    return n > 0 ? sum / n : null;
+  }
+
+  var hrvBaseline    = avgNonNull(hrvSeries.slice(0, 28));
+  var hrvRecent      = avgNonNull(hrvSeries.slice(0, 3));
+  var sleepLastNight = sleepSeries.length ? sleepSeries[0] : null;
+  var sleepAvg3      = avgNonNull(sleepSeries.slice(0, 3));
+
+  var hrvDeficit = (hrvBaseline && hrvRecent)
+    ? Math.round((hrvRecent - hrvBaseline) / hrvBaseline * 100)
+    : null;
+
+  // Demotie-regels — eerste hit telt
+  var signal, reason;
+  if ((sleepLastNight != null && sleepLastNight < 5) ||
+      (sleepAvg3      != null && sleepAvg3      < 5)) {
+    signal = 'recovery';
+    reason = 'slaap kritiek laag (' + (sleepLastNight != null ? sleepLastNight : sleepAvg3) + 'u)';
+  } else if (hrvDeficit != null && hrvDeficit < -10 &&
+             sleepAvg3 != null && sleepAvg3 < 6) {
+    signal = 'recovery';
+    reason = 'HRV én slaap onder baseline (HRV ' + hrvDeficit + '%, slaap ' + sleepAvg3 + 'u)';
+  } else if ((hrvDeficit != null && hrvDeficit < -10) ||
+             (sleepLastNight != null && sleepLastNight < 6)) {
+    signal = 'demote';
+    reason = (hrvDeficit != null && hrvDeficit < -10)
+      ? 'HRV ' + hrvDeficit + '% onder baseline'
+      : 'slaap ' + sleepLastNight + 'u onder ondergrens';
+  } else if ((hrvDeficit != null && hrvDeficit < -5) ||
+             (sleepLastNight != null && sleepLastNight < 7)) {
+    signal = 'warning';
+    reason = 'lichte afwijking';
+  } else {
+    signal = 'normal';
+    reason = 'binnen baseline';
+  }
+
+  return {
+    hrvBaseline:    hrvBaseline    ? Math.round(hrvBaseline    * 10) / 10 : null,
+    hrvRecent:      hrvRecent      ? Math.round(hrvRecent      * 10) / 10 : null,
+    hrvDeficit:     hrvDeficit,
+    sleepLastNight: sleepLastNight,
+    sleepAvg3:      sleepAvg3      ? Math.round(sleepAvg3      * 10) / 10 : null,
+    signal:         signal,
+    reason:         reason
+  };
+}
+
+function wellnessFallback_(reason) {
+  return {
+    hrvBaseline: null, hrvRecent: null, hrvDeficit: null,
+    sleepLastNight: null, sleepAvg3: null,
+    signal: 'normal', reason: reason
+  };
 }
 
 function doelKey(doel) {
