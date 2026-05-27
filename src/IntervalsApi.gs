@@ -170,20 +170,30 @@ function buildEventPayload(workout, dateISO, type) {
   }
   type = type || 'Ride';
 
-  var zwo = buildWorkoutZwo_(workout);
-  if (!zwo) {
-    throw new Error('buildEventPayload: ZWO generation faalde voor "' + workout.naam + '"');
-  }
-
-  return {
+  var base = {
     category: 'WORKOUT',
     start_date_local: dateISO + 'T00:00:00',
     type: type,
     name: COACH_NAME_PREFIX + workout.naam,
-    filename: sanitizeFilename_(workout.naam) + '.zwo',
-    file_contents_base64: Utilities.base64Encode(zwo),
     external_id: 'coach_' + dateISO + '_' + type.toLowerCase()
   };
+
+  // Primary: ZWO file (structured FIT via intervals.icu → Garmin multi-step)
+  var zwo = buildWorkoutZwo_(workout);
+  if (zwo) {
+    base.filename = sanitizeFilename_(workout.naam) + '.zwo';
+    base.file_contents_base64 = Utilities.base64Encode(zwo);
+    return base;
+  }
+
+  // Fallback: DSL in description (intervals.icu chart werkt, Garmin = single-lap)
+  console.log('buildEventPayload: ZWO null, fallback op DSL-description voor "' + workout.naam + '"');
+  var dsl = buildWorkoutDsl_(workout);
+  base.description = dsl != null ? dsl : buildWorkoutDescription_(workout);
+  base.moving_time = (workout.totaalMin || 0) * 60;
+  base.target = 'POWER';
+  base.workout_doc = {};
+  return base;
 }
 
 /**
