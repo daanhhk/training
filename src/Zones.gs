@@ -153,7 +153,10 @@ function buildZones(ss) {
     if (isInf) {
       sh.getRange(r, 6).setValue('∞').setHorizontalAlignment('center');
     } else {
-      sh.getRange(r, 6).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(max / 100) + ';0)');
+      // FLOOR i.p.v. ROUND voor exacte parity met intervals.icu:
+      // de volgende zone's min (=F+1) refereert naar deze max, dus
+      // afronding-uitwijkingen moeten ALTIJD naar beneden.
+      sh.getRange(r, 6).setFormula('=FLOOR(' + ftpRef + '*' + nlNumber(max / 100) + ';1)');
     }
     sh.getRange(r, 1, 1, 6).setBackground(z[4]);
   });
@@ -169,7 +172,7 @@ function buildZones(ss) {
   sh.getRange(nextRow, 3).setValue(ssMin + '%');
   sh.getRange(nextRow, 4).setValue(ssMax + '%');
   sh.getRange(nextRow, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMin / 100) + ';0)');
-  sh.getRange(nextRow, 6).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMax / 100) + ';0)');
+  sh.getRange(nextRow, 6).setFormula('=FLOOR(' + ftpRef + '*' + nlNumber(ssMax / 100) + ';1)');
   sh.getRange(nextRow, 1, 1, 6).setBackground('#fef3c7')
     .setBorder(true, true, true, true, false, false, '#92400e',
                SpreadsheetApp.BorderStyle.SOLID);
