@@ -277,6 +277,132 @@ function doelKey(doel) {
   return 'ftp';
 }
 
+// ── DSL builder — intervals.icu description-format ───────────────
+
+/**
+ * Vertaalt workout.structuur naar intervals.icu's eigen workout-DSL,
+ * die intervals.icu zelf parsed naar structured workout (chart, Garmin sync).
+ *
+ * DSL syntax (zie forum.intervals.icu/.../63624):
+ *   - "- 15m 55%"          single step steady
+ *   - "- 15m 55-70%"       ramp
+ *   - "- 20m 90% Sweet Spot" met label
+ *   - "Nx" header + "- ..." children = repeat block (afgesloten met blank line)
+ *
+ * Returnt null als één segment niet parsed kan worden (caller valt
+ * dan terug op description-only push).
+ */
+function buildWorkoutDsl_(workout) {
+  if (!workout || !Array.isArray(workout.structuur) || !workout.structuur.length) return null;
+
+  var ftp = Number(getDocProp('ftp', '275')) || 275;
+  var blocks = [];
+
+  for (var i = 0; i < workout.structuur.length; i++) {
+    var block = dslBlockFromRow_(workout.structuur[i], ftp);
+    if (!block) {
+      console.log('buildWorkoutDsl_: kon segment niet parsen, terugval op description-only: ' +
+                  JSON.stringify(workout.structuur[i]));
+      return null;
+    }
+    blocks.push(block);
+  }
+
+  // Blocks gescheiden door dubbele newline — sluit ook impliciet repeat-blokken.
+  return blocks.join('\n\n');
+}
+
+function dslBlockFromRow_(row, ftp) {
+  var name   = String(row[0] || '');
+  var durStr = String(row[1] || '');
+  var powStr = String(row[2] || '');
+  var note   = String(row[4] || '');
+
+  // Repeat-loop: "Nx M min" of "Nx M sec"
+  var repMatch = /^\s*(\d+)\s*x\s*(\d+)\s*(min|sec|s)\b/i.exec(durStr);
+  if (repMatch) {
+    var reps    = parseInt(repMatch[1], 10);
+    var workDur = parseInt(repMatch[2], 10);
+    var workUnit = /min/i.test(repMatch[3]) ? 'm' : 's';
+    var workPct = dslMidPct_(powStr, ftp);
+    if (workPct == null) return null;
+
+    var lines = [reps + 'x', '- ' + workDur + workUnit + ' ' + workPct + '%'];
+
+    var rest = dslRestFromNote_(note);
+    if (rest && rest.duration > 0) {
+      var restUnit = rest.duration >= 60 && rest.duration % 60 === 0 ? 'm' : 's';
+      var restDur  = restUnit === 'm' ? rest.duration / 60 : rest.duration;
+      lines.push('- ' + restDur + restUnit + ' ' + rest.pct + '%');
+    }
+    return lines.join('\n');
+  }
+
+  // Enkele step — duur parsen
+  var seconds = dslDurationSec_(durStr);
+  if (!seconds) return null;
+  var durTxt = (seconds % 60 === 0) ? (seconds / 60) + 'm' : seconds + 's';
+
+  var isWarmup   = /warm[ -]?up|inrijden|opbouw/i.test(name + ' ' + note);
+  var isCooldown = /cool[ -]?down|uitrijden|easy uit/i.test(name + ' ' + note);
+  var label = isWarmup ? ' Warmup' : (isCooldown ? ' Cooldown' : '');
+
+  var range = dslPowerRange_(powStr, ftp);
+  if (!range) return null;
+
+  // Warmup met een range → echte ramp; anders midpoint als steady.
+  if (isWarmup && range.lo !== range.hi) {
+    return '- ' + durTxt + ' ' + range.lo + '-' + range.hi + '%' + label;
+  }
+  return '- ' + durTxt + ' ' + range.mid + '%' + label;
+}
+
+function dslPowerRange_(powStr, ftp) {
+  if (!powStr || powStr === '—') return null;
+  var rangeMatch = /(\d+)\s*[-–]\s*(\d+)\s*W/i.exec(powStr);
+  if (rangeMatch) {
+    var lo = parseInt(rangeMatch[1], 10);
+    var hi = parseInt(rangeMatch[2], 10);
+    return {
+      lo:  Math.round(lo / ftp * 100),
+      hi:  Math.round(hi / ftp * 100),
+      mid: Math.round((lo + hi) / 2 / ftp * 100)
+    };
+  }
+  var singleMatch = />?\s*(\d+)\s*W/i.exec(powStr);
+  if (singleMatch) {
+    var w = parseInt(singleMatch[1], 10);
+    var p = Math.round(w / ftp * 100);
+    return { lo: p, hi: p, mid: p };
+  }
+  return null;
+}
+
+function dslMidPct_(powStr, ftp) {
+  var r = dslPowerRange_(powStr, ftp);
+  return r ? r.mid : null;
+}
+
+function dslDurationSec_(str) {
+  if (!str) return 0;
+  var m = /(\d+)\s*min/i.exec(str);
+  if (m) return parseInt(m[1], 10) * 60;
+  var s = /(\d+)\s*s\b/i.exec(str);
+  if (s) return parseInt(s[1], 10);
+  return 0;
+}
+
+function dslRestFromNote_(note) {
+  if (!note) return null;
+  var m = /(\d+)\s*min\s+(rust|pauze|recovery)/i.exec(note);
+  if (!m) return null;
+  var pctMatch = /@\s*(\d+)\s*%/i.exec(note);
+  return {
+    duration: parseInt(m[1], 10) * 60,
+    pct:      pctMatch ? parseInt(pctMatch[1], 10) : 50
+  };
+}
+
 /**
  * Kiest de key-intensity workout voor een vrije dag op basis van doel,
  * macro-fase en wat nog open staat in dekking.
