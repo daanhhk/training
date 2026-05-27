@@ -101,7 +101,7 @@ function buildZones(ss) {
 
   // ── POWER ZONES ──
   sh.getRange(1, 1, 1, 6).merge()
-    .setValue('⚡  Power zones' + (apiPower ? ' (intervals.icu)' : ' (Coggan default)') + ' — % van FTP')
+    .setValue('⚡  Power zones' + (apiPower ? ' (intervals.icu)' : '') + ' — % van FTP')
     .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff')
     .setHorizontalAlignment('left');
 
@@ -123,7 +123,7 @@ function buildZones(ss) {
   // ── HR ZONES ──
   var hrStart = 3 + powerZones.length + 2;
   sh.getRange(hrStart, 1, 1, 6).merge()
-    .setValue('❤️  HR zones' + (apiHr ? ' (intervals.icu)' : ' (Friel default)') + ' — % van LTHR')
+    .setValue('❤️  HR zones' + (apiHr ? ' (intervals.icu)' : '') + ' — % van LTHR')
     .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff')
     .setHorizontalAlignment('left');
 
