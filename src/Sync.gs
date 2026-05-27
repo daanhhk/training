@@ -58,6 +58,16 @@ function syncAthleteZones() {
   if (powerBoundaries) setDocProp('api_power_zones', JSON.stringify(powerBoundaries));
   if (hrBoundaries)    setDocProp('api_hr_zones',    JSON.stringify(hrBoundaries));
 
+  // Sweet Spot range (geen zone in het 7-zone systeem, maar workout-library
+  // gebruikt deze range — los cachen voor de referentie-rij in Zones-tab).
+  var ssMin = raw.icu_sweet_spot_min ?? raw.sweet_spot_min ?? null;
+  var ssMax = raw.icu_sweet_spot_max ?? raw.sweet_spot_max ?? null;
+  if (ssMin != null) setDocProp('sweet_spot_min', ssMin);
+  if (ssMax != null) setDocProp('sweet_spot_max', ssMax);
+  if (ssMin != null && ssMax != null) {
+    console.log('Sweet Spot range: ' + ssMin + '% – ' + ssMax + '% FTP');
+  }
+
   // Sync cellen in Instellingen-tab
   var sh = ss.getSheetByName(SETTINGS_SHEET);
   if (sh) {
