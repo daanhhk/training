@@ -22,6 +22,19 @@ function dutchFormula(formula) {
   return formula;
 }
 
+/**
+ * Convert a JavaScript decimal number to NL-locale string format
+ * for use inside Apps Script setFormula() calls in NL-locale Sheets.
+ *
+ * NL-Sheets require "," as decimal separator in formulas.
+ * JS toString() produces "." → must be replaced.
+ *
+ * Example: nlNumber(0.55) → "0,55"
+ */
+function nlNumber(n) {
+  return String(n).replace('.', ',');
+}
+
 function getDocProp(key, def) {
   var v = PropertiesService.getDocumentProperties().getProperty(key);
   return v == null || v === '' ? def : v;
