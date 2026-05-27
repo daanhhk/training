@@ -158,24 +158,22 @@ function buildZones(ss) {
     sh.getRange(r, 1, 1, 6).setBackground(z[4]);
   });
 
-  // ── SWEET SPOT REFERENTIE ROW ───────────────────────────
-  var ssMinRaw = getDocProp('sweet_spot_min', '');
-  var ssMaxRaw = getDocProp('sweet_spot_max', '');
-  var ssMin = ssMinRaw === '' ? null : Number(ssMinRaw);
-  var ssMax = ssMaxRaw === '' ? null : Number(ssMaxRaw);
+  // ── SWEET SPOT REFERENTIE ROW (altijd zichtbaar) ───────
+  // Wordt door Sync.syncAthleteZones met fallback gevuld: athlete-object
+  // → recent activity → hardcoded 84/97. Hier extra safety-default.
+  var ssMin = Number(getDocProp('sweet_spot_min', '84')) || 84;
+  var ssMax = Number(getDocProp('sweet_spot_max', '97')) || 97;
   var nextRow = 3 + powerZones.length + 1;
-  if (ssMin != null && !isNaN(ssMin) && ssMax != null && !isNaN(ssMax)) {
-    sh.getRange(nextRow, 1).setValue('📍').setHorizontalAlignment('center');
-    sh.getRange(nextRow, 2).setValue('Sweet Spot').setFontWeight('bold');
-    sh.getRange(nextRow, 3).setValue(ssMin + '%');
-    sh.getRange(nextRow, 4).setValue(ssMax + '%');
-    sh.getRange(nextRow, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMin / 100) + ';0)');
-    sh.getRange(nextRow, 6).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMax / 100) + ';0)');
-    sh.getRange(nextRow, 1, 1, 6).setBackground('#fef3c7')
-      .setBorder(true, true, true, true, false, false, '#92400e',
-                 SpreadsheetApp.BorderStyle.SOLID);
-    nextRow += 1;
-  }
+  sh.getRange(nextRow, 1).setValue('📍').setHorizontalAlignment('center');
+  sh.getRange(nextRow, 2).setValue('Sweet Spot').setFontWeight('bold');
+  sh.getRange(nextRow, 3).setValue(ssMin + '%');
+  sh.getRange(nextRow, 4).setValue(ssMax + '%');
+  sh.getRange(nextRow, 5).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMin / 100) + ';0)');
+  sh.getRange(nextRow, 6).setFormula('=ROUND(' + ftpRef + '*' + nlNumber(ssMax / 100) + ';0)');
+  sh.getRange(nextRow, 1, 1, 6).setBackground('#fef3c7')
+    .setBorder(true, true, true, true, false, false, '#92400e',
+               SpreadsheetApp.BorderStyle.SOLID);
+  nextRow += 1;
 
   // ── HR ZONES ───────────────────────────────────────────
   var hrStart = nextRow + 1;
