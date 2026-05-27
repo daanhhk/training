@@ -181,8 +181,8 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase) {
   var doel = settings.doel;
   var ftp = settings.ftp, lthr = settings.lthr;
 
-  // Generieke types eerst
-  if (type === 'long_z2')     return genericLongZ2(mins, settings, mesoWeek);
+  // Generieke types eerst (maar Conditie heeft eigen long_z2 met fase-schaling)
+  if (type === 'long_z2' && doel !== 'Conditie') return genericLongZ2(mins, settings, mesoWeek);
   if (type === 'recovery')    return genericRecovery(mins, settings);
   if (type === 'pendel_z2')   return genericPendelZ2(mins, settings);
   if (type.indexOf('pendel_') === 0 && type.indexOf('_intervals') > 0) {

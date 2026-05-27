@@ -1,10 +1,163 @@
 /**
  * Proposal.gs — Tab "Voorstel".
  *
- * Toont het wekelijkse trainingsvoorstel in een leesbare vorm: per dag
- * de aanbevolen workout met beschrijving, duur, TSS en motivatie.
+ * Rendert het wekelijkse trainingsvoorstel: header (doel + macro-week
+ * + fase + meso-week), dekking-banner, per-dag workout-blokken,
+ * en weektotaal + Garmin Training Status heuristic.
  */
 
-function buildProposalSheet() {
-  // Stub — implementatie komt in volgende stap.
+var PROPOSAL_SHEET = 'Voorstel';
+
+function renderProposal(ss, days, voltooid, settings, mesoWeek, macro, dekking) {
+  var sh = getOrCreateSheet(ss, PROPOSAL_SHEET);
+  var r = 1;
+  var COLS = 5;
+
+  // ── Header ──
+  sh.getRange(r, 1, 1, COLS).merge()
+    .setValue('🚴  Voorstel — ' + settings.doel + ' — Week ' + macro.week + ' van ' + settings.doelDuur + ' — ' + macro.fase + ' fase')
+    .setFontWeight('bold').setFontSize(14)
+    .setBackground('#111827').setFontColor('#ffffff')
+    .setHorizontalAlignment('left').setVerticalAlignment('middle');
+  sh.setRowHeight(r, 34);
+  r += 2;
+
+  // Mesocyclus regel
+  sh.getRange(r, 1, 1, COLS).merge()
+    .setValue('Mesocyclus week ' + mesoWeek + ' van 4   ·   load factor ' + mesoFactor(mesoWeek).toFixed(2) + '×' +
+              (mesoWeek === 4 ? '   ·   RECOVERY WEEK' : ''))
+    .setBackground(mesoWeek === 4 ? '#fef3c7' : '#e5e7eb')
+    .setFontStyle('italic').setFontColor('#374151');
+  r += 1;
+
+  // Dekking banner
+  var icon = function (ok) { return ok ? '✅' : '⬜'; };
+  var dekText = 'Load focus dekking deze week:   ' +
+    icon(dekking.low)       + ' Low   ' +
+    icon(dekking.high)      + ' High   ' +
+    icon(dekking.anaerobic) + ' Anaerobic';
+  sh.getRange(r, 1, 1, COLS).merge()
+    .setValue(dekText)
+    .setBackground('#e0f2fe').setFontWeight('bold');
+  r += 1;
+
+  if (mesoWeek === 4) {
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('⚠️  Recovery week — alle workouts zijn lichter. Druk je niet bij de wedstrijd-zone, herstel is training.')
+      .setBackground('#fef3c7').setFontStyle('italic');
+    r += 1;
+  }
+  if (macro.isTestWeek) {
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('🧪  Test week — je krijgt deze week 1 test-workout. Vul resultaten in op Instellingen.')
+      .setBackground('#ede9fe').setFontStyle('italic');
+    r += 1;
+  }
+  r += 1;
+
+  // ── Per dag ──
+  var totalTss = 0, totalMin = 0;
+  days.forEach(function (d) {
+    if (!d.train) return;
+    var wo = d.voorgesteldType
+      ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase)
+      : null;
+
+    // Day header
+    var dateStr = d.datum ? formatDate(d.datum, 'EEE dd-MM') : '';
+    var statusStr = d.gedaan ? '   ✅ GEDAAN' : '';
+    var nameStr = wo ? wo.naam : '(geen workout)';
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue(d.dag + '   ·   ' + dateStr + '   ·   ' + nameStr + statusStr)
+      .setFontWeight('bold').setFontSize(12)
+      .setBackground(d.gedaan ? '#d1d5db' : '#374151')
+      .setFontColor('#ffffff')
+      .setHorizontalAlignment('left').setVerticalAlignment('middle');
+    sh.setRowHeight(r, 28);
+    r += 1;
+
+    if (!wo) {
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('Geen workout gepland (Train? uitgevinkt of dagtype leeg).')
+        .setFontStyle('italic').setFontColor('#6b7280');
+      r += 2;
+      return;
+    }
+
+    // Focus + duur + TSS regel
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('Focus: ' + wo.focus + '   ·   Duur: ' + wo.totaalMin + ' min   ·   TSS: ' + wo.tss +
+                '   ·   Dekking: ' + (wo.zones || []).join(', '))
+      .setBackground('#f3f4f6').setFontColor('#374151').setFontStyle('italic');
+    r += 1;
+
+    // Structuur header
+    sh.getRange(r, 1, 1, COLS).setValues([['Segment', 'Duur', 'Vermogen', 'Hartslag', 'Toelichting']])
+      .setFontWeight('bold').setBackground('#e5e7eb');
+    r += 1;
+
+    // Structuur rows
+    var structRows = wo.structuur || [];
+    if (structRows.length) {
+      sh.getRange(r, 1, structRows.length, 5).setValues(structRows);
+      sh.getRange(r, 5, structRows.length, 1).setWrap(true);
+      r += structRows.length;
+    }
+
+    // Eindopmerking
+    if (wo.eindopmerking) {
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('💡  ' + wo.eindopmerking)
+        .setFontStyle('italic').setFontColor('#1e40af').setWrap(true);
+      r += 1;
+    }
+    r += 1;
+
+    totalTss += wo.tss || 0;
+    totalMin += wo.totaalMin || 0;
+  });
+
+  // ── Weektotaal + Garmin heuristic ──
+  sh.getRange(r, 1, 1, COLS).merge()
+    .setValue('Week totaal')
+    .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff');
+  r += 1;
+  sh.getRange(r, 1).setValue('Totaal TSS:').setFontWeight('bold');
+  sh.getRange(r, 2).setValue(totalTss);
+  r += 1;
+  sh.getRange(r, 1).setValue('Totaal tijd:').setFontWeight('bold');
+  sh.getRange(r, 2).setValue(Math.floor(totalMin / 60) + 'u ' + (totalMin % 60) + 'm');
+  r += 1;
+  sh.getRange(r, 1).setValue('Verwachte Garmin status:').setFontWeight('bold');
+  sh.getRange(r, 2, 1, 4).merge().setValue(garminHeuristic(totalTss, mesoWeek, macro.fase))
+    .setFontStyle('italic').setWrap(true);
+  r += 1;
+
+  SpreadsheetApp.flush();
+  sh.setColumnWidth(1, 150);
+  sh.setColumnWidth(2, 110);
+  sh.setColumnWidth(3, 160);
+  sh.setColumnWidth(4, 140);
+  sh.setColumnWidth(5, 400);
+  sh.setFrozenRows(1);
+}
+
+/**
+ * Heuristic — zonder echte CTL-data inschatting op basis van weektotaal TSS,
+ * mesoWeek en macroFase. Drempels gekozen voor een 280W FTP cyclist met
+ * ongeveer 6-9u/week training.
+ */
+function garminHeuristic(totalTss, mesoWeek, macroFase) {
+  if (mesoWeek === 4) {
+    if (totalTss < 200) return 'Recovering / Unproductive → Productive (na herstel)';
+    return 'Recovering — load lager dan vorige week is gewenst';
+  }
+  if (macroFase === 'Test') {
+    return 'Maintaining / Peaking — test week, kort en specifiek';
+  }
+  if (totalTss < 200)      return 'Maintaining / Low load — sub-optimaal voor groei';
+  if (totalTss < 350)      return 'Productive — load ligt in groei-zone';
+  if (totalTss < 500)      return 'Productive — bovenkant van groei-zone';
+  if (totalTss < 650)      return 'Productive (hoog) — let op slaap + voeding';
+  return 'Overreaching risk — overweeg of dit duurzaam is';
 }
