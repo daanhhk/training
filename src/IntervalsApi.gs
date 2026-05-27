@@ -157,73 +157,63 @@ function getWellness(daysBack) {
 }
 
 /**
- * Push een workout naar intervals.icu kalender als WORKOUT event.
- * intervals.icu synct events automatisch naar gekoppelde Garmin devices
- * (verschijnt op Garmin Epix als "Geplande training" binnen 1-2 minuten).
- *
- * Eerste versie: alleen description-tekst (leesbaar op Garmin). Het
- * gestructureerde workout_doc format kan later worden toegevoegd voor
- * step-by-step coaching op het horloge.
- *
- * @param workout  object met { naam, totaalMin, focus, structuur, tss, eindopmerking }
- * @param dateISO  'yyyy-MM-dd' string — datum waarop het op de kalender komt
- * @param type     'Ride' | 'Run' | etc. (default 'Ride')
- * @return parsed response body van intervals.icu
+ * Bouwt één event-payload voor de /events/bulk endpoint.
+ * external_id maakt de push idempotent: re-push met dezelfde external_id
+ * triggert een UPDATE in plaats van INSERT (?upsert=true).
  */
-function pushWorkout(workout, dateISO, type) {
-  if (!workout || !workout.naam) throw new Error('pushWorkout: geen geldig workout-object.');
+function buildEventPayload(workout, dateISO, type) {
+  if (!workout || !workout.naam) throw new Error('buildEventPayload: geen geldig workout-object.');
   if (!dateISO || !/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
-    throw new Error('pushWorkout: dateISO moet yyyy-MM-dd zijn (kreeg "' + dateISO + '").');
+    throw new Error('buildEventPayload: dateISO moet yyyy-MM-dd zijn (kreeg "' + dateISO + '").');
   }
   type = type || 'Ride';
 
-  var prefixedName = COACH_NAME_PREFIX + workout.naam;
-  var description  = buildWorkoutDescription_(workout);
-  var doc          = buildWorkoutDoc_(workout);
+  var dsl = buildWorkoutDsl_(workout);
+  var description = dsl != null ? dsl : buildWorkoutDescription_(workout);
 
-  // Library-route is verplicht voor structured workouts: /events negeert
-  // het embedded workout_doc veld stilletjes. We maken eerst een library
-  // workout aan, dan een event dat ernaar verwijst via workout_id.
-  var folderId = ensureCoachFolderId_();
-
-  var libPayload = {
-    name: prefixedName,
-    type: type,
-    description: description
-  };
-  if (doc) {
-    libPayload.workout_doc = doc;
-    libPayload.moving_time = doc.duration;
-    console.log('pushWorkout: structured ' + doc.steps.length + ' steps, ' + doc.duration + 's totaal');
-  } else {
-    console.log('pushWorkout: description-only (kon structuur niet mappen)');
-  }
-
-  var libWorkout = intervalsRequest_(
-    '/athlete/{id}/folders/' + folderId + '/workouts',
-    { method: 'post', payload: libPayload }
-  );
-  Logger.log('POST /folders/{id}/workouts RAW RESPONSE:');
-  Logger.log(JSON.stringify(libWorkout, null, 2));
-
-  // Step 2: maak event dat de library workout pakt
-  var eventPayload = {
+  return {
     category: 'WORKOUT',
     start_date_local: dateISO + 'T00:00:00',
     type: type,
-    name: prefixedName,
-    workout_id: libWorkout && libWorkout.id,
-    targets: ['POWER']
+    name: COACH_NAME_PREFIX + workout.naam,
+    description: description,
+    moving_time: (workout.totaalMin || 0) * 60,
+    target: 'POWER',
+    workout_doc: {},
+    external_id: 'coach_' + dateISO + '_' + type.toLowerCase()
   };
+}
 
-  var event = intervalsRequest_('/athlete/{id}/events', {
+/**
+ * Push 1 workout. Wrapt single event in array en stuurt via bulk endpoint
+ * met upsert=true → intervals.icu parsed de DSL uit description en bouwt
+ * de structured workout zelf. Re-push met zelfde external_id = update.
+ *
+ * @return response van bulk endpoint (array van event-objects)
+ */
+function pushWorkout(workout, dateISO, type) {
+  return pushEvents_([buildEventPayload(workout, dateISO, type)]);
+}
+
+/**
+ * Low-level bulk push. Stuurt een array van event-payloads naar
+ * /events/bulk?upsert=true. external_id op elke payload zorgt voor
+ * idempotency (insert óf update afhankelijk van bestaan).
+ */
+function pushEvents_(events) {
+  if (!Array.isArray(events) || !events.length) {
+    throw new Error('pushEvents_: lege of ongeldige events array.');
+  }
+  console.log('pushEvents_: ' + events.length + ' event(s) naar /events/bulk?upsert=true');
+
+  var response = intervalsRequest_('/athlete/{id}/events/bulk?upsert=true', {
     method: 'post',
-    payload: eventPayload
+    payload: events
   });
-  Logger.log('POST /events RAW RESPONSE:');
-  Logger.log(JSON.stringify(event, null, 2));
 
-  return { library_workout: libWorkout, event: event };
+  Logger.log('POST /events/bulk RAW RESPONSE:');
+  Logger.log(JSON.stringify(response, null, 2));
+  return response;
 }
 
 /**

@@ -362,43 +362,47 @@ function pushAllPendingWorkouts() {
     return;
   }
 
-  var ok = 0, fail = 0;
-  var errors = [];
+  // Bouw alle event-payloads, één call naar /events/bulk?upsert=true
+  var events = [];
+  var skipped = [];
 
-  pending.forEach(function (d, idx) {
+  pending.forEach(function (d) {
     var dateISO = formatDate(d.datum, 'yyyy-MM-dd');
     var raw = getDocProp('proposal_' + dateISO, '');
     if (!raw) {
-      fail++;
-      errors.push(d.dag + ' (' + dateISO + '): geen opgeslagen voorstel — Genereer voorstel eerst.');
+      skipped.push(d.dag + ' (' + dateISO + '): geen opgeslagen voorstel — Genereer voorstel eerst.');
       return;
     }
-    ss.toast('Pushing ' + (idx + 1) + '/' + pending.length + ' (' + d.dag + ')...', '🚴 Coach', 3);
     try {
-      // Idempotent: verwijder bestaande coach events (+ library workouts)
-      // op deze datum vóór de nieuwe push. Geen-op bij eerste push.
-      var removed = deleteCoachEventsOnDate_(dateISO);
-      if (removed > 0) {
-        console.log('Replaced ' + removed + ' bestaande event(s) op ' + dateISO);
-      }
-
       var wo = JSON.parse(raw);
-      pushWorkout(wo, dateISO, 'Ride');
-      console.log('Pushed: ' + d.dag + ' ' + dateISO + ' — ' + wo.naam);
-      ok++;
+      events.push(buildEventPayload(wo, dateISO, 'Ride'));
     } catch (e) {
-      fail++;
-      errors.push(d.dag + ' (' + dateISO + '): ' + e.message);
-      console.error('pushAllPendingWorkouts ' + dateISO, e);
+      skipped.push(d.dag + ' (' + dateISO + '): ' + e.message);
     }
   });
 
-  var msg = '✅ ' + ok + ' workouts gepusht naar intervals.icu kalender.\n' +
-            'Synct binnen 1-2 minuten naar Garmin Epix als geplande training.';
-  if (fail > 0) {
-    msg += '\n\n❌ ' + fail + ' mislukt:\n' + errors.join('\n');
+  if (!events.length) {
+    if (ui) ui.alert('Niets om te pushen', skipped.join('\n') || 'Geen geldige voorstellen.', ui.ButtonSet.OK);
+    return;
   }
-  if (ui) ui.alert('Push voltooid', msg, ui.ButtonSet.OK);
+
+  ss.toast('Pushing ' + events.length + ' workouts in 1 bulk call...', '🚴 Coach', 5);
+  try {
+    var response = pushEvents_(events);
+    var pushedCount = Array.isArray(response) ? response.length : events.length;
+    var msg = '✅ ' + pushedCount + ' workouts gepusht naar intervals.icu (upsert).\n' +
+              'Re-push met dezelfde external_id triggert update i.p.v. duplicate.\n' +
+              'Synct binnen 1-2 minuten naar Garmin Epix.';
+    if (skipped.length) {
+      msg += '\n\n⚠️ Overgeslagen:\n' + skipped.join('\n');
+    }
+    if (ui) ui.alert('Push voltooid', msg, ui.ButtonSet.OK);
+  } catch (e) {
+    console.error('pushAllPendingWorkouts bulk failed', e);
+    var fmsg = '❌ Bulk push mislukt: ' + e.message;
+    if (skipped.length) fmsg += '\n\nOvergeslagen:\n' + skipped.join('\n');
+    if (ui) ui.alert('Push mislukt', fmsg, ui.ButtonSet.OK);
+  }
 }
 
 // ── Reconcile planner met activities ─────────────────────────────
