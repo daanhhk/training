@@ -227,6 +227,56 @@ function pushWorkout(workout, dateISO, type) {
 }
 
 /**
+ * Verwijdert bestaande events op gegeven datum waarvan de naam begint
+ * met COACH_NAME_PREFIX. Idempotency-helper voor re-push.
+ *
+ * Verwijdert ook (best-effort) de gekoppelde library workouts, zodat
+ * de Coach Generated folder niet vol loopt met orphans.
+ *
+ * @return aantal verwijderde events
+ */
+function deleteCoachEventsOnDate_(dateISO) {
+  var events;
+  try {
+    events = intervalsRequest_('/athlete/{id}/events', {
+      query: { oldest: dateISO, newest: dateISO }
+    });
+  } catch (e) {
+    console.warn('deleteCoachEventsOnDate_: events lookup failed: ' + e.message);
+    return 0;
+  }
+  if (!Array.isArray(events) || !events.length) return 0;
+
+  var deleted = 0;
+  events.forEach(function (ev) {
+    var nm = String(ev.name || '');
+    if (nm.indexOf(COACH_NAME_PREFIX) !== 0) return; // niet van ons
+
+    // Library workout opruimen (best-effort)
+    if (ev.workout_id) {
+      try {
+        intervalsRequest_('/athlete/{id}/workouts/' + ev.workout_id, {
+          method: 'delete'
+        });
+        console.log('Deleted library workout ' + ev.workout_id + ' (' + nm + ')');
+      } catch (libErr) {
+        console.warn('Library workout ' + ev.workout_id + ' delete failed: ' + libErr.message);
+      }
+    }
+
+    // Event verwijderen
+    try {
+      intervalsRequest_('/athlete/{id}/events/' + ev.id, { method: 'delete' });
+      deleted++;
+      console.log('Deleted coach event ' + ev.id + ' on ' + dateISO + ' (' + nm + ')');
+    } catch (evErr) {
+      console.warn('Event ' + ev.id + ' delete failed: ' + evErr.message);
+    }
+  });
+  return deleted;
+}
+
+/**
  * Vindt of creëert de "Coach Generated" folder in de library.
  * Folder-id wordt gecached in DocProps voor hergebruik.
  */

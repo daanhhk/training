@@ -375,6 +375,13 @@ function pushAllPendingWorkouts() {
     }
     ss.toast('Pushing ' + (idx + 1) + '/' + pending.length + ' (' + d.dag + ')...', '🚴 Coach', 3);
     try {
+      // Idempotent: verwijder bestaande coach events (+ library workouts)
+      // op deze datum vóór de nieuwe push. Geen-op bij eerste push.
+      var removed = deleteCoachEventsOnDate_(dateISO);
+      if (removed > 0) {
+        console.log('Replaced ' + removed + ' bestaande event(s) op ' + dateISO);
+      }
+
       var wo = JSON.parse(raw);
       pushWorkout(wo, dateISO, 'Ride');
       console.log('Pushed: ' + d.dag + ' ' + dateISO + ' — ' + wo.naam);
