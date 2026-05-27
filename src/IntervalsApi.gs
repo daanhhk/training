@@ -153,13 +153,70 @@ function getWellness(daysBack) {
 }
 
 /**
- * Push een workout naar intervals.icu kalender.
- * Stub — volledige implementatie in volgende stap.
+ * Push een workout naar intervals.icu kalender als WORKOUT event.
+ * intervals.icu synct events automatisch naar gekoppelde Garmin devices
+ * (verschijnt op Garmin Epix als "Geplande training" binnen 1-2 minuten).
+ *
+ * Eerste versie: alleen description-tekst (leesbaar op Garmin). Het
+ * gestructureerde workout_doc format kan later worden toegevoegd voor
+ * step-by-step coaching op het horloge.
+ *
+ * @param workout  object met { naam, totaalMin, focus, structuur, tss, eindopmerking }
+ * @param dateISO  'yyyy-MM-dd' string — datum waarop het op de kalender komt
+ * @param type     'Ride' | 'Run' | etc. (default 'Ride')
+ * @return parsed response body van intervals.icu
  */
-function pushWorkout(workoutObj, date) {
-  console.log('pushWorkout placeholder — implementatie komt in volgende stap.',
-              JSON.stringify({ name: workoutObj && workoutObj.naam, date: date }));
-  return null;
+function pushWorkout(workout, dateISO, type) {
+  if (!workout || !workout.naam) throw new Error('pushWorkout: geen geldig workout-object.');
+  if (!dateISO || !/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
+    throw new Error('pushWorkout: dateISO moet yyyy-MM-dd zijn (kreeg "' + dateISO + '").');
+  }
+  type = type || 'Ride';
+
+  var payload = {
+    category: 'WORKOUT',
+    start_date_local: dateISO + 'T00:00:00',
+    type: type,
+    name: workout.naam,
+    description: buildWorkoutDescription_(workout)
+  };
+
+  return intervalsRequest_('/athlete/{id}/events', {
+    method: 'post',
+    payload: payload
+  });
+}
+
+/**
+ * Bouwt een multi-line description string die zowel in intervals.icu's
+ * kalender als op Garmin Epix leesbaar is. Per segment één regel:
+ *   "Warmup 15 min @ 150-200W"
+ * Eindopmerking wordt afgekapt op 200 chars (Garmin notitie-limiet).
+ */
+function buildWorkoutDescription_(workout) {
+  var lines = [];
+  lines.push(workout.naam + ' — ' + (workout.totaalMin || '?') + 'min' +
+             (workout.tss ? ' (TSS ' + workout.tss + ')' : ''));
+  if (workout.focus) lines.push('Focus: ' + workout.focus);
+  lines.push('');
+
+  if (Array.isArray(workout.structuur)) {
+    workout.structuur.forEach(function (seg) {
+      // seg = [Segment, Duur, Vermogen, Hartslag, Toelichting]
+      var label = seg[0] || '';
+      var dur   = seg[1] || '';
+      var pow   = seg[2] || '';
+      lines.push(label + ' ' + dur + (pow ? ' @ ' + pow : ''));
+    });
+  }
+
+  if (workout.eindopmerking) {
+    lines.push('');
+    var note = String(workout.eindopmerking);
+    lines.push(note.length > 200 ? note.substring(0, 197) + '...' : note);
+  }
+
+  return lines.join('\n');
 }
 
 /**
