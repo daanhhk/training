@@ -17,6 +17,7 @@ function onOpen() {
     .addItem('Sync nu (intervals.icu)', 'syncAll')
     .addItem('Test API verbinding', 'menuTestConnection')
     .addItem('Debug API respons (eenmalig)', 'debugApiResponse')
+    .addItem('Debug bestaande workout', 'debugExistingWorkout')
     .addSeparator()
     .addItem('Installeer dagelijkse sync (06:00)', 'installDailySyncTrigger')
     .addItem('Verwijder dagelijkse sync', 'removeDailySyncTrigger')

@@ -220,6 +220,67 @@ function buildWorkoutDescription_(workout) {
 }
 
 /**
+ * Diagnostiek: haalt 1 bestaande WORKOUT-event op uit Daan's kalender,
+ * plus folders-endpoint, zodat we de exacte structured-workout format
+ * van intervals.icu kunnen leren. Resultaat → Executions → console.
+ */
+function debugExistingWorkout() {
+  var athleteId = getDocProp('intervals_athlete_id', '');
+  if (!athleteId) throw new Error('Athlete ID niet ingesteld in Instellingen.');
+
+  // Probeer events met category=WORKOUT — laatste 2 maanden
+  var today = Utilities.formatDate(new Date(), 'Europe/Amsterdam', 'yyyy-MM-dd');
+  var twoMonthsAgo = Utilities.formatDate(
+    new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+    'Europe/Amsterdam', 'yyyy-MM-dd');
+
+  console.log('=== EVENTS endpoint (category=WORKOUT) ===');
+  var events;
+  try {
+    events = intervalsRequest_(
+      '/athlete/' + athleteId + '/events?oldest=' + twoMonthsAgo +
+      '&newest=' + today + '&category=WORKOUT');
+    console.log('Count: ' + (events ? events.length : 0));
+    if (Array.isArray(events) && events.length) {
+      console.log('=== FIRST WORKOUT FULL JSON ===');
+      console.log(JSON.stringify(events[0], null, 2));
+      console.log('=== EVENT KEYS ===');
+      console.log(Object.keys(events[0]).sort().join(', '));
+    }
+  } catch (e) {
+    console.log('Events endpoint error: ' + e.message);
+  }
+
+  // Probeer folders endpoint
+  console.log('=== FOLDERS endpoint ===');
+  try {
+    var folders = intervalsRequest_('/athlete/' + athleteId + '/folders');
+    console.log(JSON.stringify(folders, null, 2).substring(0, 2000));
+  } catch (e) {
+    console.log('Folders endpoint error: ' + e.message);
+  }
+
+  // Probeer workouts endpoint (library)
+  console.log('=== WORKOUTS endpoint (library) ===');
+  try {
+    var lib = intervalsRequest_('/athlete/' + athleteId + '/workouts');
+    if (Array.isArray(lib) && lib.length) {
+      console.log('Library count: ' + lib.length);
+      console.log('=== FIRST LIBRARY WORKOUT ===');
+      console.log(JSON.stringify(lib[0], null, 2));
+    } else {
+      console.log('Library leeg of niet beschikbaar.');
+    }
+  } catch (e) {
+    console.log('Workouts library endpoint error: ' + e.message);
+  }
+
+  SpreadsheetApp.getActive().toast(
+    'Debug log geschreven — Apps Script Editor → Executions',
+    '🚴 Coach', 8);
+}
+
+/**
  * Diagnostiek: logt het volledige athlete-object + eerste activity zodat
  * we kunnen zien welke veldnamen intervals.icu gebruikt voor deze account.
  * Resultaat staat in Apps Script Editor → Executions → expand console output.
