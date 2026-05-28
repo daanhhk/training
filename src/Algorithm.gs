@@ -51,9 +51,12 @@ function generateProposal() {
     workoutZones(d.voorgesteldType, settings.doel).forEach(function (z) { dekking[z] = true; });
   });
 
+  // Feedback-loop: geplande intent vs werkelijke zone-times deze week.
+  var feedback = computeZoneDebt_(ss, weekStart);
+
   var klimType = (macro.hoofdEvent && macro.hoofdEvent.klimType) || null;
   var recentHard = recentHardDayDate_(ss);
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType, recentHard);
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType, recentHard, feedback.debt);
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
@@ -87,7 +90,7 @@ function generateProposal() {
   });
   setDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), JSON.stringify(weekplan));
 
-  renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, dekking, wellness);
+  renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, dekking, wellness, feedback);
 
   var prop = ss.getSheetByName(PROPOSAL_SHEET);
   if (prop) ss.setActiveSheet(prop);
@@ -232,6 +235,105 @@ function actualZoneMinutes_(activity, zoneBoundaries) {
   return { low: buckets.low / 60, high: buckets.high / 60, anaerobic: buckets.anaerobic / 60 };
 }
 
+/** Primaire load-focus bucket van een workout-type. */
+function typeBucket_(type, doel) {
+  var z = workoutZones(type, doel);
+  if (z.indexOf('anaerobic') >= 0) return 'anaerobic';
+  if (z.indexOf('high') >= 0) return 'high';
+  return 'low';
+}
+
+/**
+ * Vergelijkt geplande intent (weekplan_<weekStart>) met werkelijke
+ * zone-minuten van voltooide+gematchte dagen DEZE week.
+ * debt[bucket] = Σ intent - Σ actual (positief = tekort).
+ * |debt| < 5 min → 0 (verwaarloosbaar). Geen zone-data voor een dag →
+ * aanname dat de intent gehaald is (debt 0 voor die dag).
+ *
+ * @return { debt:{low,high,anaerobic}, details:[per dag], hasPlan:bool }
+ */
+function computeZoneDebt_(ss, weekStart) {
+  var result = { debt: { low: 0, high: 0, anaerobic: 0 }, details: [], hasPlan: false };
+
+  var raw = getDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), '');
+  if (!raw) return result;
+  var plan;
+  try { plan = JSON.parse(raw); } catch (e) { return result; }
+  if (!Array.isArray(plan) || !plan.length) return result;
+  result.hasPlan = true;
+
+  var planByDate = {};
+  plan.forEach(function (p) { planByDate[p.datum] = p; });
+
+  // Activities ophalen (icu_zone_times zit niet in de tab) — stil falen.
+  var acts = [];
+  try { acts = getActivities(14) || []; } catch (e) { console.warn('computeZoneDebt getActivities: ' + e.message); }
+  var actsByDate = {};
+  acts.forEach(function (a) {
+    if (!a.start_date_local) return;
+    var key = formatDate(stripTime_(new Date(a.start_date_local)), 'yyyy-MM-dd');
+    (actsByDate[key] = actsByDate[key] || []).push(a);
+  });
+
+  var wsT = stripTime_(weekStart).getTime();
+  var weT = wsT + 7 * 24 * 60 * 60 * 1000;
+
+  var planner = readPlanner(ss);
+  planner.forEach(function (day) {
+    if (!day.train || !day.gedaan || !day.datum) return;
+    var dt = stripTime_(day.datum);
+    if (dt.getTime() < wsT || dt.getTime() >= weT) return;
+    var key = formatDate(dt, 'yyyy-MM-dd');
+    var p = planByDate[key];
+    if (!p || !p.intent) return;
+
+    var dayActs = actsByDate[key] || [];
+    var actual = null;
+    dayActs.forEach(function (a) {
+      var az = actualZoneMinutes_(a, null);
+      if (az) {
+        if (!actual) actual = { low: 0, high: 0, anaerobic: 0 };
+        actual.low += az.low; actual.high += az.high; actual.anaerobic += az.anaerobic;
+      }
+    });
+
+    result.details.push({
+      datum: key, dag: day.dag, type: p.workoutType,
+      intent: p.intent, actual: actual, hasData: !!actual
+    });
+
+    if (!actual) return; // geen data → aanname plan gehaald
+    ['low', 'high', 'anaerobic'].forEach(function (b) {
+      result.debt[b] += (p.intent[b] || 0) - (actual[b] || 0);
+    });
+  });
+
+  ['low', 'high', 'anaerobic'].forEach(function (b) {
+    result.debt[b] = Math.round(result.debt[b]);
+    if (Math.abs(result.debt[b]) < 5) result.debt[b] = 0;
+  });
+  return result;
+}
+
+/**
+ * Kiest een workout-categorie die de grootste positieve debt-bucket
+ * aanpakt. Null als er geen significant tekort (<5 min) is.
+ */
+function debtPreferredType_(debt, doel, macroFase) {
+  if (!debt) return null;
+  var best = null, bestVal = 4; // drempel 5
+  ['anaerobic', 'high', 'low'].forEach(function (b) {
+    if (debt[b] > bestVal) { bestVal = debt[b]; best = b; }
+  });
+  if (!best) return null;
+  if (best === 'anaerobic') return 'vo2max';
+  if (best === 'high') {
+    if (doel === 'Beklimmingen') return 'klim';
+    return (macroFase === 'Peak') ? 'threshold' : 'sweet_spot';
+  }
+  return 'long_z2';
+}
+
 /**
  * Zorgt dat de data-tabs (Activiteiten + Wellness) gevuld zijn vóór
  * generateProposal draait, en reconcilet de Gedaan-checkboxes.
@@ -304,7 +406,7 @@ function ensureIntent_(wo) {
  * @param wellness  resultaat van getWellnessSignal(); demote/recovery
  *                  signal overschrijft de assignment cascade.
  */
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt) {
   var doel = settings.doel;
   var isTaper    = macroFase === 'Taper';
   var isEventRecovery = macroFase === 'Recovery';
@@ -315,6 +417,10 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   var openersGedaan = false;
   // Avoid-consecutive-hard: laatste harde dag vóór het te-plannen venster.
   var lastHardDate = recentHardDate ? stripTime_(recentHardDate) : null;
+  // Debt-weging alleen in opbouwfasen (niet tijdens taper/recovery —
+  // dan geen compensatie-intensiteit forceren; herstel respecteren).
+  var debtActief = !!debt && !isTaper && !isEventRecovery && !isRecovery;
+  var debtWerk = debtActief ? { low: debt.low, high: debt.high, anaerobic: debt.anaerobic } : null;
 
   // Sorteer op dagIdx zodat ma→zo wordt verwerkt
   days.sort(function (a, b) { return a.dagIdx - b.dagIdx; });
@@ -352,7 +458,14 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
         type = 'long_z2';
       }
     } else if (d.type === 'vrij') {
-      type = keyIntensity(doel, macroFase, dekking, klimType);
+      // Debt-weging: prioriteer grootste positieve tekort-bucket.
+      var dp = debtWerk ? debtPreferredType_(debtWerk, doel, macroFase) : null;
+      if (dp) {
+        type = dp;
+        debtWerk[typeBucket_(dp, doel)] = 0; // verbruikt → volgende dag andere bucket
+      } else {
+        type = keyIntensity(doel, macroFase, dekking, klimType);
+      }
     } else if (d.type === 'recovery') {
       type = 'recovery';
     } else {
