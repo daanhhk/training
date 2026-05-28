@@ -19,7 +19,7 @@ function onOpen() {
     .addItem('Debug API respons (eenmalig)', 'debugApiResponse')
     .addItem('Debug bestaande workout', 'debugExistingWorkout')
     .addSeparator()
-    .addItem('Installeer dagelijkse sync (06:00)', 'installDailySyncTrigger')
+    .addItem('Installeer dagelijkse sync (08:00)', 'installDailySyncTrigger')
     .addItem('Verwijder dagelijkse sync', 'removeDailySyncTrigger')
     .addSeparator()
     .addItem('Volgende mesocyclus-week ▶', 'advanceMeso')

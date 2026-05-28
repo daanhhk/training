@@ -465,16 +465,17 @@ function reconcilePlannerWithActivities() {
 var SYNC_HANDLER = 'syncAll';
 
 function installDailySyncTrigger() {
+  // Idempotent: verwijder eerst bestaande syncAll-triggers, dan één nieuwe.
   removeDailySyncTrigger_();
   ScriptApp.newTrigger(SYNC_HANDLER)
     .timeBased()
-    .atHour(6)
+    .atHour(8)
     .everyDays(1)
     .inTimezone(TZ)
     .create();
   var ui;
   try { ui = SpreadsheetApp.getUi(); } catch (e) {}
-  if (ui) ui.alert('✓ Dagelijkse sync trigger geïnstalleerd (06:00 Europe/Amsterdam).');
+  if (ui) ui.alert('Dagelijkse sync geïnstalleerd — draait elke ochtend rond 08:00 (Europe/Amsterdam).');
 }
 
 function removeDailySyncTrigger() {
