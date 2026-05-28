@@ -23,11 +23,12 @@ function generateProposal() {
   var ss = SpreadsheetApp.getActive();
   var settings  = readSettings(ss);
 
-  // Volgorde-onafhankelijke gemist-detectie: zorg dat de Activiteiten-tab
-  // gevuld is en reconcile de Gedaan-checkboxes vóór we 'gemist' bepalen.
-  // Zo markeert "Bouw alles opnieuw → Genereer voorstel" (zonder handmatige
-  // sync) gedane dagen correct als gedaan.
-  ensureActivitiesAndReconcile_(ss);
+  // Volgorde-onafhankelijke gemist-detectie + verse data: zorg dat de
+  // data-tabs gevuld zijn en reconcile de Gedaan-checkboxes vóór we
+  // 'gemist' bepalen. Zo werkt "Bouw alles opnieuw → Genereer voorstel"
+  // (zonder handmatige sync): gedane dagen kloppen én wellness-banner
+  // toont echte data.
+  ensureDataAndReconcile_(ss);
 
   var weekStart = weekStartDate(new Date());
   var macro     = bepaalFaseVoorDatum_(weekStart);  // event-driven, valt terug op vaste meso
@@ -88,21 +89,27 @@ function stripTime_(d) {
 }
 
 /**
- * Zorgt dat de Activiteiten-tab gevuld is (sync indien leeg) en draait
- * daarna reconcilePlannerWithActivities zodat Gedaan-checkboxes kloppen
- * vóór generateProposal de gemiste dagen bepaalt. Faalt stil (geen API
- * key → planner blijft zoals hij is).
+ * Zorgt dat de data-tabs (Activiteiten + Wellness) gevuld zijn vóór
+ * generateProposal draait, en reconcilet de Gedaan-checkboxes.
+ *
+ * Na "Bouw alles opnieuw" zijn ALLE data-tabs leeg → dan een volledige
+ * syncAll (activities + wellness + zones + reconcile in juiste volgorde).
+ * Zijn ze al gevuld → alleen reconcile. Faalt stil zonder API-key.
  */
-function ensureActivitiesAndReconcile_(ss) {
-  var act = ss.getSheetByName(ACTIVITEITEN_SHEET);
-  var hasData = act && act.getLastRow() > 1;
-  if (!hasData) {
-    ss.toast('Activiteiten ophalen voor matching...', '🚴 Coach', 5);
-    try { syncActivities(); }
-    catch (e) { console.warn('syncActivities in generateProposal faalde: ' + e.message); }
+function ensureDataAndReconcile_(ss) {
+  var act  = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  var well = ss.getSheetByName(WELLNESS_SHEET);
+  var actLeeg  = !act  || act.getLastRow()  <= 1;
+  var wellLeeg = !well || well.getLastRow() <= 1;
+
+  if (actLeeg || wellLeeg) {
+    ss.toast('Gegevens ophalen voor voorstel...', '🚴 Coach', 5);
+    try { syncAll(); }  // bevat zelf de reconcile-stap
+    catch (e) { console.warn('syncAll in generateProposal faalde: ' + e.message); }
+  } else {
+    try { reconcilePlannerWithActivities(); }
+    catch (e) { console.warn('reconcile in generateProposal faalde: ' + e.message); }
   }
-  try { reconcilePlannerWithActivities(); }
-  catch (e) { console.warn('reconcile in generateProposal faalde: ' + e.message); }
 }
 
 /**
