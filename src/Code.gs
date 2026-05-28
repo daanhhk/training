@@ -25,71 +25,14 @@ function onOpen() {
     .addItem('Volgende mesocyclus-week ▶', 'advanceMeso')
     .addItem('Reset mesocyclus naar week 1', 'resetMeso')
     .addSeparator()
-    .addItem('Stel doel-event in', 'setEventDate')
-    .addItem('Wis doel-event', 'clearEventDate')
+    .addItem('Open Events-tab', 'openEventsTab')
     .addSeparator()
     .addItem('Bouw alles opnieuw (reset Sheet)', 'buildAll')
     .addToUi();
 }
 
-/**
- * Menu-actie: vraagt event-datum + naam, schrijft naar DocProps en
- * synct naar de Instellingen-cellen. Event-datum activeert event-driven
- * periodisering (terugtellen + taper) in plaats van vaste mesocyclus.
- */
-function setEventDate() {
-  var ui = SpreadsheetApp.getUi();
-
-  var dateResp = ui.prompt('Doel-event datum',
-    'Voer de event-datum in (yyyy-MM-dd), bv. 2026-06-13:', ui.ButtonSet.OK_CANCEL);
-  if (dateResp.getSelectedButton() !== ui.Button.OK) return;
-  var dateStr = dateResp.getResponseText().trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    ui.alert('Ongeldige datum', 'Gebruik formaat yyyy-MM-dd (bv. 2026-06-13).', ui.ButtonSet.OK);
-    return;
-  }
-  var d = new Date(dateStr);
-  if (isNaN(d.getTime())) {
-    ui.alert('Ongeldige datum', 'Kon "' + dateStr + '" niet parsen.', ui.ButtonSet.OK);
-    return;
-  }
-
-  var nameResp = ui.prompt('Doel-event naam',
-    'Naam van het event (bv. "Girona fietsvakantie"):', ui.ButtonSet.OK_CANCEL);
-  if (nameResp.getSelectedButton() !== ui.Button.OK) return;
-  var name = nameResp.getResponseText().trim();
-
-  setDocProp('event_date', dateStr);
-  setDocProp('event_name', name);
-
-  var sh = SpreadsheetApp.getActive().getSheetByName(SETTINGS_SHEET);
-  if (sh) {
-    sh.getRange(SETTINGS_FIELDS.EVENT_DATE.row, 2).setValue(d).setNumberFormat('dd-MM-yyyy');
-    sh.getRange(SETTINGS_FIELDS.EVENT_NAME.row, 2).setValue(name);
-  }
-
-  ui.alert('Doel-event ingesteld',
-    (name || '(naamloos)') + ' op ' + dateStr + '.\n\n' +
-    'Genereer voorstel om de fase-aftelling + taper te zien.', ui.ButtonSet.OK);
-}
-
-/**
- * Menu-actie: wist het doel-event uit DocProps + Instellingen-cellen.
- * Systeem valt terug op vaste mesocyclus-logica.
- */
-function clearEventDate() {
-  var props = PropertiesService.getDocumentProperties();
-  props.deleteProperty('event_date');
-  props.deleteProperty('event_name');
-
-  var sh = SpreadsheetApp.getActive().getSheetByName(SETTINGS_SHEET);
-  if (sh) {
-    sh.getRange(SETTINGS_FIELDS.EVENT_DATE.row, 2).clearContent();
-    sh.getRange(SETTINGS_FIELDS.EVENT_NAME.row, 2).clearContent();
-  }
-
-  SpreadsheetApp.getUi().alert('Doel-event gewist — terug naar vaste mesocyclus.');
-}
+// Events worden beheerd via de Events-tab (zie Events.gs).
+// Menu-actie "Open Events-tab" → openEventsTab() in Events.gs.
 
 /**
  * onEdit simple trigger: synct edits in tab Instellingen, kolom B,
@@ -136,6 +79,7 @@ function buildAll() {
   buildSettings(ss);
   buildZones(ss);
   buildDoel(ss);
+  buildEvents(ss);
   buildPlanner(ss);
   buildVoorstelPlaceholder(ss);
   buildActiviteiten(ss);
@@ -150,7 +94,7 @@ function buildAll() {
   });
 
   // Volgorde van tabs
-  var order = [SETTINGS_SHEET, ZONES_SHEET, DOEL_SHEET, PLANNER_SHEET,
+  var order = [SETTINGS_SHEET, ZONES_SHEET, DOEL_SHEET, EVENTS_SHEET, PLANNER_SHEET,
                PROPOSAL_SHEET, ACTIVITEITEN_SHEET, WELLNESS_SHEET];
   order.forEach(function (name, i) {
     var sh = ss.getSheetByName(name);

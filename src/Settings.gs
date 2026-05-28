@@ -20,8 +20,6 @@ var SETTINGS_FIELDS = {
   DOEL:       { row: 11, label: 'Primair doel',            unit: ''                   },
   DOEL_START: { row: 12, label: 'Startdatum doel',         unit: ''                   },
   DOEL_DUUR:  { row: 13, label: 'Duur (weken)',            unit: 'weken'              },
-  EVENT_DATE: { row: 14, label: 'Doel-event datum',        unit: 'leeg = vaste meso'  },
-  EVENT_NAME: { row: 15, label: 'Doel-event naam',         unit: ''                   },
   FASE:       { row: 19, label: 'Fase',                    unit: ''                   },
   ATHLETE_ID: { row: 23, label: 'Athlete ID',              unit: ''                   },
   API_KEY:    { row: 24, label: 'API Key',                 unit: ''                   },
@@ -42,8 +40,6 @@ var SETTINGS_ROW_TO_KEY = {
   11: 'doel',
   12: 'doel_start',
   13: 'doel_duur',
-  14: 'event_date',
-  15: 'event_name',
   19: 'fase',
   23: 'intervals_athlete_id',
   24: 'intervals_api_key',
@@ -62,8 +58,6 @@ var SETTINGS_DEFAULTS = {
   doel:                 'FTP',
   doel_start:           null,   // → today bij eerste build
   doel_duur:            12,
-  event_date:           '',     // leeg = vaste mesocyclus
-  event_name:           '',
   fase:                 'build',
   intervals_athlete_id: '',
   intervals_api_key:    '',
@@ -88,7 +82,7 @@ var SETTINGS_SECTIONS = [
 /** Numerieke + datum velden (kind hint voor parsen). */
 var SETTINGS_KIND = {
   ftp: 'num', hr_max: 'num', hr_rest: 'num', lthr: 'num', doel_duur: 'num',
-  doel_start: 'date', event_date: 'date'
+  doel_start: 'date'
 };
 
 function buildSettings(ss) {
@@ -199,9 +193,6 @@ function readSettings(ss) {
   var startRaw = v('DOEL_START');
   var startDate = startRaw instanceof Date ? startRaw : new Date(startRaw || new Date());
 
-  var eventRaw = v('EVENT_DATE');
-  var eventDate = eventRaw instanceof Date ? eventRaw : null;
-
   return {
     ftp:        Number(v('FTP'))    || SETTINGS_DEFAULTS.ftp,
     hrMax:      Number(v('HR_MAX')) || SETTINGS_DEFAULTS.hr_max,
@@ -211,8 +202,6 @@ function readSettings(ss) {
     doel:       String(v('DOEL')    || SETTINGS_DEFAULTS.doel),
     doelStart:  startDate,
     doelDuur:   Number(v('DOEL_DUUR')) || SETTINGS_DEFAULTS.doel_duur,
-    eventDate:  eventDate,
-    eventName:  String(v('EVENT_NAME') || ''),
     fase:       String(v('FASE')    || SETTINGS_DEFAULTS.fase),
     athleteId:  String(v('ATHLETE_ID') || ''),
     apiKey:     String(v('API_KEY')    || ''),
