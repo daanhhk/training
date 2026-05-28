@@ -87,6 +87,44 @@ function range(start, end) {
   return arr;
 }
 
+// ── LAAG 1: Patroon (persistent default week) ─────────────────────
+
+/**
+ * Default-patroon (Daan): di 150 pendel / do 90 vrij / za 120 weekend.
+ * Gebruikt DAGEN_NL + PLANNER_DEFAULTS uit Planner.gs (globaal).
+ */
+function defaultPattern_() {
+  return DAGEN_NL.map(function (dag, i) {
+    var def = PLANNER_DEFAULTS[i] || { train: false, min: 0, type: '', note: '' };
+    return {
+      dag:     dag,
+      train:   !!def.train,
+      minuten: def.min || 0,
+      dagtype: def.type || '',
+      note:    def.note || ''
+    };
+  });
+}
+
+/**
+ * Leest het persistente weekpatroon (DocProp 'pattern'). Seed met
+ * defaults als nog niet ingesteld. Overleeft buildAll.
+ */
+function getPattern() {
+  var raw = getDocProp('pattern', '');
+  if (raw) {
+    try {
+      var p = JSON.parse(raw);
+      if (Array.isArray(p) && p.length === 7) return p;
+    } catch (e) { console.warn('getPattern parse: ' + e.message); }
+  }
+  return defaultPattern_();
+}
+
+function savePattern(arr) {
+  setDocProp('pattern', JSON.stringify(arr));
+}
+
 function getOrCreateSheet(ss, name) {
   var sh = ss.getSheetByName(name);
   if (!sh) {
