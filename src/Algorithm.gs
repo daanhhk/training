@@ -44,7 +44,8 @@ function generateProposal() {
     workoutZones(d.voorgesteldType, settings.doel).forEach(function (z) { dekking[z] = true; });
   });
 
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness);
+  var klimType = (macro.hoofdEvent && macro.hoofdEvent.klimType) || null;
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType);
 
   // Persisteer gegenereerde workouts per datum naar DocProps (voor push-to-Garmin)
   tePlannen.forEach(function (d) {
@@ -92,10 +93,12 @@ function cleanupOldProposals_() {
  * @param wellness  resultaat van getWellnessSignal(); demote/recovery
  *                  signal overschrijft de assignment cascade.
  */
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType) {
   var doel = settings.doel;
   var isTaper    = macroFase === 'Taper';
-  var isRecovery = mesoWeek === 4;
+  var isEventRecovery = macroFase === 'Recovery';
+  var isMesoRecovery  = mesoWeek === 4;
+  var isRecovery = isMesoRecovery;
   var isTestWeek = macroFase === 'Test';
   var testGedaan = false;
   var openersGedaan = false;
@@ -106,7 +109,10 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness) 
   days.forEach(function (d) {
     var type;
 
-    if (isTaper) {
+    if (isEventRecovery) {
+      // Recovery-week na A-race: alles easy Z2.
+      type = 'recovery';
+    } else if (isTaper) {
       // Taper-week: één korte intensieve openers-sessie, rest korte Z2.
       if (!openersGedaan && (d.type === 'vrij' || d.type === 'weekend')) {
         type = 'taper_openers';
@@ -133,7 +139,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness) 
         type = 'long_z2';
       }
     } else if (d.type === 'vrij') {
-      type = keyIntensity(doel, macroFase, dekking);
+      type = keyIntensity(doel, macroFase, dekking, klimType);
     } else if (d.type === 'recovery') {
       type = 'recovery';
     } else {
@@ -532,8 +538,16 @@ function xmlEscape_(s) {
  * Kiest de key-intensity workout voor een vrije dag op basis van doel,
  * macro-fase en wat nog open staat in dekking.
  */
-function keyIntensity(doel, macroFase, dekking) {
-  if (macroFase === 'Taper') return 'taper_openers'; // defensief — taper handled in assignWorkouts
+function keyIntensity(doel, macroFase, dekking, klimType) {
+  if (macroFase === 'Taper')    return 'taper_openers'; // defensief — taper handled in assignWorkouts
+  if (macroFase === 'Recovery') return 'recovery';
+
+  // Klim-type stuurt de kwaliteitsdag in Build/Peak (event-driven).
+  if (macroFase === 'Build' || macroFase === 'Peak') {
+    var ct = climbTypeWorkout_(klimType, macroFase, dekking);
+    if (ct) return ct;
+  }
+
   if (doel === 'FTP') {
     if (macroFase === 'Base')  return 'sweet_spot';
     if (macroFase === 'Build') return dekking.high ? 'threshold' : 'sweet_spot';
@@ -562,12 +576,38 @@ function keyIntensity(doel, macroFase, dekking) {
 }
 
 /**
+ * Klim-type-gestuurde workout-keuze voor de kwaliteitsdag.
+ *   kort    → explosief: vo2_hill_repeats / anaerobic_capacity
+ *   lang    → sustained: threshold_long / sweet_spot_long
+ *   gemengd → afwisselen op basis van dekking
+ *   vlak    → null (val terug op doel-standaard)
+ */
+function climbTypeWorkout_(klimType, macroFase, dekking) {
+  if (!klimType || klimType === 'vlak') return null;
+  if (klimType === 'kort') {
+    if (macroFase === 'Peak') return dekking.anaerobic ? 'anaerobic_capacity' : 'vo2_hill_repeats';
+    return 'vo2_hill_repeats';
+  }
+  if (klimType === 'lang') {
+    if (macroFase === 'Peak') return 'threshold_long';
+    return dekking.high ? 'threshold_long' : 'sweet_spot_long';
+  }
+  if (klimType === 'gemengd') {
+    // afwisselen: nog geen anaerobic dekking → kort/explosief, anders lang/sustained
+    return dekking.anaerobic ? 'threshold_long' : 'vo2_hill_repeats';
+  }
+  return null;
+}
+
+/**
  * Lookup: welke load-focus zones dekt deze workout? (low/high/anaerobic)
  */
 function workoutZones(type, doel) {
   if (!type) return [];
   if (type === 'taper_z2_kort') return ['low'];
   if (type === 'taper_openers') return ['anaerobic'];
+  if (type === 'vo2_hill_repeats' || type === 'anaerobic_capacity') return ['anaerobic'];
+  if (type === 'threshold_long' || type === 'sweet_spot_long') return ['high'];
   if (type === 'long_z2' || type === 'recovery' || type === 'pendel_z2' || type === 'fatox') return ['low'];
   if (type === 'sweet_spot' || type === 'threshold' || type === 'tempo' ||
       type === 'ss_lang' || type === 'low_cad' || type === 'big_gear' || type === 'bergsim') return ['high'];
@@ -602,6 +642,12 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase) {
   // Taper-workouts (event-driven laatste week)
   if (type === 'taper_openers')  return genericTaperOpeners(settings);
   if (type === 'taper_z2_kort')  return genericTaperZ2Kort(mins, settings);
+
+  // Klim-type-specifieke workouts (event-driven, doel-onafhankelijk)
+  if (type === 'vo2_hill_repeats')   return genericVo2HillRepeats(mins, settings, mesoWeek);
+  if (type === 'anaerobic_capacity') return genericAnaerobicCapacity(mins, settings, mesoWeek);
+  if (type === 'threshold_long')     return genericThresholdLong(mins, settings, mesoWeek);
+  if (type === 'sweet_spot_long')    return genericSweetSpotLong(mins, settings, mesoWeek);
 
   // Generieke types eerst (maar Conditie heeft eigen long_z2 met fase-schaling)
   if (type === 'long_z2' && doel !== 'Conditie') return genericLongZ2(mins, settings, mesoWeek);
@@ -695,6 +741,84 @@ function genericTaperZ2Kort(mins, settings) {
     ],
     tss: Math.round(mins * 0.6),
     eindopmerking: 'Volume bewust gehalveerd. Niet opbouwen meer — fris worden is het doel.'
+  };
+}
+
+// ─── Klim-type-specifieke workouts (event-driven) ────────────────
+
+function genericVo2HillRepeats(mins, settings, mesoWeek) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  var f = mesoFactor(mesoWeek);
+  mins = mins || 70;
+  return {
+    naam: 'VO2 Hill Repeats 9x90s',
+    focus: 'explosive climbing',
+    zones: ['anaerobic'],
+    totaalMin: mins,
+    structuur: [
+      ['Warmup',   '15 min', wattsRange(ftp, 55, 80), bpmBelow(lthr, 92), 'Inrijden + 3x 30s openers'],
+      ['Hill reps','9x 90 sec', wattsRange(ftp, Math.round(112 * f), Math.round(118 * f)), bpmRange(lthr, 100, 108), '2 min rust @ 50% — sta op bij de steile stukken'],
+      ['Cooldown', '12 min', wattsRange(ftp, 45, 55), '—', 'Easy']
+    ],
+    tss: Math.round(mins * 1.05),
+    eindopmerking: 'Korte explosieve klim-efforts voor punchy beklimmingen (Amstel/Ardennen) — herhaalbaar vermogen.'
+  };
+}
+
+function genericAnaerobicCapacity(mins, settings, mesoWeek) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  var f = mesoFactor(mesoWeek);
+  mins = mins || 60;
+  return {
+    naam: 'Anaerobic Capacity 10x 30/30s',
+    focus: 'anaerobic capacity',
+    zones: ['anaerobic'],
+    totaalMin: mins,
+    structuur: [
+      ['Warmup', '15 min', wattsRange(ftp, 55, 80), bpmBelow(lthr, 92), 'Inrijden + 2x 1min openers'],
+      ['30/30s', '10x 30 sec', wattsRange(ftp, Math.round(120 * f), Math.round(130 * f)), bpmRange(lthr, 100, 110), '30 sec rust @ 50% — maximaal herhaalbaar'],
+      ['Cooldown', '10 min', wattsRange(ftp, 45, 55), '—', 'Easy']
+    ],
+    tss: Math.round(mins * 1.0),
+    eindopmerking: 'Korte, snelle herhalingen voor steile korte klimmetjes — anaerobe capaciteit + snel herstel.'
+  };
+}
+
+function genericThresholdLong(mins, settings, mesoWeek) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  var f = mesoFactor(mesoWeek);
+  mins = mins || 80;
+  return {
+    naam: 'Threshold Long 3x14min',
+    focus: 'sustained climbing',
+    zones: ['high'],
+    totaalMin: mins,
+    structuur: [
+      ['Warmup',   '15 min', wattsRange(ftp, 55, 75), bpmBelow(lthr, 90), 'Inrijden + 1x 3min @ 90%'],
+      ['Threshold','3x 14 min', wattsRange(ftp, Math.round(95 * f), Math.round(102 * f)), bpmRange(lthr, 96, 100), '5 min rust @ 55% — pacing als een lange col'],
+      ['Cooldown', '10 min', wattsRange(ftp, 45, 55), '—', 'Easy']
+    ],
+    tss: Math.round(mins * 1.1),
+    eindopmerking: 'Sustained threshold voor lange alpine cols (Girona/Alpen) — leer uren in de klim-zone te pacen.'
+  };
+}
+
+function genericSweetSpotLong(mins, settings, mesoWeek) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  var f = mesoFactor(mesoWeek);
+  mins = mins || 85;
+  return {
+    naam: 'Sweet Spot Long 3x20min',
+    focus: 'climbing endurance',
+    zones: ['high'],
+    totaalMin: mins,
+    structuur: [
+      ['Warmup',     '15 min', wattsRange(ftp, 55, 70), bpmBelow(lthr, 88), 'Inrijden'],
+      ['Sweet Spot', '3x 20 min', wattsRange(ftp, Math.round(88 * f), Math.round(93 * f)), bpmRange(lthr, 92, 98), '6 min rust @ 50% — duurzame klim-belasting'],
+      ['Cooldown',   '10 min', wattsRange(ftp, 45, 55), '—', 'Easy']
+    ],
+    tss: Math.round(mins * 1.0),
+    eindopmerking: 'Lange sweet spot blokken bouwen het vermogen om uren in de klim-zone te blijven.'
   };
 }
 
