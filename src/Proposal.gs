@@ -25,12 +25,22 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   sh.setRowHeight(r, 34);
   r += 2;
 
-  // ── Event countdown banner (event-driven periodisering) ──
-  if (macro.eventDate) {
+  // ── Recovery-week banner (na A-race) ──
+  if (macro.isRecovery) {
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('🌿  Recovery-week na A-race' + (macro.eventName ? ' (' + macro.eventName + ')' : '') +
+                ' — alles easy Z2, laat het lichaam aanpassen.')
+      .setBackground('#dcfce7').setFontWeight('bold').setFontColor('#166534').setWrap(true);
+    r += 2;
+  } else if (macro.eventDate) {
+    // ── Event countdown banner (event-driven periodisering) ──
     var today0 = new Date(); today0.setHours(0, 0, 0, 0);
     var ev0 = new Date(macro.eventDate.getFullYear(), macro.eventDate.getMonth(), macro.eventDate.getDate());
     var dagenTot = Math.round((ev0 - today0) / (24 * 60 * 60 * 1000));
     var evNaam = macro.eventName || 'Doel-event';
+    var ev = macro.hoofdEvent || {};
+    var profiel = (ev.afstandKm ? ev.afstandKm + 'km' : '?km') + ' / ' +
+                  (ev.hm ? ev.hm + 'hm' : '?hm') + ', ' + (ev.klimType || 'vlak') + ' klimmen';
 
     if (dagenTot < 0) {
       sh.getRange(r, 1, 1, COLS).merge()
@@ -40,11 +50,12 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     } else {
       var faseUitleg = (typeof MACRO_UITLEG !== 'undefined' && MACRO_UITLEG[macro.fase]) || '';
       sh.getRange(r, 1, 1, COLS).merge()
-        .setValue('🎯  ' + evNaam + ' over ' + dagenTot + ' dagen — fase: ' + macro.fase + '. ' + faseUitleg + '.')
+        .setValue('🎯  ' + evNaam + ' over ' + dagenTot + ' dagen — ' + profiel +
+                  ' — fase: ' + macro.fase + '. ' + faseUitleg + '.')
         .setBackground('#ede9fe').setFontWeight('bold').setWrap(true);
       r += 1;
 
-      if (macro.wekenTotEvent != null && macro.wekenTotEvent <= 2) {
+      if (macro.wekenTotEvent != null && macro.wekenTotEvent <= 2 && !macro.isTaper) {
         sh.getRange(r, 1, 1, COLS).merge()
           .setValue('⚠️  <2 weken tot event: fitness is gemaakt. Nu fris worden, niet meer opbouwen.')
           .setBackground('#fef3c7').setFontStyle('italic').setFontColor('#92400e').setWrap(true);
@@ -59,6 +70,18 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     }
     r += 1;
   }
+
+  // ── B/C-races deze week (mini-taper / training-race) ──
+  var bcRaces = bcRacesThisWeek_(days);
+  bcRaces.forEach(function (race) {
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('🏁  ' + formatDate(race.datum, 'EEE dd-MM') + ' — ' + race.naam +
+                ' (' + race.type + ', prio ' + race.prioriteit + '): ' +
+                (race.prioriteit === 'B' ? 'mini-taper, ga met frisse benen' : 'training-race, gewoon doorrijden') + '.')
+      .setBackground('#fef9c3').setFontStyle('italic').setWrap(true);
+    r += 1;
+  });
+  if (bcRaces.length) r += 1;
 
   // Mesocyclus regel
   sh.getRange(r, 1, 1, COLS).merge()
@@ -222,6 +245,19 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   sh.setColumnWidth(4, 140);
   sh.setColumnWidth(5, 400);
   sh.setFrozenRows(1);
+}
+
+/**
+ * B/C-races die binnen de huidige week vallen (mini-taper / training-race).
+ */
+function bcRacesThisWeek_(days) {
+  var ws = weekStartDate(new Date());
+  var weekEnd = new Date(ws.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return getAllEvents_().filter(function (e) {
+    if (e.prioriteit !== 'B' && e.prioriteit !== 'C') return false;
+    var ed = new Date(e.datum.getFullYear(), e.datum.getMonth(), e.datum.getDate());
+    return ed >= ws && ed < weekEnd;
+  });
 }
 
 /**
