@@ -35,6 +35,7 @@ function onOpen() {
     .addSeparator()
     .addItem('🔧 TEST: diversiteit (4 weken)', 'testDiversiteit')
     .addItem('🔧 TEST: week-rollover', 'testRollover')
+    .addItem('🔧 TEST: toon zone-debt', 'testZoneDebt')
     .addToUi();
 }
 

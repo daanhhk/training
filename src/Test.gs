@@ -95,3 +95,41 @@ function testRollover() {
     'patroon-defaults (di/do/za) terug.',
     ui.ButtonSet.OK);
 }
+
+/**
+ * Toont zone-debt (geplande intent vs werkelijke zone-times) voor de
+ * huidige week, met per-dag details. Verificatie van de feedback-loop.
+ */
+function testZoneDebt() {
+  var ss = SpreadsheetApp.getActive();
+  var ui = SpreadsheetApp.getUi();
+  var weekStart = weekStartDate(new Date());
+  var fb = computeZoneDebt_(ss, weekStart);
+
+  var lines = [];
+  if (!fb.hasPlan) {
+    lines.push('Geen weekplan-snapshot voor deze week.');
+    lines.push('Draai eerst "Genereer voorstel" zodat weekplan_<maandag> wordt opgeslagen.');
+  } else {
+    lines.push('Netto zone-debt deze week (+ = tekort):');
+    lines.push('  low: ' + fb.debt.low + 'min · high: ' + fb.debt.high + 'min · anaerobic: ' + fb.debt.anaerobic + 'min');
+    lines.push('');
+    if (!fb.details.length) {
+      lines.push('Nog geen voltooide+gematchte dagen deze week.');
+    } else {
+      lines.push('Per voltooide dag (gepland → werkelijk):');
+      fb.details.forEach(function (det) {
+        if (!det.hasData) {
+          lines.push('  ' + det.dag + ' (' + det.type + '): geen zone-data');
+          return;
+        }
+        var ip = det.intent || {}, ac = det.actual || {};
+        lines.push('  ' + det.dag + ' (' + det.type + '): ' +
+          'low ' + Math.round(ip.low || 0) + '→' + Math.round(ac.low || 0) + ' · ' +
+          'high ' + Math.round(ip.high || 0) + '→' + Math.round(ac.high || 0) + ' · ' +
+          'anaerobic ' + Math.round(ip.anaerobic || 0) + '→' + Math.round(ac.anaerobic || 0));
+      });
+    }
+  }
+  ui.alert('🔧 TEST: zone-debt', lines.join('\n'), ui.ButtonSet.OK);
+}
