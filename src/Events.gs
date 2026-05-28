@@ -48,8 +48,12 @@ function buildEvents(ss) {
   sh.getRange(EVENT_FIRST_ROW, 7, EVENT_ROW_COUNT, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(EVENT_KLIM_OPTIONS, true).setAllowInvalid(false).build());
 
-  // Migreer legacy event_date/event_name → rij 1 (type=trip, prio=A)
-  migrateLegacyEvent_(sh);
+  // Eénmalige migratie van legacy event_date/event_name → events_json
+  migrateLegacyEvent_();
+
+  // Herstel opgeslagen events (DocProps) — NA dropdowns zodat validatie
+  // de teruggeschreven waarden accepteert.
+  restoreEventsFromProps_(ss);
 
   SpreadsheetApp.flush();
   var widths = [110, 200, 80, 90, 90, 110, 100, 260];
@@ -57,7 +61,12 @@ function buildEvents(ss) {
   sh.setFrozenRows(2);
 }
 
-function migrateLegacyEvent_(sh) {
+/**
+ * Eénmalige migratie: zet de oude enkele event_date/event_name DocProps
+ * om naar een entry in events_json (type=trip, prio=A, klim=lang) en
+ * verwijder de legacy props. No-op als ze al verwerkt zijn.
+ */
+function migrateLegacyEvent_() {
   var props = PropertiesService.getDocumentProperties();
   var legacyDate = props.getProperty('event_date');
   if (!legacyDate) return;
@@ -65,15 +74,94 @@ function migrateLegacyEvent_(sh) {
   var legacyName = props.getProperty('event_name') || 'Doel-event';
   var d = new Date(legacyDate);
   if (!isNaN(d.getTime())) {
-    sh.getRange(EVENT_FIRST_ROW, 1).setValue(d).setNumberFormat('yyyy-mm-dd');
-    sh.getRange(EVENT_FIRST_ROW, 2).setValue(legacyName);
-    sh.getRange(EVENT_FIRST_ROW, 3).setValue('trip');
-    sh.getRange(EVENT_FIRST_ROW, 4).setValue('A');
-    sh.getRange(EVENT_FIRST_ROW, 7).setValue('lang');
-    console.log('Migrated legacy event → Events rij 1: ' + legacyName + ' (' + legacyDate + ')');
+    var existing = [];
+    var raw = props.getProperty('events_json');
+    if (raw) { try { existing = JSON.parse(raw) || []; } catch (e) {} }
+    existing.unshift({
+      datum:      Utilities.formatDate(d, TZ, 'yyyy-MM-dd'),
+      naam:       legacyName,
+      type:       'trip',
+      prioriteit: 'A',
+      afstandKm:  '',
+      hm:         '',
+      klimType:   'lang',
+      notitie:    ''
+    });
+    props.setProperty('events_json', JSON.stringify(existing));
+    console.log('Migrated legacy event → events_json: ' + legacyName + ' (' + legacyDate + ')');
   }
   props.deleteProperty('event_date');
   props.deleteProperty('event_name');
+}
+
+/**
+ * Serialiseert alle ingevulde Events-rijen naar DocProperty 'events_json'.
+ * Aangeroepen door onEdit bij wijzigingen in de Events-tab.
+ */
+function saveEventsToProps_() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(EVENTS_SHEET);
+  if (!sh) return;
+
+  var rows = [];
+  var lastRow = sh.getLastRow();
+  if (lastRow >= EVENT_FIRST_ROW) {
+    var n = lastRow - EVENT_FIRST_ROW + 1;
+    var data = sh.getRange(EVENT_FIRST_ROW, 1, n, EVENT_HEADERS.length).getValues();
+    data.forEach(function (r) {
+      // Sla volledig lege rijen over (geen datum én geen naam)
+      if (!(r[0] instanceof Date) && !String(r[1] || '').trim()) return;
+      rows.push({
+        datum:      r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : '',
+        naam:       String(r[1] || ''),
+        type:       String(r[2] || ''),
+        prioriteit: String(r[3] || ''),
+        afstandKm:  r[4] === '' || r[4] == null ? '' : Number(r[4]),
+        hm:         r[5] === '' || r[5] == null ? '' : Number(r[5]),
+        klimType:   String(r[6] || ''),
+        notitie:    String(r[7] || '')
+      });
+    });
+  }
+  PropertiesService.getDocumentProperties().setProperty('events_json', JSON.stringify(rows));
+}
+
+/**
+ * Schrijft de in DocProps opgeslagen events terug in de Events-tab.
+ * No-op als 'events_json' afwezig/leeg is. Vereist dat de dropdowns
+ * al gezet zijn (anders weigert validatie de waarden).
+ */
+function restoreEventsFromProps_(ss) {
+  var raw = getDocProp('events_json', '');
+  if (!raw) return;
+
+  var rows;
+  try { rows = JSON.parse(raw); } catch (e) {
+    console.warn('restoreEventsFromProps_ JSON-fout: ' + e.message);
+    return;
+  }
+  if (!Array.isArray(rows) || !rows.length) return;
+
+  var sh = ss.getSheetByName(EVENTS_SHEET);
+  if (!sh) return;
+
+  var values = rows.map(function (e) {
+    var d = e.datum ? new Date(e.datum) : '';
+    if (d !== '' && isNaN(d.getTime())) d = '';
+    return [
+      d,
+      e.naam || '',
+      e.type || '',
+      e.prioriteit || '',
+      (e.afstandKm === '' || e.afstandKm == null) ? '' : e.afstandKm,
+      (e.hm === '' || e.hm == null) ? '' : e.hm,
+      e.klimType || '',
+      e.notitie || ''
+    ];
+  });
+
+  sh.getRange(EVENT_FIRST_ROW, 1, values.length, EVENT_HEADERS.length).setValues(values);
+  sh.getRange(EVENT_FIRST_ROW, 1, values.length, 1).setNumberFormat('yyyy-mm-dd');
 }
 
 /**

@@ -35,28 +35,36 @@ function onOpen() {
 // Menu-actie "Open Events-tab" → openEventsTab() in Events.gs.
 
 /**
- * onEdit simple trigger: synct edits in tab Instellingen, kolom B,
- * naar DocumentProperties op basis van SETTINGS_ROW_TO_KEY mapping.
+ * onEdit simple trigger:
+ *  - Instellingen!B → synct naar DocProps (SETTINGS_ROW_TO_KEY).
+ *  - Events databereik → saveEventsToProps_ (persist over rebuild).
  * Stille fail bij errors — simple triggers mogen niet throwen.
  */
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
-    var sh = e.range.getSheet();
-    if (sh.getName() !== SETTINGS_SHEET) return;
-    if (e.range.getColumn() !== 2) return;
-    var row = e.range.getRow();
-    var key = SETTINGS_ROW_TO_KEY[row];
-    if (!key) return;
+    var name = e.range.getSheet().getName();
 
-    var newVal = e.range.getValue();
-    var props = PropertiesService.getDocumentProperties();
-    if (newVal === '' || newVal === null || newVal === undefined) {
-      props.deleteProperty(key);
-    } else if (newVal instanceof Date) {
-      props.setProperty(key, newVal.toISOString());
-    } else {
-      props.setProperty(key, String(newVal));
+    if (name === SETTINGS_SHEET) {
+      if (e.range.getColumn() !== 2) return;
+      var key = SETTINGS_ROW_TO_KEY[e.range.getRow()];
+      if (!key) return;
+
+      var newVal = e.range.getValue();
+      var props = PropertiesService.getDocumentProperties();
+      if (newVal === '' || newVal === null || newVal === undefined) {
+        props.deleteProperty(key);
+      } else if (newVal instanceof Date) {
+        props.setProperty(key, newVal.toISOString());
+      } else {
+        props.setProperty(key, String(newVal));
+      }
+    } else if (name === EVENTS_SHEET) {
+      // Alleen op edits in het databereik (rij ≥ EVENT_FIRST_ROW, kol A-H)
+      if (e.range.getRow() >= EVENT_FIRST_ROW &&
+          e.range.getColumn() >= 1 && e.range.getColumn() <= EVENT_HEADERS.length) {
+        saveEventsToProps_();
+      }
     }
   } catch (err) {
     console.error('onEdit error:', err);
