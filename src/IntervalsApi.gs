@@ -354,6 +354,8 @@ function debugApiResponse() {
     console.log(JSON.stringify(activities[0], null, 2));
     console.log('=== ACTIVITY KEYS ===');
     console.log(Object.keys(activities[0]).sort().join(', '));
+    console.log('=== icu_zone_times (feedback-loop mapping) ===');
+    console.log(JSON.stringify(activities[0].icu_zone_times || activities[0].zone_times || 'NIET AANWEZIG', null, 2));
   } else {
     console.log('Geen activiteiten in de laatste 7 dagen.');
   }
