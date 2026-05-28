@@ -5,6 +5,58 @@
  * met mesoWeek (1.00/1.08/1.15/0.60) en macroFase (Base/Build/Peak/Test).
  */
 
+/**
+ * Variant-pools voor FTP: sweet_spot (high) + threshold (high).
+ * Variant = vorm; fase/meso schalen %FTP via adj() in renderVariant_.
+ */
+function ftpPools_() {
+  return {
+    sweet_spot: [
+      { id: 'ss_2x20', naam: 'Sweet Spot 2×20', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Sweet Spot', reps: 2, onMin: 20, onPct: a(90), offMin: 5, offPct: 50 }]; },
+        tip: 'Sweet Spot bouwt FTP zonder grote vermoeidheid.' },
+      { id: 'ss_3x15', naam: 'Sweet Spot 3×15', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Sweet Spot', reps: 3, onMin: 15, onPct: a(91), offMin: 4, offPct: 50 }]; } },
+      { id: 'ss_2x30', naam: 'Sweet Spot 2×30', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Sweet Spot', reps: 2, onMin: 30, onPct: a(89), offMin: 6, offPct: 50 }]; } },
+      { id: 'ss_pyramide', naam: 'Sweet Spot pyramide 10-15-20-15-10', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [
+          { kind: 'steady', label: 'SS 10', durMin: 10, pct: a(90) },
+          { kind: 'steady', label: 'rust',  durMin: 5,  pct: a(50), zone: 'low' },
+          { kind: 'steady', label: 'SS 15', durMin: 15, pct: a(90) },
+          { kind: 'steady', label: 'rust',  durMin: 5,  pct: a(50), zone: 'low' },
+          { kind: 'steady', label: 'SS 20', durMin: 20, pct: a(90) },
+          { kind: 'steady', label: 'rust',  durMin: 5,  pct: a(50), zone: 'low' },
+          { kind: 'steady', label: 'SS 15', durMin: 15, pct: a(90) },
+          { kind: 'steady', label: 'rust',  durMin: 5,  pct: a(50), zone: 'low' },
+          { kind: 'steady', label: 'SS 10', durMin: 10, pct: a(90) }
+        ]; } },
+      { id: 'ss_overunder', naam: 'Sweet Spot over/under 4×(2-3)', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { var arr = []; for (var i = 0; i < 4; i++) {
+          arr.push({ kind: 'steady', label: 'Over', durMin: 2, pct: a(95) });
+          arr.push({ kind: 'steady', label: 'Under', durMin: 3, pct: a(88) });
+        } return arr; } }
+    ],
+    threshold: [
+      { id: 'thr_4x10', naam: 'Threshold 4×10', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Threshold', reps: 4, onMin: 10, onPct: a(98), offMin: 5, offPct: 50 }]; },
+        tip: 'Op de scherpe rand van duurzaam — verbetert FTP.' },
+      { id: 'thr_3x15', naam: 'Threshold 3×15', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Threshold', reps: 3, onMin: 15, onPct: a(98), offMin: 5, offPct: 50 }]; } },
+      { id: 'thr_2x20', naam: 'Threshold 2×20', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Threshold', reps: 2, onMin: 20, onPct: a(100), offMin: 6, offPct: 50 }]; } },
+      { id: 'thr_overunder', naam: 'Threshold over/under 3×8', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { var arr = []; for (var s = 0; s < 3; s++) {
+          for (var i = 0; i < 4; i++) {
+            arr.push({ kind: 'steady', label: 'Over', durMin: 1, pct: a(105) });
+            arr.push({ kind: 'steady', label: 'Under', durMin: 1, pct: a(95) });
+          }
+          if (s < 2) arr.push({ kind: 'steady', label: 'rust', durMin: 4, pct: a(50), zone: 'low' });
+        } return arr; } }
+    ]
+  };
+}
+
 function workoutForFtp(type, mins, settings, mesoWeek, macroFase) {
   var ftp = settings.ftp, lthr = settings.lthr;
   var f = mesoFactor(mesoWeek);

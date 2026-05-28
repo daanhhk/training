@@ -5,6 +5,29 @@
  * en de manuele klim PR-poging test.
  */
 
+/**
+ * Variant-pool voor Beklimmingen hoofdtype 'klim' (zone: high).
+ * Lange sweet spot, low-cadence, big gear, bergsimulatie.
+ */
+function climbPools_() {
+  return {
+    klim: [
+      { id: 'klim_ss_lang', naam: 'Klim Sweet Spot lang 2×25', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'SS lang', reps: 2, onMin: 25, onPct: a(89), offMin: 6, offPct: 50 }]; },
+        tip: 'Lange sweet spot — uren in de klim-zone kunnen blijven.' },
+      { id: 'klim_lowcad', naam: 'Klim Low-cadence 4×10 @60rpm', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Low-cad 60rpm', reps: 4, onMin: 10, onPct: a(85), offMin: 5, offPct: 50 }]; },
+        tip: 'Lage cadans onder load — kracht-uithouding voor de klim.' },
+      { id: 'klim_biggear', naam: 'Klim Big Gear 4×6 @55rpm', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'int', label: 'Big gear 55rpm', reps: 4, onMin: 6, onPct: a(90), offMin: 5, offPct: 50 }]; },
+        tip: 'Big-gear maakt de spier sterker — pas op met de knieën.' },
+      { id: 'klim_bergsim', naam: 'Klim Bergsimulatie 35min', zone: 'high', warmup: 15, cooldown: 10,
+        blocks: function (a) { return [{ kind: 'steady', label: 'Sustained klim', durMin: 35, pct: a(85) }]; },
+        tip: 'Sustained climbing — leer pacen over 30-60 min in klim-zone.' }
+    ]
+  };
+}
+
 function workoutForBeklimmingen(type, mins, settings, mesoWeek, macroFase) {
   var ftp = settings.ftp, lthr = settings.lthr;
   var f = mesoFactor(mesoWeek);

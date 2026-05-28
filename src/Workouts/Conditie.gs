@@ -5,6 +5,32 @@
  * 90-min eindtest met laatste 30min tempo.
  */
 
+/**
+ * Variant-pool voor Conditie hoofdtype. Mix tempo/sweet-spot/fat-ox.
+ * Variant.zone is de primaire bucket; gemengde varianten bevatten ook
+ * low-blokken (de intent splitst per blok).
+ */
+function conditiePools_() {
+  return {
+    conditie: [
+      { id: 'cond_tempo', naam: 'Conditie Tempo 3×15', zone: 'high', warmup: 12, cooldown: 8,
+        blocks: function (a) { return [{ kind: 'int', label: 'Tempo', reps: 3, onMin: 15, onPct: a(80), offMin: 4, offPct: 50 }]; },
+        tip: 'Tempo verlegt de aerobic-anaerobic grens.' },
+      { id: 'cond_z2tempo', naam: 'Conditie Z2 + tempo', zone: 'high', warmup: 10, cooldown: 8,
+        blocks: function (a) { return [
+          { kind: 'steady', label: 'Z2 base', durMin: 40, pct: a(70), zone: 'low' },
+          { kind: 'int', label: 'Tempo', reps: 3, onMin: 10, onPct: a(80), offMin: 5, offPct: 50 }
+        ]; },
+        tip: 'Lange rit met tempo-blokken — efficient voor Conditie/Build.' },
+      { id: 'cond_sst', naam: 'Conditie Sweet Spot 2×20', zone: 'high', warmup: 12, cooldown: 8,
+        blocks: function (a) { return [{ kind: 'int', label: 'Sweet Spot', reps: 2, onMin: 20, onPct: a(89), offMin: 5, offPct: 50 }]; } },
+      { id: 'cond_fatox', naam: 'Conditie Fat-ox nuchter 90min', zone: 'low', warmup: 10, cooldown: 5,
+        blocks: function (a) { return [{ kind: 'steady', label: 'Z1-Z2 nuchter', durMin: 75, pct: a(63) }]; },
+        tip: 'Nuchter Z1-Z2 traint vetverbranding — niet pushen.' }
+    ]
+  };
+}
+
 function workoutForConditie(type, mins, settings, mesoWeek, macroFase) {
   var ftp = settings.ftp, lthr = settings.lthr;
   var f = mesoFactor(mesoWeek);

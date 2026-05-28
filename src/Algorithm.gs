@@ -597,54 +597,32 @@ function keyIntensity(doel, macroFase, dekking, klimType) {
     if (ct) return ct;
   }
 
+  // Categorie-types → variant-pools (selectVariant_ roteert de vorm).
   if (doel === 'FTP') {
     if (macroFase === 'Base')  return 'sweet_spot';
     if (macroFase === 'Build') return dekking.high ? 'threshold' : 'sweet_spot';
     if (macroFase === 'Peak')  return 'threshold';
     return 'sweet_spot';
   }
-  if (doel === 'VO2max') {
-    if (macroFase === 'Base')  return 'vo2_short';
-    if (macroFase === 'Build') return 'vo2_medium';
-    if (macroFase === 'Peak')  return dekking.anaerobic ? 'vo2_3015' : 'vo2_long';
-    return 'vo2_short';
-  }
-  if (doel === 'Conditie') {
-    if (macroFase === 'Base')  return 'tempo';
-    if (macroFase === 'Build') return dekking.high ? 'combo_z2_tempo' : 'tempo';
-    if (macroFase === 'Peak')  return 'fatox';
-    return 'tempo';
-  }
-  if (doel === 'Beklimmingen') {
-    if (macroFase === 'Base')  return 'low_cad';
-    if (macroFase === 'Build') return dekking.high ? 'bergsim' : 'big_gear';
-    if (macroFase === 'Peak')  return 'bergsim';
-    return 'low_cad';
-  }
+  if (doel === 'VO2max')       return 'vo2max';
+  if (doel === 'Conditie')     return 'conditie';
+  if (doel === 'Beklimmingen') return 'klim';
   return 'sweet_spot';
 }
 
 /**
- * Klim-type-gestuurde workout-keuze voor de kwaliteitsdag.
- *   kort    → explosief: vo2_hill_repeats / anaerobic_capacity
- *   lang    → sustained: threshold_long / sweet_spot_long
+ * Klim-type-gestuurde keuze van de kwaliteitsdag-categorie (event-driven).
+ * Mapt naar variant-pool categorieën i.p.v. losse types:
+ *   kort    → vo2max  (pool bevat 8x2 / 30-30 / 40-20 explosief)
+ *   lang    → threshold / sweet_spot (sustained)
  *   gemengd → afwisselen op basis van dekking
  *   vlak    → null (val terug op doel-standaard)
  */
 function climbTypeWorkout_(klimType, macroFase, dekking) {
   if (!klimType || klimType === 'vlak') return null;
-  if (klimType === 'kort') {
-    if (macroFase === 'Peak') return dekking.anaerobic ? 'anaerobic_capacity' : 'vo2_hill_repeats';
-    return 'vo2_hill_repeats';
-  }
-  if (klimType === 'lang') {
-    if (macroFase === 'Peak') return 'threshold_long';
-    return dekking.high ? 'threshold_long' : 'sweet_spot_long';
-  }
-  if (klimType === 'gemengd') {
-    // afwisselen: nog geen anaerobic dekking → kort/explosief, anders lang/sustained
-    return dekking.anaerobic ? 'threshold_long' : 'vo2_hill_repeats';
-  }
+  if (klimType === 'kort') return 'vo2max';
+  if (klimType === 'lang') return dekking.high ? 'threshold' : 'sweet_spot';
+  if (klimType === 'gemengd') return dekking.anaerobic ? 'threshold' : 'vo2max';
   return null;
 }
 
@@ -658,7 +636,8 @@ function workoutZones(type, doel) {
   if (type === 'vo2_hill_repeats' || type === 'anaerobic_capacity') return ['anaerobic'];
   if (type === 'threshold_long' || type === 'sweet_spot_long') return ['high'];
   if (type === 'long_z2' || type === 'recovery' || type === 'pendel_z2' || type === 'fatox') return ['low'];
-  if (type === 'sweet_spot' || type === 'threshold' || type === 'tempo' ||
+  if (type === 'sweet_spot' || type === 'threshold' || type === 'tempo' || type === 'klim' ||
+      type === 'conditie' ||
       type === 'ss_lang' || type === 'low_cad' || type === 'big_gear' || type === 'bergsim') return ['high'];
   if (type === 'vo2max' || type === 'vo2_short' || type === 'vo2_medium' || type === 'vo2_long' ||
       type === 'vo2_3015' || type === 'microbursts') return ['anaerobic'];
@@ -680,9 +659,170 @@ function workoutZones(type, doel) {
   return [];
 }
 
+// ════════════════════════════════════════════════════════════════
+// VARIANT-ENGINE (DEEL 3) — pools + selectie + renderer
+// ════════════════════════════════════════════════════════════════
+
+// Fase past %FTP-offset toe bovenop de meso-factor (variant = vorm,
+// fase/meso = intensiteit/volume).
+var VARIANT_FASE_OFFSET = { Base: -2, Build: 0, Peak: 2, Taper: 0, Recovery: 0, Test: 0 };
+
+/** Weken sinds doel-startdatum (deterministisch, reproduceerbaar). */
+function weekIndexFromStart_(settings) {
+  var start = settings.doelStart || new Date();
+  var s0 = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  var ws = weekStartDate(new Date());
+  var diff = Math.floor((ws - s0) / (7 * 24 * 60 * 60 * 1000));
+  return diff < 0 ? 0 : diff;
+}
+
+/** Verzamelt alle pools (generiek + per doel-library) in één object. */
+function getPool_(type) {
+  var pools = {};
+  function merge(p) { if (p) Object.keys(p).forEach(function (k) { pools[k] = p[k]; }); }
+  merge(genericPools_());
+  merge(ftpPools_());
+  merge(vo2Pools_());
+  merge(conditiePools_());
+  merge(climbPools_());
+  return pools[type] || null;
+}
+
+function findVariantById_(pool, id) {
+  for (var i = 0; i < pool.length; i++) if (pool[i].id === id) return pool[i];
+  return null;
+}
+
 /**
- * Bouwt een concrete workout. Routet naar doel-specifieke library voor
- * doel-gespecificeerde types. Generieke types worden hier afgehandeld.
+ * Kiest een variant uit de pool voor `type`.
+ * - index = weekIndex % pool.length (deterministisch roterend).
+ * - Vermijd directe herhaling t.o.v. vorige keuze → +1 (mod length).
+ * - Idempotent binnen dezelfde week: opslag {week, id} onder
+ *   DocProp 'variant_<type>' zodat herhaalde buildWorkout-calls in één
+ *   generateProposal NIET doorrotteren (anders mismatch storage/render).
+ */
+function selectVariant_(type, weekIndex) {
+  var pool = getPool_(type);
+  if (!pool || !pool.length) return null;
+
+  var key = 'variant_' + type;
+  var prev = null;
+  var raw = getDocProp(key, '');
+  if (raw) { try { prev = JSON.parse(raw); } catch (e) {} }
+
+  // Zelfde week al gekozen → geef exact dezelfde variant terug.
+  if (prev && prev.week === weekIndex) {
+    var same = findVariantById_(pool, prev.id);
+    if (same) return same;
+  }
+
+  var idx = ((weekIndex % pool.length) + pool.length) % pool.length;
+  if (prev && pool[idx].id === prev.id) idx = (idx + 1) % pool.length; // avoid-repeat
+  var chosen = pool[idx];
+  setDocProp(key, JSON.stringify({ week: weekIndex, id: chosen.id }));
+  return chosen;
+}
+
+/**
+ * Rendert een variant-spec naar een workout-object met intent.
+ * adj(basePct) = round(basePct * mesoFactor) + fase-offset.
+ * intent = target tijd-in-zone (min) per load-focus bucket.
+ */
+function renderVariant_(variant, settings, mesoWeek, macroFase) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  var f = mesoFactor(mesoWeek);
+  var off = VARIANT_FASE_OFFSET[macroFase] || 0;
+  var adj = function (p) { return Math.round(p * f) + off; };
+
+  var warm = variant.warmup || 12, cool = variant.cooldown || 10;
+  var structuur = [['Warmup', warm + ' min', wattsRange(ftp, 50, 68), bpmBelow(lthr, 85), 'Inrijden, opbouwend']];
+  var intent = { low: warm + cool, high: 0, anaerobic: 0 };
+  var mainMin = 0;
+
+  variant.blocks(adj).forEach(function (b) {
+    if (b.kind === 'int') {
+      var onMin  = b.onMin != null ? b.onMin : b.onSec / 60;
+      var offMin = b.offMin != null ? b.offMin : b.offSec / 60;
+      var onStr  = (b.onMin != null ? b.onMin + ' min' : b.onSec + ' sec');
+      var offStr = (b.offMin != null ? b.offMin + ' min' : b.offSec + ' sec');
+      structuur.push([
+        b.label,
+        b.reps + 'x ' + onStr,
+        wattsRange(ftp, b.onPct - 2, b.onPct + 2),
+        bpmRange(lthr, 95, 106),
+        offStr + ' rust @ ' + b.offPct + '%'
+      ]);
+      intent[variant.zone] += b.reps * onMin;
+      intent.low += b.reps * offMin;
+      mainMin += b.reps * (onMin + offMin);
+    } else { // steady
+      var z = b.zone || variant.zone;
+      structuur.push([
+        b.label, b.durMin + ' min',
+        wattsRange(ftp, b.pct - 2, b.pct + 2),
+        bpmRange(lthr, 78, 92), b.note || 'Stabiel'
+      ]);
+      intent[z] += b.durMin;
+      mainMin += b.durMin;
+    }
+  });
+
+  structuur.push(['Cooldown', cool + ' min', wattsRange(ftp, 45, 55), '—', 'Easy uit']);
+
+  var totaalMin = warm + cool + mainMin;
+  var rate = variant.zone === 'anaerobic' ? 1.05 : (variant.zone === 'high' ? 0.95 : 0.7);
+  Object.keys(intent).forEach(function (k) { intent[k] = Math.round(intent[k]); });
+
+  return {
+    naam: variant.naam + ' (' + macroFase + ')',
+    focus: variant.zone,
+    zones: [variant.zone],
+    variantId: variant.id,
+    totaalMin: totaalMin,
+    structuur: structuur,
+    intent: intent,
+    tss: Math.round(totaalMin * rate),
+    eindopmerking: variant.tip || (variant.naam + ' — variant van deze week (roteert wekelijks).')
+  };
+}
+
+/** Generieke pools (doel-onafhankelijk): lange Z2 + tempo. */
+function genericPools_() {
+  return {
+    long_z2: [
+      { id: 'z2_steady', naam: 'Lange Z2 steady', zone: 'low', warmup: 10, cooldown: 5,
+        blocks: function (a) { return [{ kind: 'steady', label: 'Z2', durMin: 90, pct: a(70) }]; },
+        tip: 'Continu Z2 — aerobe motor.' },
+      { id: 'z2_cadans', naam: 'Z2 + hoge cadans', zone: 'low', warmup: 10, cooldown: 5,
+        blocks: function (a) { return [
+          { kind: 'steady', label: 'Z2', durMin: 50, pct: a(70) },
+          { kind: 'int', label: 'Hoge cadans 95+rpm', reps: 3, onMin: 10, onPct: a(72), offMin: 5, offPct: a(60) }
+        ]; },
+        tip: 'Z2 met cadans-blokken 95+ rpm — pedaalefficiëntie.' },
+      { id: 'z2_progressief', naam: 'Z2 progressief', zone: 'low', warmup: 10, cooldown: 5,
+        blocks: function (a) { return [
+          { kind: 'steady', label: 'Z2', durMin: 70, pct: a(68) },
+          { kind: 'steady', label: 'Bovenkant Z2', durMin: 20, pct: a(75) }
+        ]; },
+        tip: 'Laatste 20% naar bovenkant Z2.' },
+      { id: 'z2_nuchter', naam: 'Z2 nuchter', zone: 'low', warmup: 10, cooldown: 5,
+        blocks: function (a) { return [{ kind: 'steady', label: 'Z2 nuchter', durMin: 80, pct: a(68) }]; },
+        tip: 'Ochtend nuchter, strak Z2 — vetverbranding.' }
+    ],
+    tempo: [
+      { id: 'tempo_2x20', naam: 'Tempo 2×20', zone: 'high', warmup: 12, cooldown: 8,
+        blocks: function (a) { return [{ kind: 'int', label: 'Tempo', reps: 2, onMin: 20, onPct: a(82), offMin: 5, offPct: 50 }]; } },
+      { id: 'tempo_3x15', naam: 'Tempo 3×15', zone: 'high', warmup: 12, cooldown: 8,
+        blocks: function (a) { return [{ kind: 'int', label: 'Tempo', reps: 3, onMin: 15, onPct: a(80), offMin: 4, offPct: 50 }]; } },
+      { id: 'tempo_45', naam: 'Tempo 45min continu', zone: 'high', warmup: 12, cooldown: 8,
+        blocks: function (a) { return [{ kind: 'steady', label: 'Tempo continu', durMin: 45, pct: a(78) }]; } }
+    ]
+  };
+}
+
+/**
+ * Bouwt een concrete workout. Variant-pools eerst, dan generieke/doel-
+ * specifieke routing. macroFase/meso schalen intensiteit binnen de variant.
  */
 function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx) {
   var doel = settings.doel;
@@ -692,14 +832,21 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx) {
   if (type === 'taper_openers')  return genericTaperOpeners(settings);
   if (type === 'taper_z2_kort')  return genericTaperZ2Kort(mins, settings);
 
-  // Klim-type-specifieke workouts (event-driven, doel-onafhankelijk)
+  // long_z2 met event-context → endurance scaling (behoud event-feature)
+  if (type === 'long_z2' && eventCtx) return genericLongZ2(mins, settings, mesoWeek, eventCtx);
+
+  // Variant-pool categorie? (vo2max/sweet_spot/threshold/tempo/long_z2/klim/conditie)
+  if (getPool_(type)) {
+    var variant = selectVariant_(type, weekIndexFromStart_(settings));
+    if (variant) return renderVariant_(variant, settings, mesoWeek, macroFase);
+  }
+
+  // Klim-type-specifieke legacy workouts (nog callable; niet meer geselecteerd)
   if (type === 'vo2_hill_repeats')   return genericVo2HillRepeats(mins, settings, mesoWeek);
   if (type === 'anaerobic_capacity') return genericAnaerobicCapacity(mins, settings, mesoWeek);
   if (type === 'threshold_long')     return genericThresholdLong(mins, settings, mesoWeek);
   if (type === 'sweet_spot_long')    return genericSweetSpotLong(mins, settings, mesoWeek);
 
-  // Generieke types eerst (maar Conditie heeft eigen long_z2 met fase-schaling)
-  if (type === 'long_z2' && doel !== 'Conditie') return genericLongZ2(mins, settings, mesoWeek, eventCtx);
   if (type === 'recovery')    return genericRecovery(mins, settings);
   if (type === 'pendel_z2')   return genericPendelZ2(mins, settings);
   if (type.indexOf('pendel_') === 0 && type.indexOf('_intervals') > 0) {
