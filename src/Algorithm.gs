@@ -22,10 +22,17 @@ function generateProposal() {
 
   var ss = SpreadsheetApp.getActive();
   var settings  = readSettings(ss);
+
+  // Volgorde-onafhankelijke gemist-detectie: zorg dat de Activiteiten-tab
+  // gevuld is en reconcile de Gedaan-checkboxes vóór we 'gemist' bepalen.
+  // Zo markeert "Bouw alles opnieuw → Genereer voorstel" (zonder handmatige
+  // sync) gedane dagen correct als gedaan.
+  ensureActivitiesAndReconcile_(ss);
+
   var weekStart = weekStartDate(new Date());
   var macro     = bepaalFaseVoorDatum_(weekStart);  // event-driven, valt terug op vaste meso
   var mesoWeek  = getMesoWeek();
-  var days      = readPlanner(ss);
+  var days      = readPlanner(ss);                  // nu met gereconcileerde Gedaan-vinkjes
   var wellness  = getWellnessSignal(ss);
   var today     = stripTime_(new Date());
 
@@ -78,6 +85,24 @@ function generateProposal() {
 
 function stripTime_(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * Zorgt dat de Activiteiten-tab gevuld is (sync indien leeg) en draait
+ * daarna reconcilePlannerWithActivities zodat Gedaan-checkboxes kloppen
+ * vóór generateProposal de gemiste dagen bepaalt. Faalt stil (geen API
+ * key → planner blijft zoals hij is).
+ */
+function ensureActivitiesAndReconcile_(ss) {
+  var act = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  var hasData = act && act.getLastRow() > 1;
+  if (!hasData) {
+    ss.toast('Activiteiten ophalen voor matching...', '🚴 Coach', 5);
+    try { syncActivities(); }
+    catch (e) { console.warn('syncActivities in generateProposal faalde: ' + e.message); }
+  }
+  try { reconcilePlannerWithActivities(); }
+  catch (e) { console.warn('reconcile in generateProposal faalde: ' + e.message); }
 }
 
 /**
