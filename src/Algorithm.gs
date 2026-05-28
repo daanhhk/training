@@ -94,9 +94,11 @@ function cleanupOldProposals_() {
  */
 function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness) {
   var doel = settings.doel;
+  var isTaper    = macroFase === 'Taper';
   var isRecovery = mesoWeek === 4;
   var isTestWeek = macroFase === 'Test';
   var testGedaan = false;
+  var openersGedaan = false;
 
   // Sorteer op dagIdx zodat ma→zo wordt verwerkt
   days.sort(function (a, b) { return a.dagIdx - b.dagIdx; });
@@ -104,7 +106,15 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness) 
   days.forEach(function (d) {
     var type;
 
-    if (isRecovery) {
+    if (isTaper) {
+      // Taper-week: één korte intensieve openers-sessie, rest korte Z2.
+      if (!openersGedaan && (d.type === 'vrij' || d.type === 'weekend')) {
+        type = 'taper_openers';
+        openersGedaan = true;
+      } else {
+        type = 'taper_z2_kort';
+      }
+    } else if (isRecovery) {
       // Recovery week: alleen lichte sessies
       if (d.type === 'pendel')       type = 'pendel_z2';
       else if (d.type === 'weekend') type = 'long_z2';
@@ -388,18 +398,20 @@ function dslDurationSec_(str) {
   if (!str) return 0;
   var m = /(\d+)\s*min/i.exec(str);
   if (m) return parseInt(m[1], 10) * 60;
-  var s = /(\d+)\s*s\b/i.exec(str);
+  var s = /(\d+)\s*(?:sec|s)\b/i.exec(str);
   if (s) return parseInt(s[1], 10);
   return 0;
 }
 
 function dslRestFromNote_(note) {
   if (!note) return null;
-  var m = /(\d+)\s*min\s+(rust|pauze|recovery)/i.exec(note);
+  var m = /(\d+)\s*(min|sec|s)\s+(rust|pauze|recovery)/i.exec(note);
   if (!m) return null;
+  var val = parseInt(m[1], 10);
+  var seconds = /min/i.test(m[2]) ? val * 60 : val;
   var pctMatch = /@\s*(\d+)\s*%/i.exec(note);
   return {
-    duration: parseInt(m[1], 10) * 60,
+    duration: seconds,
     pct:      pctMatch ? parseInt(pctMatch[1], 10) : 50
   };
 }
@@ -521,6 +533,7 @@ function xmlEscape_(s) {
  * macro-fase en wat nog open staat in dekking.
  */
 function keyIntensity(doel, macroFase, dekking) {
+  if (macroFase === 'Taper') return 'taper_openers'; // defensief — taper handled in assignWorkouts
   if (doel === 'FTP') {
     if (macroFase === 'Base')  return 'sweet_spot';
     if (macroFase === 'Build') return dekking.high ? 'threshold' : 'sweet_spot';
@@ -553,6 +566,8 @@ function keyIntensity(doel, macroFase, dekking) {
  */
 function workoutZones(type, doel) {
   if (!type) return [];
+  if (type === 'taper_z2_kort') return ['low'];
+  if (type === 'taper_openers') return ['anaerobic'];
   if (type === 'long_z2' || type === 'recovery' || type === 'pendel_z2' || type === 'fatox') return ['low'];
   if (type === 'sweet_spot' || type === 'threshold' || type === 'tempo' ||
       type === 'ss_lang' || type === 'low_cad' || type === 'big_gear' || type === 'bergsim') return ['high'];
@@ -583,6 +598,10 @@ function workoutZones(type, doel) {
 function buildWorkout(type, mins, settings, mesoWeek, macroFase) {
   var doel = settings.doel;
   var ftp = settings.ftp, lthr = settings.lthr;
+
+  // Taper-workouts (event-driven laatste week)
+  if (type === 'taper_openers')  return genericTaperOpeners(settings);
+  if (type === 'taper_z2_kort')  return genericTaperZ2Kort(mins, settings);
 
   // Generieke types eerst (maar Conditie heeft eigen long_z2 met fase-schaling)
   if (type === 'long_z2' && doel !== 'Conditie') return genericLongZ2(mins, settings, mesoWeek);
@@ -641,6 +660,41 @@ function genericRecovery(mins, settings) {
     ],
     tss: Math.round(mins * 0.35),
     eindopmerking: 'Bloed laten stromen, geen stress. Niet skippen — herstel is training.'
+  };
+}
+
+// ─── Taper workouts (event-driven laatste week) ──────────────────
+
+function genericTaperOpeners(settings) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  return {
+    naam: 'Taper Openers (30 min)',
+    focus: 'sharpness',
+    zones: ['anaerobic'],
+    totaalMin: 30,
+    structuur: [
+      ['Warmup',   '12 min', wattsRange(ftp, 50, 65),   bpmBelow(lthr, 80),    'Rustig opbouwen'],
+      ['Openers',  '4x 30 sec', wattsRange(ftp, 110, 120), bpmRange(lthr, 95, 105), '90 sec rust @ 50% tussen reps'],
+      ['Cooldown', '8 min',  wattsRange(ftp, 45, 55),   '—',                   'Easy uit']
+    ],
+    tss: 28,
+    eindopmerking: 'Benen wakker maken, niet vermoeien. Kort en scherp — fitness is al gemaakt.'
+  };
+}
+
+function genericTaperZ2Kort(mins, settings) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  mins = Math.max(30, Math.min(45, Math.round((mins || 40) * 0.5)));
+  return {
+    naam: 'Taper Z2 kort (' + mins + ' min)',
+    focus: 'aerobic onderhoud',
+    zones: ['low'],
+    totaalMin: mins,
+    structuur: [
+      ['Hele rit', mins + ' min', wattsRange(ftp, 60, 72), bpmRange(lthr, 78, 86), 'Soepel, laag volume — fris blijven voor het event']
+    ],
+    tss: Math.round(mins * 0.6),
+    eindopmerking: 'Volume bewust gehalveerd. Niet opbouwen meer — fris worden is het doel.'
   };
 }
 
