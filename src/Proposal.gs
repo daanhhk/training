@@ -8,7 +8,7 @@
 
 var PROPOSAL_SHEET = 'Voorstel';
 
-function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, dekking, wellness) {
+function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, dekking, wellness, feedback) {
   var sh = getOrCreateSheet(ss, PROPOSAL_SHEET);
   var r = 1;
   var COLS = 5;
@@ -141,6 +141,71 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
       .setValue(wText)
       .setBackground(wBg).setFontColor(wFg).setFontWeight('bold').setWrap(true);
     r += 1;
+  }
+
+  // ── Feedback op voltooide trainingen (DEEL 4) ──
+  if (feedback && feedback.hasPlan && feedback.details && feedback.details.length) {
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('📊  Feedback op voltooide trainingen (gepland vs werkelijk)')
+      .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff');
+    r += 1;
+
+    feedback.details.forEach(function (det) {
+      var dayLabel = det.dag;
+      if (!det.hasData) {
+        sh.getRange(r, 1, 1, COLS).merge()
+          .setValue(dayLabel + ' — ' + det.type + ': geen zone-data, aangenomen volgens plan')
+          .setFontStyle('italic').setFontColor('#6b7280').setBackground('#f3f4f6').setWrap(true);
+        r += 1;
+        return;
+      }
+      var intent = det.intent || {};
+      var pb = 'low', pbVal = -1;
+      ['low', 'high', 'anaerobic'].forEach(function (b) {
+        if ((intent[b] || 0) > pbVal) { pbVal = intent[b] || 0; pb = b; }
+      });
+      var planned = Math.round(intent[pb] || 0);
+      var act = Math.round((det.actual && det.actual[pb]) || 0);
+      var diff = act - planned;
+      var mark, bg;
+      if (diff <= -5)      { mark = '⚠️ ' + diff + 'min'; bg = '#fef3c7'; }
+      else if (diff >= 5)  { mark = '↑ +' + diff + 'min'; bg = '#dcfce7'; }
+      else                 { mark = '✅'; bg = '#f0fdf4'; }
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue(dayLabel + ' — ' + det.type + ' gepland (' + pb + ' ' + planned + 'min) → werkelijk ' + act + 'min  ' + mark)
+        .setBackground(bg).setWrap(true);
+      r += 1;
+    });
+
+    // Samenvatting netto debt + compensatie
+    var debt = feedback.debt || { low: 0, high: 0, anaerobic: 0 };
+    var parts = [];
+    ['low', 'high', 'anaerobic'].forEach(function (b) {
+      if (debt[b] > 0) parts.push(b + ' -' + debt[b] + 'min tekort');
+      else if (debt[b] < 0) parts.push(b + ' +' + (-debt[b]) + 'min over');
+    });
+    var sumText;
+    if (!parts.length) {
+      sumText = 'Netto: alles op schema ✅';
+    } else if (macro.isTaper || macro.isRecovery) {
+      sumText = 'Netto debt: ' + parts.join(' · ') + '   |   taper/recovery — niet gecompenseerd (herstel gaat voor).';
+    } else {
+      var comp = [];
+      ['anaerobic', 'high', 'low'].forEach(function (b) {
+        if (debt[b] <= 0) return;
+        var dayName = null;
+        days.forEach(function (d) {
+          if (dayName || !d.train || d.gedaan || !d.voorgesteldType) return;
+          if (typeBucket_(d.voorgesteldType, settings.doel) === b) dayName = d.dag;
+        });
+        if (dayName) comp.push(debt[b] + 'min ' + b + ' → ' + dayName);
+      });
+      sumText = 'Netto debt: ' + parts.join(' · ') + (comp.length ? '   |   compensatie: ' + comp.join(', ') : '');
+    }
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('Σ  ' + sumText)
+      .setFontStyle('italic').setFontColor('#374151').setBackground('#e0f2fe').setWrap(true);
+    r += 2;
   }
 
   // Gemiste dagen — 1-regel notitie per dag
