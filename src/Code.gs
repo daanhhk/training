@@ -9,6 +9,9 @@
  */
 
 function onOpen() {
+  // Rol de Weekplanner automatisch naar de huidige week (LAAG 2).
+  try { ensureCurrentWeek(SpreadsheetApp.getActive()); } catch (e) { console.warn('ensureCurrentWeek onOpen: ' + e.message); }
+
   SpreadsheetApp.getUi()
     .createMenu('🚴 Coach')
     .addItem('Genereer voorstel voor deze week', 'generateProposal')
@@ -26,6 +29,7 @@ function onOpen() {
     .addItem('Reset mesocyclus naar week 1', 'resetMeso')
     .addSeparator()
     .addItem('Open Events-tab', 'openEventsTab')
+    .addItem('Sla huidige week op als standaardpatroon', 'savePatternFromTab')
     .addSeparator()
     .addItem('Bouw alles opnieuw (reset Sheet)', 'buildAll')
     .addToUi();
@@ -111,6 +115,10 @@ function buildAll() {
       ss.moveActiveSheet(i + 1);
     }
   });
+
+  // Zorg dat de Weekplanner de huidige week toont (buildPlanner deed dit al;
+  // dit is de expliciete guard zodat de tab altijd klopt na rebuild).
+  ensureCurrentWeek(ss);
 
   ss.setActiveSheet(ss.getSheetByName(SETTINGS_SHEET));
   ss.toast('Alle tabs opgebouwd ✓', '🚴 Coach', 5);
