@@ -21,13 +21,10 @@ function generateProposal() {
   cleanupOldProposals_();
 
   var ss = SpreadsheetApp.getActive();
+  ensureCurrentWeek(ss);            // LAAG 2: rol planner naar huidige week
   var settings  = readSettings(ss);
 
-  // Volgorde-onafhankelijke gemist-detectie + verse data: zorg dat de
-  // data-tabs gevuld zijn en reconcile de Gedaan-checkboxes vóór we
-  // 'gemist' bepalen. Zo werkt "Bouw alles opnieuw → Genereer voorstel"
-  // (zonder handmatige sync): gedane dagen kloppen én wellness-banner
-  // toont echte data.
+  // Volgorde-onafhankelijke gemist-detectie + verse data.
   ensureDataAndReconcile_(ss);
 
   var weekStart = weekStartDate(new Date());
@@ -46,23 +43,17 @@ function generateProposal() {
     return d.train && !d.gedaan && (!d.datum || stripTime_(d.datum) >= today);
   });
 
-  // Dekking obv voltooide trainingen
-  var dekking = { low: false, high: false, anaerobic: false };
+  // DEEL 2 — rollend dekkings-venster (laatste 7 dagen, over weekgrens heen)
+  var rolling = rollingZoneCoverage(ss, 7);
+  var dekking = { low: rolling.low > 0, high: rolling.high > 0, anaerobic: rolling.anaerobic > 0 };
+  // Plus reeds-voltooide dagen van deze week (dubbel plannen voorkomen)
   voltooid.forEach(function (d) {
     workoutZones(d.voorgesteldType, settings.doel).forEach(function (z) { dekking[z] = true; });
   });
 
   var klimType = (macro.hoofdEvent && macro.hoofdEvent.klimType) || null;
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType);
-
-  // Persisteer gegenereerde workouts per datum naar DocProps (voor push-to-Garmin)
-  var eventCtx = eventContextFrom_(macro);
-  tePlannen.forEach(function (d) {
-    if (!d.voorgesteldType || !d.datum) return;
-    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx);
-    if (!wo) return;
-    setDocProp('proposal_' + formatDate(d.datum, 'yyyy-MM-dd'), JSON.stringify(wo));
-  });
+  var recentHard = recentHardDayDate_(ss);
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType, recentHard);
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
@@ -75,6 +66,27 @@ function generateProposal() {
   });
   writeVoorgesteldType(ss, days);
 
+  // DEEL 4 — persisteer per-dag workout (proposal_<datum>) + weekplan-snapshot
+  var eventCtx = eventContextFrom_(macro);
+  var weekplan = [];
+  days.forEach(function (d) {
+    if (!d.train || !d.voorgesteldType || !d.datum) return;
+    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx);
+    if (!wo) return;
+    var dISO = formatDate(d.datum, 'yyyy-MM-dd');
+    setDocProp('proposal_' + dISO, JSON.stringify(wo));
+    weekplan.push({
+      datum: dISO,
+      workoutType: d.voorgesteldType,
+      variantId: wo.variantId || null,
+      zones: wo.zones || [],
+      intent: ensureIntent_(wo),
+      tss: wo.tss || 0,
+      minuten: wo.totaalMin || 0
+    });
+  });
+  setDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), JSON.stringify(weekplan));
+
   renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, dekking, wellness);
 
   var prop = ss.getSheetByName(PROPOSAL_SHEET);
@@ -86,6 +98,87 @@ function generateProposal() {
 
 function stripTime_(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// ── DEEL 2 — rollend dekkings-venster ─────────────────────────────
+
+/**
+ * Zoekt de load-focus zones van een activiteit op een datum uit de
+ * opgeslagen weekplan-snapshot (intent). Returnt zones-array of null.
+ */
+function intentZonesForDate_(d) {
+  var ws = weekStartDate(d);
+  var raw = getDocProp('weekplan_' + formatDate(ws, 'yyyy-MM-dd'), '');
+  if (!raw) return null;
+  try {
+    var plan = JSON.parse(raw);
+    var ds = formatDate(stripTime_(d), 'yyyy-MM-dd');
+    for (var i = 0; i < plan.length; i++) {
+      if (plan[i].datum === ds) return plan[i].zones || null;
+    }
+  } catch (e) {}
+  return null;
+}
+
+/**
+ * Telt recente stimulus per load-focus bucket over de laatste `daysBack`
+ * dagen (over de kalenderweekgrens heen). Mapping per activiteit:
+ *   a) gematchte geplande dag met opgeslagen intent → die zones
+ *   b) anders heuristisch uit IF: ≥0,95 anaerobic / 0,85-0,95 high /
+ *      <0,80 low / 0,80-0,85 high (sub-threshold tempo).
+ * @return {low, high, anaerobic} counts
+ */
+function rollingZoneCoverage(ss, daysBack) {
+  daysBack = daysBack || 7;
+  var cov = { low: 0, high: 0, anaerobic: 0 };
+  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  if (!sh) return cov;
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return cov;
+
+  var data = sh.getRange(2, 1, lastRow - 1, ACT_HEADERS.length).getValues();
+  var today = stripTime_(new Date());
+  var cutoff = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
+
+  data.forEach(function (r) {
+    var d = r[0];
+    if (!(d instanceof Date)) return;
+    if (stripTime_(d) < cutoff) return;
+
+    var intentZones = intentZonesForDate_(d);
+    if (intentZones && intentZones.length) {
+      intentZones.forEach(function (z) { if (cov[z] != null) cov[z]++; });
+      return;
+    }
+    var iff = Number(r[7]) || 0; // kolom 8 = IF
+    if (iff >= 0.95)      cov.anaerobic++;
+    else if (iff >= 0.85) cov.high++;
+    else if (iff >= 0.80) cov.high++;
+    else if (iff > 0)     cov.low++;
+  });
+  return cov;
+}
+
+/**
+ * Datum van de meest recente "harde" sessie (high/anaerobic) uit de
+ * Activiteiten-tab. Gebruikt voor avoid-consecutive-hard. Null indien geen.
+ */
+function recentHardDayDate_(ss) {
+  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  if (!sh) return null;
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return null;
+  var data = sh.getRange(2, 1, lastRow - 1, ACT_HEADERS.length).getValues();
+  var best = null;
+  data.forEach(function (r) {
+    var d = r[0];
+    if (!(d instanceof Date)) return;
+    var hard = (Number(r[7]) || 0) >= 0.85;
+    var iz = intentZonesForDate_(d);
+    if (iz && (iz.indexOf('high') >= 0 || iz.indexOf('anaerobic') >= 0)) hard = true;
+    if (hard) { var dd = stripTime_(d); if (!best || dd > best) best = dd; }
+  });
+  return best;
 }
 
 /**
@@ -136,13 +229,31 @@ function cleanupOldProposals_() {
 }
 
 /**
+ * Geeft de intent (tijd-in-zone in min per bucket) van een workout terug.
+ * Variant-workouts hebben dit al; voor overige workouts schatten we het:
+ * ~45% van de tijd als werk in de niet-low zones, rest naar low.
+ */
+function ensureIntent_(wo) {
+  if (wo.intent) return wo.intent;
+  var total = wo.totaalMin || 0;
+  var intent = { low: 0, high: 0, anaerobic: 0 };
+  var zones = (wo.zones && wo.zones.length) ? wo.zones : ['low'];
+  var workZones = zones.filter(function (z) { return z !== 'low'; });
+  if (!workZones.length) { intent.low = total; return intent; }
+  var per = Math.round(total * 0.45 / workZones.length);
+  workZones.forEach(function (z) { if (intent[z] != null) intent[z] += per; });
+  intent.low = Math.max(0, total - per * workZones.length);
+  return intent;
+}
+
+/**
  * Wijst per dag een workout-type toe. Muteert days in-place (voorgesteldType
  * + tss-hint) en update dekking.
  *
  * @param wellness  resultaat van getWellnessSignal(); demote/recovery
  *                  signal overschrijft de assignment cascade.
  */
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate) {
   var doel = settings.doel;
   var isTaper    = macroFase === 'Taper';
   var isEventRecovery = macroFase === 'Recovery';
@@ -151,6 +262,8 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   var isTestWeek = macroFase === 'Test';
   var testGedaan = false;
   var openersGedaan = false;
+  // Avoid-consecutive-hard: laatste harde dag vóór het te-plannen venster.
+  var lastHardDate = recentHardDate ? stripTime_(recentHardDate) : null;
 
   // Sorteer op dagIdx zodat ma→zo wordt verwerkt
   days.sort(function (a, b) { return a.dagIdx - b.dagIdx; });
@@ -195,9 +308,23 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       type = 'recovery';
     }
 
+    // Avoid-consecutive-hard: als de vorige kalenderdag een harde dag was
+    // (deze week of vorige week) en deze dag óók hard zou zijn → downgrade
+    // naar long_z2. Voorkomt twee zware dagen op rij, ook over de weekgrens.
+    var zonesPre = workoutZones(type, doel);
+    var isHard = zonesPre.indexOf('high') >= 0 || zonesPre.indexOf('anaerobic') >= 0;
+    if (isHard && d.datum && lastHardDate) {
+      var prevDay = stripTime_(new Date(d.datum.getTime() - 24 * 60 * 60 * 1000));
+      if (prevDay.getTime() === lastHardDate.getTime()) {
+        type = 'long_z2';
+        isHard = false;
+      }
+    }
+
     d.voorgesteldType = type;
     var zones = workoutZones(type, doel);
     zones.forEach(function (z) { dekking[z] = true; });
+    if (isHard && d.datum) lastHardDate = stripTime_(d.datum);
   });
 
   // Wellness-demotie pass: pas type aan op basis van HRV/slaap-signaal
