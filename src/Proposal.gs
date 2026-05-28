@@ -14,13 +14,51 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   var COLS = 5;
 
   // ── Header ──
+  var headerWeek = macro.eventDriven
+    ? macro.fase + ' fase (event-driven)'
+    : 'Week ' + macro.week + ' van ' + settings.doelDuur + ' — ' + macro.fase + ' fase';
   sh.getRange(r, 1, 1, COLS).merge()
-    .setValue('🚴  Voorstel — ' + settings.doel + ' — Week ' + macro.week + ' van ' + settings.doelDuur + ' — ' + macro.fase + ' fase')
+    .setValue('🚴  Voorstel — ' + settings.doel + ' — ' + headerWeek)
     .setFontWeight('bold').setFontSize(14)
     .setBackground('#111827').setFontColor('#ffffff')
     .setHorizontalAlignment('left').setVerticalAlignment('middle');
   sh.setRowHeight(r, 34);
   r += 2;
+
+  // ── Event countdown banner (event-driven periodisering) ──
+  if (macro.eventDate) {
+    var today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    var ev0 = new Date(macro.eventDate.getFullYear(), macro.eventDate.getMonth(), macro.eventDate.getDate());
+    var dagenTot = Math.round((ev0 - today0) / (24 * 60 * 60 * 1000));
+    var evNaam = macro.eventName || 'Doel-event';
+
+    if (dagenTot < 0) {
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('🎯  ' + evNaam + ' is voorbij — terug naar vaste mesocyclus.')
+        .setBackground('#e5e7eb').setFontStyle('italic');
+      r += 1;
+    } else {
+      var faseUitleg = (typeof MACRO_UITLEG !== 'undefined' && MACRO_UITLEG[macro.fase]) || '';
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('🎯  ' + evNaam + ' over ' + dagenTot + ' dagen — fase: ' + macro.fase + '. ' + faseUitleg + '.')
+        .setBackground('#ede9fe').setFontWeight('bold').setWrap(true);
+      r += 1;
+
+      if (macro.wekenTotEvent != null && macro.wekenTotEvent <= 2) {
+        sh.getRange(r, 1, 1, COLS).merge()
+          .setValue('⚠️  <2 weken tot event: fitness is gemaakt. Nu fris worden, niet meer opbouwen.')
+          .setBackground('#fef3c7').setFontStyle('italic').setFontColor('#92400e').setWrap(true);
+        r += 1;
+      }
+      if (macro.isTaper) {
+        sh.getRange(r, 1, 1, COLS).merge()
+          .setValue('🪶  Taper-week: volume gehalveerd, één korte openers-sessie voor scherpte. Kom fris aan de start.')
+          .setBackground('#f5f3ff').setFontStyle('italic').setFontColor('#5b21b6').setWrap(true);
+        r += 1;
+      }
+    }
+    r += 1;
+  }
 
   // Mesocyclus regel
   sh.getRange(r, 1, 1, COLS).merge()
