@@ -30,22 +30,30 @@ var DOEL_FOCUS = {
     Base:  'SS 2x25 + low-cadence intro 60-70 rpm',
     Build: 'Low-cadence SS + bergsimulatie 30-45 min',
     Peak:  'Sustained climbing 45-60 min @ 80-90%',
-    Test:  'PR-poging favoriete klim (manueel)'
+    Test:  'PR-poging favoriete klim (manueel)',
+    Taper: 'Korte openers + soepele benen voor de klim'
   }
 };
+
+// Taper-focus per doel (event-driven laatste week)
+DOEL_FOCUS.FTP.Taper      = 'Korte openers + Z2 onderhoud — geen FTP-blokken meer';
+DOEL_FOCUS.VO2max.Taper   = 'Korte openers 4x30s @ 115% + rust';
+DOEL_FOCUS.Conditie.Taper = 'Korte Z2 ritjes — benen los, fris worden';
 
 var MACRO_UITLEG = {
   Base:  'Fundament leggen — volume + lichte intensiteit voor doel-zone',
   Build: 'Stimulus opvoeren — doel-specifieke intensiteit erbij',
   Peak:  'Specificiteit + race-pace — hoogste belasting per minuut',
-  Test:  'Meet vooruitgang — eind-test workout deze week'
+  Test:  'Meet vooruitgang — eind-test workout deze week',
+  Taper: 'Volume afbouwen, scherpte behouden — kom fris aan de start'
 };
 
 var FASE_KLEUR = {
   Base:  '#93c5fd',
   Build: '#fde68a',
   Peak:  '#fca5a5',
-  Test:  '#a78bfa'
+  Test:  '#a78bfa',
+  Taper: '#c4b5fd'
 };
 
 function buildDoel(ss) {
@@ -133,6 +141,21 @@ function buildDoel(ss) {
   sh.getRange(23, 2, 1, 3).merge().setValue(mesoUitleg[getMesoWeek()] || '')
     .setFontStyle('italic').setFontColor('#374151');
 
+  // Doel-event (event-driven periodisering)
+  if (s.eventDate) {
+    var ed = bepaalFaseVoorDatum_(weekStartDate(new Date()));
+    sh.getRange(25, 1, 1, 4).merge()
+      .setValue('🎯  Doel-event: ' + (s.eventName || '(naamloos)'))
+      .setFontWeight('bold').setBackground('#ede9fe');
+    sh.getRange(26, 1).setValue('Event-datum:').setFontWeight('bold');
+    sh.getRange(26, 2).setValue(s.eventDate).setNumberFormat('dd-MM-yyyy');
+    sh.getRange(27, 1).setValue('Weken tot event:').setFontWeight('bold');
+    sh.getRange(27, 2).setValue(ed.wekenTotEvent != null ? ed.wekenTotEvent : '—');
+    sh.getRange(28, 1).setValue('Event-fase (deze week):').setFontWeight('bold');
+    sh.getRange(28, 2).setValue(ed.fase)
+      .setFontWeight('bold').setBackground(FASE_KLEUR[ed.fase] || '#e5e7eb');
+  }
+
   SpreadsheetApp.flush();
   sh.setColumnWidth(1, 200);
   sh.setColumnWidth(2, 200);
@@ -146,4 +169,69 @@ function repeat(ch, n) {
   var s = '';
   for (var i = 0; i < n; i++) s += ch;
   return s;
+}
+
+/**
+ * Event-driven fase-berekening. Telt terug vanaf doel-event datum.
+ * Geen event_date ingesteld → val terug op vaste mesocyclus
+ * (computeMacroPhase). Event voorbij → idem.
+ *
+ * Fase-mapping op wekenTotEvent:
+ *   >= 9   → Base
+ *   5-8    → Build
+ *   2-4    → Peak (laatste kwaliteit, nog vol volume)
+ *   1      → Taper (laatste 7 dagen voor event)
+ *   <= 0   → event voorbij, vaste mesocyclus
+ *
+ * @param weekStart Date — maandag van de te plannen week
+ * @return { fase, week, wekenTotEvent, isTaper, isTestWeek, eventDriven,
+ *           eventName, eventDate }
+ */
+function bepaalFaseVoorDatum_(weekStart) {
+  var ss = SpreadsheetApp.getActive();
+  var eventDateStr = getDocProp('event_date', '');
+  var eventName    = getDocProp('event_name', '');
+
+  function vasteMeso(extra) {
+    var s = readSettings(ss);
+    var m = computeMacroPhase(s.doelStart, new Date());
+    var base = {
+      fase: m.fase, week: m.week, wekenTotEvent: null,
+      isTaper: false, isTestWeek: m.isTestWeek, eventDriven: false,
+      eventName: null, eventDate: null
+    };
+    if (extra) Object.keys(extra).forEach(function (k) { base[k] = extra[k]; });
+    return base;
+  }
+
+  if (!eventDateStr) return vasteMeso();
+
+  var eventDate = new Date(eventDateStr);
+  if (isNaN(eventDate.getTime())) return vasteMeso();
+
+  var ws = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
+  var ed = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+  var wekenTotEvent = Math.ceil((ed - ws) / (7 * 24 * 60 * 60 * 1000));
+
+  if (wekenTotEvent <= 0) {
+    // Event voorbij → vaste mesocyclus, maar geef event-context mee
+    return vasteMeso({ eventName: eventName, eventDate: eventDate, wekenTotEvent: wekenTotEvent });
+  }
+
+  var fase, isTaper = false;
+  if (wekenTotEvent >= 9)      fase = 'Base';
+  else if (wekenTotEvent >= 5) fase = 'Build';
+  else if (wekenTotEvent >= 2) fase = 'Peak';
+  else                          { fase = 'Taper'; isTaper = true; }
+
+  return {
+    fase: fase,
+    week: null,
+    wekenTotEvent: wekenTotEvent,
+    isTaper: isTaper,
+    isTestWeek: false,
+    eventDriven: true,
+    eventName: eventName,
+    eventDate: eventDate
+  };
 }

@@ -22,7 +22,8 @@ function generateProposal() {
 
   var ss = SpreadsheetApp.getActive();
   var settings  = readSettings(ss);
-  var macro     = computeMacroPhase(settings.doelStart, new Date());
+  var weekStart = weekStartDate(new Date());
+  var macro     = bepaalFaseVoorDatum_(weekStart);  // event-driven, valt terug op vaste meso
   var mesoWeek  = getMesoWeek();
   var days      = readPlanner(ss);
   var wellness  = getWellnessSignal(ss);

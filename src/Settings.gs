@@ -12,22 +12,24 @@
 var SETTINGS_SHEET = 'Instellingen';
 
 var SETTINGS_FIELDS = {
-  FTP:        { row: 3,  label: 'FTP (W)',                 unit: 'W'           },
-  HR_MAX:     { row: 4,  label: 'HR max',                  unit: 'bpm'         },
-  HR_RUST:    { row: 5,  label: 'HR rust',                 unit: 'bpm'         },
-  LTHR:       { row: 6,  label: 'LTHR',                    unit: 'bpm'         },
-  LOOP_PACE:  { row: 7,  label: 'Loop drempel pace',       unit: 'min:sec/km'  },
-  DOEL:       { row: 11, label: 'Primair doel',            unit: ''            },
-  DOEL_START: { row: 12, label: 'Startdatum doel',         unit: ''            },
-  DOEL_DUUR:  { row: 13, label: 'Duur (weken)',            unit: 'weken'       },
-  FASE:       { row: 17, label: 'Fase',                    unit: ''            },
-  ATHLETE_ID: { row: 21, label: 'Athlete ID',              unit: ''            },
-  API_KEY:    { row: 22, label: 'API Key',                 unit: ''            },
-  BOT_TOKEN:  { row: 26, label: 'Telegram bot token',      unit: ''            },
-  CHAT_ID:    { row: 27, label: 'Telegram chat ID',        unit: ''            },
-  EMAIL:      { row: 31, label: 'Email digest naar',       unit: ''            },
-  MESO_WEEK:  { row: 35, label: 'Huidige meso-week (1-4)', unit: ''            },
-  MACRO_FASE: { row: 36, label: 'Huidige macro-fase',      unit: ''            }
+  FTP:        { row: 3,  label: 'FTP (W)',                 unit: 'W'                  },
+  HR_MAX:     { row: 4,  label: 'HR max',                  unit: 'bpm'                },
+  HR_RUST:    { row: 5,  label: 'HR rust',                 unit: 'bpm'                },
+  LTHR:       { row: 6,  label: 'LTHR',                    unit: 'bpm'                },
+  LOOP_PACE:  { row: 7,  label: 'Loop drempel pace',       unit: 'min:sec/km'         },
+  DOEL:       { row: 11, label: 'Primair doel',            unit: ''                   },
+  DOEL_START: { row: 12, label: 'Startdatum doel',         unit: ''                   },
+  DOEL_DUUR:  { row: 13, label: 'Duur (weken)',            unit: 'weken'              },
+  EVENT_DATE: { row: 14, label: 'Doel-event datum',        unit: 'leeg = vaste meso'  },
+  EVENT_NAME: { row: 15, label: 'Doel-event naam',         unit: ''                   },
+  FASE:       { row: 19, label: 'Fase',                    unit: ''                   },
+  ATHLETE_ID: { row: 23, label: 'Athlete ID',              unit: ''                   },
+  API_KEY:    { row: 24, label: 'API Key',                 unit: ''                   },
+  BOT_TOKEN:  { row: 28, label: 'Telegram bot token',      unit: ''                   },
+  CHAT_ID:    { row: 29, label: 'Telegram chat ID',        unit: ''                   },
+  EMAIL:      { row: 33, label: 'Email digest naar',       unit: ''                   },
+  MESO_WEEK:  { row: 37, label: 'Huidige meso-week (1-4)', unit: ''                   },
+  MACRO_FASE: { row: 38, label: 'Huidige macro-fase',      unit: ''                   }
 };
 
 /** Rij → docprop key. Alleen velden die de gebruiker kan bewerken. */
@@ -40,12 +42,14 @@ var SETTINGS_ROW_TO_KEY = {
   11: 'doel',
   12: 'doel_start',
   13: 'doel_duur',
-  17: 'fase',
-  21: 'intervals_athlete_id',
-  22: 'intervals_api_key',
-  26: 'telegram_bot_token',
-  27: 'telegram_chat_id',
-  31: 'email_digest'
+  14: 'event_date',
+  15: 'event_name',
+  19: 'fase',
+  23: 'intervals_athlete_id',
+  24: 'intervals_api_key',
+  28: 'telegram_bot_token',
+  29: 'telegram_chat_id',
+  33: 'email_digest'
 };
 
 /** Harde defaults, gebruikt als prop niet ingesteld is. */
@@ -58,6 +62,8 @@ var SETTINGS_DEFAULTS = {
   doel:                 'FTP',
   doel_start:           null,   // → today bij eerste build
   doel_duur:            12,
+  event_date:           '',     // leeg = vaste mesocyclus
+  event_name:           '',
   fase:                 'build',
   intervals_athlete_id: '',
   intervals_api_key:    '',
@@ -72,17 +78,17 @@ var FASE_OPTIONS = ['build', 'maintain'];
 var SETTINGS_SECTIONS = [
   { row: 1,  title: '⚙️  Atleet baseline' },
   { row: 9,  title: '🎯  Doel' },
-  { row: 15, title: '📅  Seizoen-modus' },
-  { row: 19, title: '🔌  intervals.icu (vul in voor sync)' },
-  { row: 24, title: '🤖  Telegram bot (placeholder)' },
-  { row: 29, title: '✉️  Notificaties' },
-  { row: 33, title: '📊  Status (auto — niet bewerken)' }
+  { row: 17, title: '📅  Seizoen-modus' },
+  { row: 21, title: '🔌  intervals.icu (vul in voor sync)' },
+  { row: 26, title: '🤖  Telegram bot (placeholder)' },
+  { row: 31, title: '✉️  Notificaties' },
+  { row: 35, title: '📊  Status (auto — niet bewerken)' }
 ];
 
 /** Numerieke + datum velden (kind hint voor parsen). */
 var SETTINGS_KIND = {
   ftp: 'num', hr_max: 'num', hr_rest: 'num', lthr: 'num', doel_duur: 'num',
-  doel_start: 'date'
+  doel_start: 'date', event_date: 'date'
 };
 
 function buildSettings(ss) {
@@ -193,6 +199,9 @@ function readSettings(ss) {
   var startRaw = v('DOEL_START');
   var startDate = startRaw instanceof Date ? startRaw : new Date(startRaw || new Date());
 
+  var eventRaw = v('EVENT_DATE');
+  var eventDate = eventRaw instanceof Date ? eventRaw : null;
+
   return {
     ftp:        Number(v('FTP'))    || SETTINGS_DEFAULTS.ftp,
     hrMax:      Number(v('HR_MAX')) || SETTINGS_DEFAULTS.hr_max,
@@ -202,6 +211,8 @@ function readSettings(ss) {
     doel:       String(v('DOEL')    || SETTINGS_DEFAULTS.doel),
     doelStart:  startDate,
     doelDuur:   Number(v('DOEL_DUUR')) || SETTINGS_DEFAULTS.doel_duur,
+    eventDate:  eventDate,
+    eventName:  String(v('EVENT_NAME') || ''),
     fase:       String(v('FASE')    || SETTINGS_DEFAULTS.fase),
     athleteId:  String(v('ATHLETE_ID') || ''),
     apiKey:     String(v('API_KEY')    || ''),
