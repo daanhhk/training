@@ -48,9 +48,10 @@ function generateProposal() {
   assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType);
 
   // Persisteer gegenereerde workouts per datum naar DocProps (voor push-to-Garmin)
+  var eventCtx = eventContextFrom_(macro);
   tePlannen.forEach(function (d) {
     if (!d.voorgesteldType || !d.datum) return;
-    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase);
+    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx);
     if (!wo) return;
     setDocProp('proposal_' + formatDate(d.datum, 'yyyy-MM-dd'), JSON.stringify(wo));
   });
@@ -77,6 +78,22 @@ function generateProposal() {
 
 function stripTime_(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * Bouwt event-context voor endurance-scaling uit het macro-object.
+ * Returnt null als er geen hoofd-event is.
+ */
+function eventContextFrom_(macro) {
+  if (!macro || !macro.hoofdEvent) return null;
+  var ev = macro.hoofdEvent;
+  return {
+    naam:      ev.naam,
+    afstandKm: ev.afstandKm || 0,
+    hm:        ev.hm || 0,
+    klimType:  ev.klimType,
+    weken:     macro.wekenTotEvent
+  };
 }
 
 function cleanupOldProposals_() {
@@ -635,7 +652,7 @@ function workoutZones(type, doel) {
  * Bouwt een concrete workout. Routet naar doel-specifieke library voor
  * doel-gespecificeerde types. Generieke types worden hier afgehandeld.
  */
-function buildWorkout(type, mins, settings, mesoWeek, macroFase) {
+function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx) {
   var doel = settings.doel;
   var ftp = settings.ftp, lthr = settings.lthr;
 
@@ -650,7 +667,7 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase) {
   if (type === 'sweet_spot_long')    return genericSweetSpotLong(mins, settings, mesoWeek);
 
   // Generieke types eerst (maar Conditie heeft eigen long_z2 met fase-schaling)
-  if (type === 'long_z2' && doel !== 'Conditie') return genericLongZ2(mins, settings, mesoWeek);
+  if (type === 'long_z2' && doel !== 'Conditie') return genericLongZ2(mins, settings, mesoWeek, eventCtx);
   if (type === 'recovery')    return genericRecovery(mins, settings);
   if (type === 'pendel_z2')   return genericPendelZ2(mins, settings);
   if (type.indexOf('pendel_') === 0 && type.indexOf('_intervals') > 0) {
@@ -675,21 +692,57 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase) {
 
 // ─── Generieke workouts ──────────────────────────────────────────
 
-function genericLongZ2(mins, settings, mesoWeek) {
+/**
+ * Lange Z2. Schaalt naar event-afstand wanneer eventCtx is meegegeven:
+ * bouwt geleidelijk op naar 40→80% van de geschatte event-rijtijd in de
+ * weken vóór het event (cap 5u). Bij bergachtig profiel (hm/km > 1.0)
+ * worden klim-simulatie tempo/threshold blokken toegevoegd.
+ */
+function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
   var ftp = settings.ftp, lthr = settings.lthr;
   mins = Math.max(60, Math.round(mins * mesoFactor(mesoWeek)));
-  return {
-    naam: 'Lange Z2 (' + mins + ' min)',
-    focus: 'aerobic base',
-    zones: ['low'],
-    totaalMin: mins,
-    structuur: [
+
+  var hilly = false;
+  var eind = 'Volume zonder vermoeidheid — de basis voor alle andere workouts.';
+
+  if (eventCtx && eventCtx.afstandKm > 0 && eventCtx.weken != null) {
+    // Geschatte event-rijtijd in minuten (~28 km/h gemiddelde toer-snelheid)
+    var eventMin = eventCtx.afstandKm / 28 * 60;
+    // Progressie 40%→80%: hoe dichter bij event, hoe langer de rit
+    var progress = Math.max(0.4, Math.min(0.8, (13 - eventCtx.weken) / 12 * 0.8 + 0.4));
+    var target = Math.min(300, Math.round(eventMin * progress)); // cap 5u
+    if (target > mins) mins = target;
+
+    hilly = eventCtx.hm > 0 && (eventCtx.hm / Math.max(1, eventCtx.afstandKm) > 1.0);
+    eind = 'Bouw richting ' + (eventCtx.naam || 'event') + ' — ' +
+           eventCtx.afstandKm + 'km/' + eventCtx.hm + 'hm.';
+  }
+
+  var structuur;
+  if (hilly) {
+    structuur = [
+      ['Warmup',    '10 min', wattsRange(ftp, 50, 65), bpmBelow(lthr, 80), 'Rustig opbouwen'],
+      ['Z2 base',   Math.max(30, mins - 49) + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2'],
+      ['Klim-sim',  '3x 8 min', wattsRange(ftp, 88, 95), bpmRange(lthr, 92, 99), '5 min rust @ 60% — simuleert de cols'],
+      ['Cooldown',  '5 min', wattsRange(ftp, 45, 55), '—', 'Easy']
+    ];
+    eind += ' Bergachtig profiel → klim-simulatie blokken erin.';
+  } else {
+    structuur = [
       ['Warmup', '10 min', wattsRange(ftp, 50, 65), bpmBelow(lthr, 80), 'Rustig opbouwen'],
       ['Hoofd',  (mins - 15) + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2 — aerobic base'],
       ['Cooldown', '5 min', wattsRange(ftp, 45, 55), '—', 'Easy']
-    ],
-    tss: Math.round(mins * 0.7),
-    eindopmerking: 'Volume zonder vermoeidheid — de basis voor alle andere workouts.'
+    ];
+  }
+
+  return {
+    naam: 'Lange Z2 (' + mins + ' min)',
+    focus: 'aerobic base',
+    zones: hilly ? ['low', 'high'] : ['low'],
+    totaalMin: mins,
+    structuur: structuur,
+    tss: Math.round(mins * (hilly ? 0.8 : 0.7)),
+    eindopmerking: eind
   };
 }
 

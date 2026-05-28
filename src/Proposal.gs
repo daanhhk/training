@@ -136,12 +136,13 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   var missedIdxSet = {};
   (missed || []).forEach(function (m) { missedIdxSet[m.dagIdx] = true; });
 
+  var eventCtx = eventContextFrom_(macro);
   var totalTss = 0, totalMin = 0;
   days.forEach(function (d) {
     if (!d.train) return;
     if (missedIdxSet[d.dagIdx]) return; // al getoond in missed-banner
     var wo = d.voorgesteldType
-      ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase)
+      ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx)
       : null;
 
     // Day header
