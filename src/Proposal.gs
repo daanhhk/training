@@ -247,18 +247,36 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   (missed || []).forEach(function (m) { missedIdxSet[m.dagIdx] = true; });
 
   var eventCtx = eventContextFrom_(macro);
+  var actByDate = cyclingActivitiesByDate_(weekStartDate(new Date()));
   var totalTss = 0, totalMin = 0;
   days.forEach(function (d) {
-    if (!d.train) return;
     if (missedIdxSet[d.dagIdx]) return; // al getoond in missed-banner
+
+    var dISO = d.datum ? formatDate(d.datum, 'yyyy-MM-dd') : null;
+    var dayActs = dISO ? actByDate[dISO] : null;
+    // Render train-dagen, én niet-geplande dagen mét een gematchte rit.
+    if (!d.train && !(dayActs && dayActs.length)) return;
+
     var wo = d.voorgesteldType
       ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx)
       : null;
 
+    // Ongepland-maar-gefietst: samenvatting van de rit(ten) die dag.
+    var actInfo = null;
+    if (!wo && dayActs && dayActs.length) {
+      var totMin = 0;
+      dayActs.forEach(function (a) { totMin += a.min; });
+      var nm = (dayActs.length === 1)
+        ? truncate_(dayActs[0].name, 50)
+        : truncate_(dayActs[0].name, 40) + ' (+' + (dayActs.length - 1) + ')';
+      actInfo = { naam: nm, min: totMin };
+    }
+
     // Day header
     var dateStr = d.datum ? formatDate(d.datum, 'EEE dd-MM') : '';
     var statusStr = d.gedaan ? '   ✅ GEDAAN' : '';
-    var nameStr = wo ? wo.naam : '(geen workout)';
+    var nameStr = wo ? wo.naam
+      : (actInfo ? actInfo.naam + ' (' + actInfo.min + 'min)' : '(geen workout)');
     sh.getRange(r, 1, 1, COLS).merge()
       .setValue(d.dag + '   ·   ' + dateStr + '   ·   ' + nameStr + statusStr)
       .setFontWeight('bold').setFontSize(12)
@@ -270,7 +288,9 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
 
     if (!wo) {
       sh.getRange(r, 1, 1, COLS).merge()
-        .setValue('Geen workout gepland (Train? uitgevinkt of dagtype leeg).')
+        .setValue(actInfo
+          ? 'Ongepland — wel gefietst, telt mee in week-volume.'
+          : 'Geen workout gepland (Train? uitgevinkt of dagtype leeg).')
         .setFontStyle('italic').setFontColor('#6b7280');
       r += 2;
       return;
@@ -363,6 +383,12 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   sh.setColumnWidth(4, 140);
   sh.setColumnWidth(5, 400);
   sh.setFrozenRows(1);
+}
+
+/** Kapt een string af op n chars met ellipsis. */
+function truncate_(s, n) {
+  s = String(s || '');
+  return s.length > n ? s.substring(0, n - 1) + '…' : s;
 }
 
 /**

@@ -26,6 +26,9 @@ var VOLUME_TARGETS = {
 var VOLUME_ADVIES_MIN_TEKORT   = 60;   // niet adviseren onder 60min tekort
 var VOLUME_ADVIES_MAX_SUGGESTIE = 120; // cap suggestie per rit op 120min
 
+// Activity-types die als fiets-volume tellen (incl. gravel/MTB).
+var CYCLING_TYPES = ['Ride', 'VirtualRide', 'GravelRide', 'MountainBikeRide'];
+
 function mesoFactor(week) {
   return MESO_MOD[week] || 1.00;
 }
@@ -399,8 +402,7 @@ function computeWeekVolumeMin_(ss, weekStart) {
 
   var minByDate = {};
   acts.forEach(function (a) {
-    var t = String(a.type || '');
-    if (t !== 'Ride' && t !== 'VirtualRide') return;       // alleen fiets
+    if (CYCLING_TYPES.indexOf(String(a.type || '')) < 0) return;  // alleen fiets (incl. gravel/MTB)
     if (!a.start_date_local) return;
     var dd = stripTime_(new Date(a.start_date_local));
     if (dd.getTime() < wsT || dd.getTime() >= weT) return; // alleen deze week
@@ -420,6 +422,32 @@ function computeWeekVolumeMin_(ss, weekStart) {
     }
   }
   return Math.round(total);
+}
+
+/**
+ * Fiets-activities (incl. gravel/MTB) van deze week, gegroepeerd per
+ * datum (yyyy-MM-dd) → [{name, min}]. Voor de render van ongeplande-
+ * maar-gefietste dagen in het Voorstel.
+ */
+function cyclingActivitiesByDate_(weekStart) {
+  var wsT = stripTime_(weekStart).getTime();
+  var weT = wsT + 7 * 24 * 60 * 60 * 1000;
+  var acts = [];
+  try { acts = getActivities(14) || []; } catch (e) { console.warn('cyclingActivitiesByDate_ getActivities: ' + e.message); }
+
+  var byDate = {};
+  acts.forEach(function (a) {
+    if (CYCLING_TYPES.indexOf(String(a.type || '')) < 0) return;
+    if (!a.start_date_local) return;
+    var dd = stripTime_(new Date(a.start_date_local));
+    if (dd.getTime() < wsT || dd.getTime() >= weT) return;
+    var key = formatDate(dd, 'yyyy-MM-dd');
+    (byDate[key] = byDate[key] || []).push({
+      name: String(a.name || 'Rit'),
+      min: a.moving_time ? Math.round(a.moving_time / 60) : 0
+    });
+  });
+  return byDate;
 }
 
 /**
