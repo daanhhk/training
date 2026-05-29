@@ -107,12 +107,38 @@ vallen nu terug op blok-structuur in ZWO (verfijn-punt).
   (DEKKING_MIN_MIN). Debt-force op weekend-dag: high>30 of anaerobic>20 
   → combo_long_with_efforts, uitgeschakeld in taper/recovery.
 
-## Roadmap (open)
-1. Wellness-gestuurde dag-aanpassing (niet alleen banner).
-2. Vooruitgang-dashboard (FTP-trend, power curve).
-3. Email digest 07:00 (Email.gs stub).
-4. ZWO-fallback verfijnen voor 30/30 & over/under micro-structuur.
-5. Telegram bot (2-way, dunne interface op generateProposal + week-overrides).
-6. Opruimen: dode code + TEST-menu verwijderen.
-7. Fundamenteel: recentHardDayDate_ op actuals i.p.v. intent — dan kan 
-   de debtForced-exemptie van avoid-consecutive-hard weg.
+## Roadmap — scope B (app/bot)
+
+Vastgelegd mei 2026: Telegram bot + open-source, single-user-Sheet
+per gebruiker.
+
+### Foundation (uitrol-klaar zonder bot)
+1. Settings uitbreiden: gewicht, profiel-preset, telegram_chat_id,
+   telegram_bot_token. FTP-autocast vanuit icu_rolling_ftp + override.
+2. Profielen-presets (Amateur 3u / Gemiddeld 5u / Gevorderd 7u /
+   Pro 10u+) — bundelt VOLUME_TARGETS en andere drempels.
+3. Multi-user-klaar code: state-keys met chat_id-prefix.
+4. Onboarding-wizard ("🎯 Eerste keer instellen" menu).
+5. README + install guide in repo.
+
+### Telegram bot
+6. Apps Script doPost endpoint + bot-token verificatie.
+7. Zondag 19:00 trigger → beschikbaarheid-bericht met inline buttons.
+8. Post-rit RPE-prompt bij sync, opslag in ActiviteitenFeedback.
+9. RPE vs geplande zwaarte → mismatch-detectie in wellness-laag.
+
+### Later (na scope-B)
+10. Multi-event A/B/C-prioriteits-periodisering.
+11. Form/TSB-score uit intervals.icu in plaats van single-day HRV.
+12. RPE pattern-detectie over 14 dagen.
+13. Visualisaties (dashboards, kalender-view, FTP-trend).
+14. Workout-library scraping van whatsonzwift.
+15. FTP-groei-voorspelling.
+16. Wellness drijft workout-keuze (oude roadmap-punt 2).
+17. recentHardDayDate_ op actuals (oude open patch).
+18. Off-bike training (krachttraining, mobility).
+
+### Achterhouden tot duidelijk waarom
+- Voeding (intervals.icu doet 't).
+- Sociale features.
+- LLM-gedreven workout-generatie.
