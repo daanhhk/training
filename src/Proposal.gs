@@ -317,8 +317,11 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   sh.getRange(r, 1).setValue('Totaal TSS:').setFontWeight('bold');
   sh.getRange(r, 2).setValue(totalTss);
   r += 1;
+  // Week-volume: één bron van waarheid (actuals + intent toekomst), incl.
+  // ritten zonder Weekplanner-intent. Vervangt de loop-som over train-rijen.
+  var weekVolMin = computeWeekVolumeMin_(ss, weekStartDate(new Date()));
   sh.getRange(r, 1).setValue('Totaal tijd:').setFontWeight('bold');
-  var tijdStr = Math.floor(totalMin / 60) + 'u ' + (totalMin % 60) + 'm';
+  var tijdStr = Math.floor(weekVolMin / 60) + 'u ' + (weekVolMin % 60) + 'm';
   var volTarget = VOLUME_TARGETS[macro.fase];
   if (volTarget) tijdStr += '   ·   richting ' + macro.fase + ': ' + volTarget[0] + '-' + volTarget[1] + 'u';
   sh.getRange(r, 2, 1, 4).merge().setValue(tijdStr);
@@ -329,7 +332,7 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   r += 1;
 
   // ── DEEL 2 — Volume-advies (informatief, conditioneel) ──
-  var totalUur = totalMin / 60;
+  var totalUur = weekVolMin / 60;
   if (volTarget && totalUur < volTarget[0] && wellness && wellness.signal === 'normal') {
     var tekortMin = Math.round((volTarget[0] - totalUur) * 60);
     if (tekortMin >= VOLUME_ADVIES_MIN_TEKORT) {

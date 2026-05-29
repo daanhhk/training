@@ -379,6 +379,50 @@ function debtPreferredType_(debt, doel, macroFase) {
 }
 
 /**
+ * Week-volume (MINUTEN) als één bron van waarheid: actuals winnen waar
+ * gematched (ook ritten zónder Weekplanner-intent), toekomstige geplande
+ * dagen tellen hun intent-minuten, de rest 0.
+ *
+ * Per dag ma..zo van weekStart:
+ *   - gematchte activities (Ride/VirtualRide, zelfde dag) → Σ moving_time/60
+ *   - anders: d > vandaag én Weekplanner train=TRUE → intent-minuten
+ *   - anders → 0
+ */
+function computeWeekVolumeMin_(ss, weekStart) {
+  var planner = readPlanner(ss);
+  var today = stripTime_(new Date());
+  var wsT = stripTime_(weekStart).getTime();
+  var weT = wsT + 7 * 24 * 60 * 60 * 1000;
+
+  var acts = [];
+  try { acts = getActivities(14) || []; } catch (e) { console.warn('computeWeekVolumeMin getActivities: ' + e.message); }
+
+  var minByDate = {};
+  acts.forEach(function (a) {
+    var t = String(a.type || '');
+    if (t !== 'Ride' && t !== 'VirtualRide') return;       // alleen fiets
+    if (!a.start_date_local) return;
+    var dd = stripTime_(new Date(a.start_date_local));
+    if (dd.getTime() < wsT || dd.getTime() >= weT) return; // alleen deze week
+    var key = formatDate(dd, 'yyyy-MM-dd');
+    var mins = a.moving_time ? a.moving_time / 60 : 0;
+    minByDate[key] = (minByDate[key] || 0) + mins;
+  });
+
+  var total = 0;
+  for (var i = 0; i < 7; i++) {
+    var dayDate = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+    var key = formatDate(dayDate, 'yyyy-MM-dd');
+    if (minByDate[key] > 0) {
+      total += minByDate[key];                      // actuals winnen
+    } else if (stripTime_(dayDate).getTime() > today.getTime() && planner[i] && planner[i].train === true) {
+      total += planner[i].minuten || 0;             // toekomstige geplande dag → intent
+    }
+  }
+  return Math.round(total);
+}
+
+/**
  * Zorgt dat de data-tabs (Activiteiten + Wellness) gevuld zijn vóór
  * generateProposal draait, en reconcilet de Gedaan-checkboxes.
  *
