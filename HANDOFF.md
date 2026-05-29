@@ -4,6 +4,12 @@ Wekelijkse fiets-trainingsvoorstellen (Google Sheets + Apps Script),
 gericht op Garmin "Productive" status, met intervals.icu sync en 
 Garmin-push. Uitrolbaar voor vrienden.
 
+## Recent gedaan
+- ✅ Feedback-loop (mei 2026): zone-mapping geverifieerd, HR-fallback 
+  voor power-loze rides, dekking-op-actuals, weekend-branch debt-aware 
+  via combo_long_with_efforts, expliciete compensatie-regel in 
+  feedback-blok.
+
 ## Locaties
 - Lokaal: C:\Users\daan\Projects\training
 - GitHub: github.com/daanhhk/training
@@ -91,13 +97,22 @@ vallen nu terug op blok-structuur in ZWO (verfijn-punt).
   bij ARRAYFORMULA; render-wijzigingen pas zichtbaar na "Bouw alles 
   opnieuw"; maandag-berekening dow=getDay(), daysToMonday=(dow===0)?-6:1-dow; 
   state in DocumentProperties.
+- icu_zone_times shape: array van {id,secs}; Z1-Z7 power-zones + 
+  SS-overlay. SS moet geskipt; sum Z1-Z7 == moving_time bevestigt dat. 
+  Mapping per id (niet array-index): Z1-Z2→low, Z3-Z4→high, Z5-Z7→anaerobic.
+- icu_hr_zone_times is platte [7]-array (andere shape dan power). 
+  Index→bucket zelfde verdeling. Source-tracking: power wint van HR 
+  bij gemengde dag.
+- Dekking: ≥15min werkelijke minuten per bucket = gedekt 
+  (DEKKING_MIN_MIN). Debt-force op weekend-dag: high>30 of anaerobic>20 
+  → combo_long_with_efforts, uitgeschakeld in taper/recovery.
 
 ## Roadmap (open)
-1. **Feedback-loop (NEXT):** geplande intent vs werkelijke icu_zone_times; 
-   compenseer gemiste load in resterende week.
-2. Wellness-gestuurde dag-aanpassing (niet alleen banner).
-3. Vooruitgang-dashboard (FTP-trend, power curve).
-4. Email digest 07:00 (Email.gs stub).
-5. ZWO-fallback verfijnen voor 30/30 & over/under micro-structuur.
-6. Telegram bot (2-way, dunne interface op generateProposal + week-overrides).
-7. Opruimen: dode code + TEST-menu verwijderen.
+1. Wellness-gestuurde dag-aanpassing (niet alleen banner).
+2. Vooruitgang-dashboard (FTP-trend, power curve).
+3. Email digest 07:00 (Email.gs stub).
+4. ZWO-fallback verfijnen voor 30/30 & over/under micro-structuur.
+5. Telegram bot (2-way, dunne interface op generateProposal + week-overrides).
+6. Opruimen: dode code + TEST-menu verwijderen.
+7. Fundamenteel: recentHardDayDate_ op actuals i.p.v. intent — dan kan 
+   de debtForced-exemptie van avoid-consecutive-hard weg.
