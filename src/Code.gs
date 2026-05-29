@@ -32,11 +32,6 @@ function onOpen() {
     .addItem('Sla huidige week op als standaardpatroon', 'savePatternFromTab')
     .addSeparator()
     .addItem('Bouw alles opnieuw (reset Sheet)', 'buildAll')
-    .addSeparator()
-    .addItem('🔧 TEST: diversiteit (4 weken)', 'testDiversiteit')
-    .addItem('🔧 TEST: week-rollover', 'testRollover')
-    .addItem('🔧 TEST: toon zone-debt', 'testZoneDebt')
-    .addItem('🔧 TEST: zone-minuten sample', 'testZoneMinutesSample')
     .addToUi();
 }
 
