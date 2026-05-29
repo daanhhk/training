@@ -10,6 +10,11 @@
 
 var MESO_MOD = { 1: 1.00, 2: 1.08, 3: 1.15, 4: 0.60 };
 
+// Feedback-loop drempels.
+var DEKKING_MIN_MIN     = 15;   // ≥15min werkelijk in bucket = gedekt
+var DEBT_FORCE_HIGH_MIN = 30;   // high-debt > 30min → force weekend combo
+var DEBT_FORCE_ANAER_MIN = 20;  // anaerobic-debt > 20min → idem
+
 function mesoFactor(week) {
   return MESO_MOD[week] || 1.00;
 }
@@ -43,16 +48,29 @@ function generateProposal() {
     return d.train && !d.gedaan && (!d.datum || stripTime_(d.datum) >= today);
   });
 
+  // Feedback-loop: geplande intent vs werkelijke zone-times deze week.
+  var feedback = computeZoneDebt_(ss, weekStart);
+
   // DEEL 2 — rollend dekkings-venster (laatste 7 dagen, over weekgrens heen)
   var rolling = rollingZoneCoverage(ss, 7);
   var dekking = { low: rolling.low > 0, high: rolling.high > 0, anaerobic: rolling.anaerobic > 0 };
-  // Plus reeds-voltooide dagen van deze week (dubbel plannen voorkomen)
-  voltooid.forEach(function (d) {
-    workoutZones(d.voorgesteldType, settings.doel).forEach(function (z) { dekking[z] = true; });
-  });
 
-  // Feedback-loop: geplande intent vs werkelijke zone-times deze week.
-  var feedback = computeZoneDebt_(ss, weekStart);
+  // Reeds-voltooide dagen van deze week: dekking op ACTUALS (≥DEKKING_MIN_MIN
+  // werkelijke minuten in een bucket = gedekt). Fallback op intent-gebaseerde
+  // marking als er geen zone-data (power én HR) is.
+  var detailByDate = {};
+  feedback.details.forEach(function (det) { detailByDate[det.datum] = det; });
+  voltooid.forEach(function (d) {
+    var det = d.datum ? detailByDate[formatDate(d.datum, 'yyyy-MM-dd')] : null;
+    if (det && det.actual) {
+      ['low', 'high', 'anaerobic'].forEach(function (b) {
+        if ((det.actual[b] || 0) >= DEKKING_MIN_MIN) dekking[b] = true;
+      });
+    } else {
+      // Geen zone-data → val terug op intent-gebaseerde marking (oud gedrag).
+      workoutZones(d.voorgesteldType, settings.doel).forEach(function (z) { dekking[z] = true; });
+    }
+  });
 
   var klimType = (macro.hoofdEvent && macro.hoofdEvent.klimType) || null;
   var recentHard = recentHardDayDate_(ss);
@@ -442,6 +460,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
 
   days.forEach(function (d) {
     var type;
+    var debtForced = false; // debt-geforceerde compensatie → exempt van avoid-consecutive-hard
 
     if (isEventRecovery) {
       // Recovery-week na A-race: alles easy Z2.
@@ -465,7 +484,17 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
     } else if (d.type === 'pendel') {
       type = 'pendel_' + doelKey(doel) + '_intervals';
     } else if (d.type === 'weekend') {
-      if (!dekking.low) {
+      // Debt-aware: groot high/anaerobic tekort → forceer combo met
+      // expliciete high-blokken (i.p.v. alleen long_z2 + klim-sim).
+      if (debtActief && debtWerk.high > DEBT_FORCE_HIGH_MIN) {
+        type = 'combo_long_with_efforts';
+        debtWerk.high = 0; // gecompenseerd
+        debtForced = true;
+      } else if (debtActief && debtWerk.anaerobic > DEBT_FORCE_ANAER_MIN) {
+        type = 'combo_long_with_efforts';
+        debtWerk.anaerobic = 0;
+        debtForced = true;
+      } else if (!dekking.low) {
         type = 'long_z2';
       } else if (!dekking.high && macroFase !== 'Base') {
         type = 'combo_long_with_efforts';
@@ -492,7 +521,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
     // naar long_z2. Voorkomt twee zware dagen op rij, ook over de weekgrens.
     var zonesPre = workoutZones(type, doel);
     var isHard = zonesPre.indexOf('high') >= 0 || zonesPre.indexOf('anaerobic') >= 0;
-    if (isHard && d.datum && lastHardDate) {
+    if (isHard && !debtForced && d.datum && lastHardDate) {
       var prevDay = stripTime_(new Date(d.datum.getTime() - 24 * 60 * 60 * 1000));
       if (prevDay.getTime() === lastHardDate.getTime()) {
         type = 'long_z2';

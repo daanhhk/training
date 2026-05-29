@@ -191,17 +191,38 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     } else if (macro.isTaper || macro.isRecovery) {
       sumText = 'Netto debt: ' + parts.join(' · ') + '   |   taper/recovery — niet gecompenseerd (herstel gaat voor).';
     } else {
+      // Resterende (toekomstige, nog niet gedane) dagen deze week.
+      var resterend = days.filter(function (d) { return d.train && !d.gedaan && d.voorgesteldType; });
+      var hasRemaining = resterend.length > 0;
+
       var comp = [];
+      var covered = {};
       ['anaerobic', 'high', 'low'].forEach(function (b) {
         if (debt[b] <= 0) return;
-        var dayName = null;
-        days.forEach(function (d) {
-          if (dayName || !d.train || d.gedaan || !d.voorgesteldType) return;
-          if (typeBucket_(d.voorgesteldType, settings.doel) === b) dayName = d.dag;
+        var match = null;
+        resterend.forEach(function (d) {
+          if (match) return;
+          if (typeBucket_(d.voorgesteldType, settings.doel) === b) match = d;
         });
-        if (dayName) comp.push(debt[b] + 'min ' + b + ' → ' + dayName);
+        if (match) {
+          comp.push('→ ' + match.dag + ' (' + match.voorgesteldType + ') compenseert ' + b);
+          covered[b] = true;
+        }
       });
-      sumText = 'Netto debt: ' + parts.join(' · ') + (comp.length ? '   |   compensatie: ' + comp.join(', ') : '');
+
+      var uncomp = [];
+      ['high', 'anaerobic', 'low'].forEach(function (b) {
+        if (debt[b] > 0 && !covered[b]) uncomp.push(b + ' -' + debt[b] + 'min');
+      });
+
+      sumText = 'Netto debt: ' + parts.join(' · ');
+      if (comp.length) sumText += '   |   ' + comp.join(', ');
+      if (uncomp.length) {
+        sumText += '   |   ' + uncomp.join(', ') +
+          (hasRemaining
+            ? ': niet gecompenseerd, geen geschikte dag over deze week'
+            : ': week voorbij, niet meer compenseerbaar');
+      }
     }
     sh.getRange(r, 1, 1, COLS).merge()
       .setValue('Σ  ' + sumText)
