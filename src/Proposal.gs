@@ -318,12 +318,40 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   sh.getRange(r, 2).setValue(totalTss);
   r += 1;
   sh.getRange(r, 1).setValue('Totaal tijd:').setFontWeight('bold');
-  sh.getRange(r, 2).setValue(Math.floor(totalMin / 60) + 'u ' + (totalMin % 60) + 'm');
+  var tijdStr = Math.floor(totalMin / 60) + 'u ' + (totalMin % 60) + 'm';
+  var volTarget = VOLUME_TARGETS[macro.fase];
+  if (volTarget) tijdStr += '   ·   richting ' + macro.fase + ': ' + volTarget[0] + '-' + volTarget[1] + 'u';
+  sh.getRange(r, 2, 1, 4).merge().setValue(tijdStr);
   r += 1;
   sh.getRange(r, 1).setValue('Verwachte Garmin status:').setFontWeight('bold');
   sh.getRange(r, 2, 1, 4).merge().setValue(garminHeuristic(totalTss, mesoWeek, macro.fase))
     .setFontStyle('italic').setWrap(true);
   r += 1;
+
+  // ── DEEL 2 — Volume-advies (informatief, conditioneel) ──
+  var totalUur = totalMin / 60;
+  if (volTarget && totalUur < volTarget[0] && wellness && wellness.signal === 'normal') {
+    var tekortMin = Math.round((volTarget[0] - totalUur) * 60);
+    if (tekortMin >= VOLUME_ADVIES_MIN_TEKORT) {
+      var vToday = new Date(); vToday.setHours(0, 0, 0, 0);
+      var vrij = null;
+      days.forEach(function (d) {
+        if (vrij || !d.datum) return;
+        var dd = new Date(d.datum.getFullYear(), d.datum.getMonth(), d.datum.getDate());
+        if (dd < vToday) return;
+        if (d.train === false || !d.type) vrij = d;
+      });
+      if (vrij) {
+        var sugg = Math.round(Math.min(tekortMin, VOLUME_ADVIES_MAX_SUGGESTIE) / 15) * 15;
+        sh.getRange(r, 1, 1, COLS).merge()
+          .setValue('💡  Plan is ' + totalUur.toFixed(1) + 'u — onder dosering voor ' + macro.fase +
+            '-fase (richting ' + volTarget[0] + '-' + volTarget[1] + 'u). ' + vrij.dag +
+            ' is nog vrij, overweeg ' + sugg + ' min rustige Z2-rit toe te voegen.')
+          .setBackground('#e0f2fe').setFontStyle('italic').setFontColor('#075985').setWrap(true);
+        r += 1;
+      }
+    }
+  }
 
   SpreadsheetApp.flush();
   sh.setColumnWidth(1, 150);

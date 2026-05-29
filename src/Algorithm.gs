@@ -15,6 +15,17 @@ var DEKKING_MIN_MIN     = 15;   // ≥15min werkelijk in bucket = gedekt
 var DEBT_FORCE_HIGH_MIN = 30;   // high-debt > 30min → force weekend combo
 var DEBT_FORCE_ANAER_MIN = 20;  // anaerobic-debt > 20min → idem
 
+// Volume-advies: target uren/week per macroFase [min, max] (informatief).
+var VOLUME_TARGETS = {
+  Base:     [4, 7],
+  Build:    [6, 9],
+  Peak:     [6, 9],
+  Taper:    [3, 5],
+  Recovery: [2, 4]
+};
+var VOLUME_ADVIES_MIN_TEKORT   = 60;   // niet adviseren onder 60min tekort
+var VOLUME_ADVIES_MAX_SUGGESTIE = 120; // cap suggestie per rit op 120min
+
 function mesoFactor(week) {
   return MESO_MOD[week] || 1.00;
 }
