@@ -97,6 +97,27 @@ function testRollover() {
 }
 
 /**
+ * TIJDELIJK — verifieert actualZoneMinutes_ op activity i151660593
+ * (De Ronde Venen). Verwacht ≈ low 54.4 · high 3.7 · anaerobic 13.6 min.
+ * Verwijder samen met de andere TEST-items zodra geverifieerd.
+ */
+function testZoneMinutesSample() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var act = intervalsRequest_('/activity/i151660593');
+    var zm = actualZoneMinutes_(act, null);
+    var msg = 'icu_zone_times:\n' + JSON.stringify(act && act.icu_zone_times) + '\n\n';
+    msg += zm
+      ? ('Resultaat: low ' + zm.low.toFixed(1) + ' · high ' + zm.high.toFixed(1) +
+         ' · anaerobic ' + zm.anaerobic.toFixed(1) + '\n\nVerwacht ≈ 54.4 / 3.7 / 13.6')
+      : 'null (geen zone-data)';
+    ui.alert('🔧 TEST: zone-minuten i151660593', msg, ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Fout', e.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
  * Toont zone-debt (geplande intent vs werkelijke zone-times) voor de
  * huidige week, met per-dag details. Verificatie van de feedback-loop.
  */

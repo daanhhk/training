@@ -187,52 +187,36 @@ function recentHardDayDate_(ss) {
 // ── FEEDBACK-LOOP (intent vs werkelijke zone-times) ───────────────
 
 /**
- * Mapt een power-zone (id 'Z1'..'Z7' of 0-based index) naar load-focus
- * bucket. Z1-Z2 → low, Z3-Z4 → high (76-105% FTP), Z5+ → anaerobic.
- * Sweet-Spot overlay (id 'SS' / gap) → null (skip, anders dubbel tellen).
- */
-function zoneIdxToBucket_(id, idx) {
-  if (id) {
-    if (/^SS$/i.test(String(id))) return null;
-    var m = /^Z\s*(\d)/i.exec(String(id));
-    if (m) { var z = parseInt(m[1], 10); return z <= 2 ? 'low' : (z <= 4 ? 'high' : 'anaerobic'); }
-  }
-  if (idx != null && idx >= 0) return idx <= 1 ? 'low' : (idx <= 3 ? 'high' : 'anaerobic');
-  return null;
-}
-
-/**
  * Werkelijke tijd-in-zone (MINUTEN) per bucket uit een activity's
- * icu_zone_times (power-zones). Robuust: ondersteunt array van objecten
- * {id, secs, zone} én array van getallen (seconden, index = Z1..Zn).
- * Ontbreekt zone-data (geen powermeter) → return null.
+ * icu_zone_times (power-zones).
  *
- * @param zoneBoundaries optioneel; mapping gebeurt op zone-index/id, dus
- *        boundaries zijn niet strikt nodig (gereserveerd voor toekomst).
+ * Echte API-shape (geverifieerd op i151660593):
+ *   icu_zone_times = [{id:'Z1',secs},...,{id:'Z7',secs},{id:'SS',secs}]
+ *   Geen 'zone'-veld, geen 'gap'-veld. Z1..Z7 sommeren tot moving_time;
+ *   SS is een overlay (zit al in Z3/Z4) → MOET geskipt.
+ *
+ * Mapping per id: Z1-Z2 → low, Z3-Z4 → high, Z5-Z7 → anaerobic,
+ * SS/overig → skip. Ontbrekend/leeg → null. Geen enkele Z#-entry → null.
+ *
+ * @param zoneBoundaries ongebruikt — gereserveerd voor latere HR-fallback.
  */
 function actualZoneMinutes_(activity, zoneBoundaries) {
-  if (!activity) return null;
-  var zt = activity.icu_zone_times || activity.zone_times || activity.icu_power_zone_times || null;
-  if (!zt || !Array.isArray(zt) || !zt.length) return null;
-
-  var buckets = { low: 0, high: 0, anaerobic: 0 };
-  var found = false;
-  zt.forEach(function (entry, i) {
-    var secs, id, idx;
-    if (typeof entry === 'number') { secs = entry; id = null; idx = i; }
-    else if (entry && typeof entry === 'object') {
-      if (entry.gap) return; // Sweet-Spot overlay → skip
-      secs = Number(entry.secs != null ? entry.secs : (entry.time != null ? entry.time : (entry.s != null ? entry.s : 0)));
-      id = entry.id || entry.name || null;
-      idx = (entry.zone != null ? entry.zone - 1 : i);
-    } else { return; }
-    if (!(secs > 0)) return;
-    var bucket = zoneIdxToBucket_(id, idx);
-    if (bucket) { buckets[bucket] += secs; found = true; }
-  });
-
-  if (!found) return null;
-  return { low: buckets.low / 60, high: buckets.high / 60, anaerobic: buckets.anaerobic / 60 };
+  var zt = activity && activity.icu_zone_times;
+  if (!zt || !Array.isArray(zt) || zt.length === 0) return null;
+  var map = { Z1: 'low', Z2: 'low', Z3: 'high', Z4: 'high',
+              Z5: 'anaerobic', Z6: 'anaerobic', Z7: 'anaerobic' };
+  var b = { low: 0, high: 0, anaerobic: 0 };
+  var saw = false;
+  for (var i = 0; i < zt.length; i++) {
+    var z = zt[i];
+    if (!z || typeof z.id !== 'string') continue;
+    var bucket = map[z.id];          // 'SS' en overlays → undefined → skip
+    if (!bucket) continue;
+    b[bucket] += Number(z.secs) || 0;
+    saw = true;
+  }
+  if (!saw) return null;
+  return { low: b.low / 60, high: b.high / 60, anaerobic: b.anaerobic / 60 };
 }
 
 /** Primaire load-focus bucket van een workout-type. */
