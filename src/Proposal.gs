@@ -171,8 +171,9 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
       if (diff <= -5)      { mark = '⚠️ ' + diff + 'min'; bg = '#fef3c7'; }
       else if (diff >= 5)  { mark = '↑ +' + diff + 'min'; bg = '#dcfce7'; }
       else                 { mark = '✅'; bg = '#f0fdf4'; }
+      var srcTag = (det.source === 'hr') ? ' (via HR)' : '';
       sh.getRange(r, 1, 1, COLS).merge()
-        .setValue(dayLabel + ' — ' + det.type + ' gepland (' + pb + ' ' + planned + 'min) → werkelijk ' + act + 'min  ' + mark)
+        .setValue(dayLabel + ' — ' + det.type + ' gepland (' + pb + ' ' + planned + 'min) → werkelijk ' + act + 'min' + srcTag + '  ' + mark)
         .setBackground(bg).setWrap(true);
       r += 1;
     });

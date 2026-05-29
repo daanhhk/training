@@ -187,20 +187,26 @@ function recentHardDayDate_(ss) {
 // ── FEEDBACK-LOOP (intent vs werkelijke zone-times) ───────────────
 
 /**
- * Werkelijke tijd-in-zone (MINUTEN) per bucket uit een activity's
- * icu_zone_times (power-zones).
+ * Werkelijke tijd-in-zone (MINUTEN) per bucket uit een activity.
+ * Router: power-zones eerst (nauwkeurigst), anders HR-zones (fallback
+ * voor vrienden zonder powermeter / Daan's rare rit zonder power).
+ * Return {low,high,anaerobic,source:'power'|'hr'} of null.
  *
- * Echte API-shape (geverifieerd op i151660593):
- *   icu_zone_times = [{id:'Z1',secs},...,{id:'Z7',secs},{id:'SS',secs}]
- *   Geen 'zone'-veld, geen 'gap'-veld. Z1..Z7 sommeren tot moving_time;
- *   SS is een overlay (zit al in Z3/Z4) → MOET geskipt.
- *
- * Mapping per id: Z1-Z2 → low, Z3-Z4 → high, Z5-Z7 → anaerobic,
- * SS/overig → skip. Ontbrekend/leeg → null. Geen enkele Z#-entry → null.
- *
- * @param zoneBoundaries ongebruikt — gereserveerd voor latere HR-fallback.
+ * @param zoneBoundaries ongebruikt — gereserveerd voor toekomst.
  */
 function actualZoneMinutes_(activity, zoneBoundaries) {
+  var p = tryPowerZoneTimes_(activity);
+  if (p) { p.source = 'power'; return p; }
+  var h = tryHrZoneTimes_(activity);
+  if (h) { h.source = 'hr'; return h; }
+  return null;
+}
+
+/**
+ * Power-pad: icu_zone_times = [{id:'Z1',secs},...,{id:'Z7',secs},{id:'SS',secs}].
+ * Z1-Z2 → low, Z3-Z4 → high, Z5-Z7 → anaerobic, SS/overig → skip (overlay).
+ */
+function tryPowerZoneTimes_(activity) {
   var zt = activity && activity.icu_zone_times;
   if (!zt || !Array.isArray(zt) || zt.length === 0) return null;
   var map = { Z1: 'low', Z2: 'low', Z3: 'high', Z4: 'high',
@@ -210,9 +216,31 @@ function actualZoneMinutes_(activity, zoneBoundaries) {
   for (var i = 0; i < zt.length; i++) {
     var z = zt[i];
     if (!z || typeof z.id !== 'string') continue;
-    var bucket = map[z.id];          // 'SS' en overlays → undefined → skip
-    if (!bucket) continue;
-    b[bucket] += Number(z.secs) || 0;
+    var bk = map[z.id];              // 'SS' en overlays → undefined → skip
+    if (!bk) continue;
+    b[bk] += Number(z.secs) || 0;
+    saw = true;
+  }
+  if (!saw) return null;
+  return { low: b.low / 60, high: b.high / 60, anaerobic: b.anaerobic / 60 };
+}
+
+/**
+ * HR-pad (fallback): icu_hr_zone_times = platte [7]-array seconden.
+ * Index → bucket, zelfde verdeling als power: 0-1 low, 2-3 high, 4-6 anaerobic.
+ * NB: HR loopt achter op power bij intervallen → meer 'low', minder
+ * 'anaerobic' dan de power-meting. Verwacht gedrag, minder nauwkeurig.
+ */
+function tryHrZoneTimes_(activity) {
+  var zt = activity && activity.icu_hr_zone_times;
+  if (!zt || !Array.isArray(zt) || zt.length === 0) return null;
+  var idxBucket = ['low', 'low', 'high', 'high', 'anaerobic', 'anaerobic', 'anaerobic'];
+  var b = { low: 0, high: 0, anaerobic: 0 };
+  var saw = false;
+  for (var i = 0; i < Math.min(zt.length, 7); i++) {
+    var secs = Number(zt[i]) || 0;
+    if (secs <= 0) continue;
+    b[idxBucket[i]] += secs;
     saw = true;
   }
   if (!saw) return null;
@@ -273,17 +301,20 @@ function computeZoneDebt_(ss, weekStart) {
 
     var dayActs = actsByDate[key] || [];
     var actual = null;
+    var source = null;
     dayActs.forEach(function (a) {
       var az = actualZoneMinutes_(a, null);
       if (az) {
         if (!actual) actual = { low: 0, high: 0, anaerobic: 0 };
         actual.low += az.low; actual.high += az.high; actual.anaerobic += az.anaerobic;
+        // 'power' heeft voorrang als ten minste één rit power-data had
+        if (az.source === 'power' || source === null) source = az.source;
       }
     });
 
     result.details.push({
       datum: key, dag: day.dag, type: p.workoutType,
-      intent: p.intent, actual: actual, hasData: !!actual
+      intent: p.intent, actual: actual, hasData: !!actual, source: source
     });
 
     if (!actual) return; // geen data → aanname plan gehaald

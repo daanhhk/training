@@ -105,12 +105,27 @@ function testZoneMinutesSample() {
   var ui = SpreadsheetApp.getUi();
   try {
     var act = intervalsRequest_('/activity/i151660593');
-    var zm = actualZoneMinutes_(act, null);
-    var msg = 'icu_zone_times:\n' + JSON.stringify(act && act.icu_zone_times) + '\n\n';
-    msg += zm
-      ? ('Resultaat: low ' + zm.low.toFixed(1) + ' · high ' + zm.high.toFixed(1) +
-         ' · anaerobic ' + zm.anaerobic.toFixed(1) + '\n\nVerwacht ≈ 54.4 / 3.7 / 13.6')
-      : 'null (geen zone-data)';
+
+    // Power-pad (zoals normaal)
+    var zmP = actualZoneMinutes_(act, null);
+
+    // HR-fallback forceren: strip icu_zone_times van een kopie
+    var stripped = {};
+    Object.keys(act).forEach(function (k) { if (k !== 'icu_zone_times') stripped[k] = act[k]; });
+    var zmH = actualZoneMinutes_(stripped, null);
+
+    function fmt(zm) {
+      return zm
+        ? ('low ' + zm.low.toFixed(1) + ' · high ' + zm.high.toFixed(1) +
+           ' · anaerobic ' + zm.anaerobic.toFixed(1) + '  source=' + zm.source)
+        : 'null (geen zone-data)';
+    }
+
+    var msg =
+      'Power-pad (Favero-rit):\n  ' + fmt(zmP) + '\n  Verwacht: 54.4 / 3.7 / 13.6\n\n' +
+      'HR-fallback (icu_zone_times gestript):\n  ' + fmt(zmH) + '\n  Verwacht: 50.1 / 9.7 / 11.8\n' +
+      '  (HR loopt achter op power → meer low, minder anaerobic — verwacht)';
+
     ui.alert('🔧 TEST: zone-minuten i151660593', msg, ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Fout', e.message, ui.ButtonSet.OK);
