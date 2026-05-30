@@ -65,11 +65,11 @@ function buildPlanner(ss) {
   rules.push(rule);
   sh.setConditionalFormatRules(rules);
 
-  // Materialiseer de huidige week uit het patroon (non-destructive t.o.v. patroon).
-  // Forceer omdat de tab net opnieuw is opgebouwd.
-  var monday = weekStartDate(new Date());
-  materializeWeek_(sh, monday);
-  setDocProp('tab_week_start', formatDate(monday, 'yyyy-MM-dd'));
+  // Rij-data NIET overschrijven bij rebuild — alleen bij echte rollover.
+  // ensureCurrentWeek vult de week uit het patroon wanneer tab_week_start
+  // verouderd of leeg is (eerste setup). Voor een lopende week (stored ===
+  // huidige maandag) is dit een no-op → behoudt alle gebruikers-edits.
+  ensureCurrentWeek(ss);
 
   SpreadsheetApp.flush();
   sh.setColumnWidth(1, 70);
