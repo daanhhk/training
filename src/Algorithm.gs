@@ -19,6 +19,10 @@ var DEBT_FORCE_ANAER_MIN = 20;  // anaerobic-debt > 20min → idem
 var VOLUME_ADVIES_MIN_TEKORT   = 60;   // niet adviseren onder 60min tekort
 var VOLUME_ADVIES_MAX_SUGGESTIE = 120; // cap suggestie per rit op 120min
 
+// Compensatie-suggesties voor open vrije dagen (feedback-blok).
+var SUGGESTIE_MAX_MIN = 90; // cap op voorgestelde duur per vrije dag
+var SUGGESTIE_MIN_MIN = 30; // onder dit niveau geen suggestie
+
 /**
  * Target uren/week per macroFase, op basis van de gekozen profiel-preset
  * uit Settings. 'Gevorderd 7u' (default) reproduceert het pre-scope-B

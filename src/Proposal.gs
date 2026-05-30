@@ -191,7 +191,7 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     } else if (macro.isTaper || macro.isRecovery) {
       sumText = 'Netto debt: ' + parts.join(' · ') + '   |   taper/recovery — niet gecompenseerd (herstel gaat voor).';
     } else {
-      // Resterende (toekomstige, nog niet gedane) dagen deze week.
+      // Pass 1: train=true resterende dagen die bucket matchen.
       var resterend = days.filter(function (d) { return d.train && !d.gedaan && d.voorgesteldType; });
       var hasRemaining = resterend.length > 0;
 
@@ -210,24 +210,79 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
         }
       });
 
+      // Vrije dagen deze week (train=false, datum ≥ vandaag).
+      var fbToday = new Date(); fbToday.setHours(0, 0, 0, 0);
+      var vrijeDagen = days.filter(function (d) {
+        if (d.train || !d.datum) return false;
+        var dd = new Date(d.datum.getFullYear(), d.datum.getMonth(), d.datum.getDate());
+        return dd >= fbToday;
+      });
+
+      // Pass 2: 💡-suggesties voor open buckets op vrije dagen.
+      // Wellness-gate: alleen bij signal==='normal' (zelfde principe als volume-advies).
+      var suggesties = [];
+      var suggBuckets = {};
+      if (vrijeDagen.length && wellness && wellness.signal === 'normal') {
+        var openBuckets = ['high', 'anaerobic', 'low'].filter(function (b) {
+          return debt[b] > 0 && !covered[b];
+        });
+        vrijeDagen.forEach(function (vd) {
+          if (!openBuckets.length) return;
+          // Pak de bucket met de grootste nog-open debt.
+          var best = null, bestVal = 0;
+          openBuckets.forEach(function (b) {
+            var remaining = debt[b] - (suggBuckets[b] || 0);
+            if (remaining > bestVal) { bestVal = remaining; best = b; }
+          });
+          if (!best) return;
+          var rawMin = Math.min(SUGGESTIE_MAX_MIN, debt[best] - (suggBuckets[best] || 0));
+          // 15-min-stappen, nearest (matcht verificatie-voorbeeld 32→30 i.p.v. 45).
+          var n = Math.round(rawMin / 15) * 15;
+          if (n < SUGGESTIE_MIN_MIN) return;
+          suggBuckets[best] = (suggBuckets[best] || 0) + n;
+          var typeStr = best === 'low'  ? 'rustige Z2-rit'
+                       : best === 'high' ? 'tempo of sweet spot rit'
+                                         : 'korte VO2-sessie met 4-6 intervallen';
+          suggesties.push({ dag: vd.dag, bucket: best, min: n, type: typeStr, totaalDebt: debt[best] });
+          if (suggBuckets[best] >= debt[best]) {
+            openBuckets = openBuckets.filter(function (b) { return b !== best; });
+          }
+        });
+      }
+
+      // Pass 3: uncomp = niet gedekt door pass-1 én niet door pass-2.
       var uncomp = [];
       ['high', 'anaerobic', 'low'].forEach(function (b) {
-        if (debt[b] > 0 && !covered[b]) uncomp.push(b + ' -' + debt[b] + 'min');
+        if (debt[b] > 0 && !covered[b] && !suggBuckets[b]) uncomp.push(b + ' -' + debt[b] + 'min');
       });
 
       sumText = 'Netto debt: ' + parts.join(' · ');
       if (comp.length) sumText += '   |   ' + comp.join(', ');
       if (uncomp.length) {
+        // "Week voorbij" alleen als ECHT geen dagen over (geen train=true resterend ÉN geen vrije dagen).
+        var noDaysLeft = !hasRemaining && vrijeDagen.length === 0;
         sumText += '   |   ' + uncomp.join(', ') +
-          (hasRemaining
-            ? ': niet gecompenseerd, geen geschikte dag over deze week'
-            : ': week voorbij, niet meer compenseerbaar');
+          (noDaysLeft
+            ? ': week voorbij, niet meer compenseerbaar'
+            : ': niet gecompenseerd in huidige plan');
       }
     }
     sh.getRange(r, 1, 1, COLS).merge()
       .setValue('Σ  ' + sumText)
       .setFontStyle('italic').setFontColor('#374151').setBackground('#e0f2fe').setWrap(true);
-    r += 2;
+    r += 1;
+
+    // 💡-suggestie-regels (één per vrije dag met geadviseerde compensatie).
+    if (typeof suggesties !== 'undefined' && suggesties.length) {
+      suggesties.forEach(function (s) {
+        sh.getRange(r, 1, 1, COLS).merge()
+          .setValue('💡  ' + s.dag + ' is vrij — overweeg ~' + s.min + ' min ' + s.type +
+                    ' om ' + s.bucket + ' (' + s.totaalDebt + 'min) bij te trekken.')
+          .setBackground('#e0f2fe').setFontStyle('italic').setFontColor('#075985').setWrap(true);
+        r += 1;
+      });
+    }
+    r += 1;
   }
 
   // Gemiste dagen — 1-regel notitie per dag
