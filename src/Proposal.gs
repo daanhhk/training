@@ -261,9 +261,9 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
       ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx)
       : null;
 
-    // Ongepland-maar-gefietst: samenvatting van de rit(ten) die dag.
+    // Aggregeer eventueel gematchte fiets-activities van die dag.
     var actInfo = null;
-    if (!wo && dayActs && dayActs.length) {
+    if (dayActs && dayActs.length) {
       var totMin = 0;
       dayActs.forEach(function (a) { totMin += a.min; });
       var nm = (dayActs.length === 1)
@@ -272,11 +272,27 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
       actInfo = { naam: nm, min: totMin };
     }
 
+    // Render-mode (zie commit-message): waarheid is d.train (kol A), niet wo.
+    //   'workout'   = wo aanwezig → volle structuur-rendering
+    //   'planned'   = train=true zonder wo → fallback uit planner-data
+    //                 (typisch voor reeds-gedane dagen; kol G is dan leeg)
+    //   'unplanned' = train=false mét gematchte rit → "Ongepland-maar-gefietst"
+    var mode = wo ? 'workout' : (d.train ? 'planned' : 'unplanned');
+
     // Day header
     var dateStr = d.datum ? formatDate(d.datum, 'EEE dd-MM') : '';
     var statusStr = d.gedaan ? '   ✅ GEDAAN' : '';
-    var nameStr = wo ? wo.naam
-      : (actInfo ? actInfo.naam + ' (' + actInfo.min + 'min)' : '(geen workout)');
+    var nameStr;
+    if (mode === 'workout') {
+      nameStr = wo.naam;
+    } else if (mode === 'planned') {
+      var typeName = capitalize_(d.type || 'Training');
+      nameStr = typeName + (d.minuten ? ' (' + d.minuten + 'min)' : '');
+      if (actInfo) nameStr += ' — ' + actInfo.naam;
+    } else { // unplanned
+      nameStr = actInfo.naam + ' (' + actInfo.min + 'min)';
+    }
+
     sh.getRange(r, 1, 1, COLS).merge()
       .setValue(d.dag + '   ·   ' + dateStr + '   ·   ' + nameStr + statusStr)
       .setFontWeight('bold').setFontSize(12)
@@ -286,11 +302,24 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     sh.setRowHeight(r, 28);
     r += 1;
 
-    if (!wo) {
+    if (mode === 'planned') {
+      // Sub-regel uit toelichting (kol F) + eventueel activity-info.
+      var sub = d.notitie || '';
+      if (actInfo) {
+        var extra = actInfo.naam + ' (' + actInfo.min + 'min)';
+        sub = sub ? (sub + '   ·   ' + extra) : extra;
+      }
+      if (!sub) sub = '(geen toelichting)';
       sh.getRange(r, 1, 1, COLS).merge()
-        .setValue(actInfo
-          ? 'Ongepland — wel gefietst, telt mee in week-volume.'
-          : 'Geen workout gepland (Train? uitgevinkt of dagtype leeg).')
+        .setValue(sub)
+        .setFontStyle('italic').setFontColor('#374151').setBackground('#f3f4f6').setWrap(true);
+      r += 2;
+      return;
+    }
+
+    if (mode === 'unplanned') {
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('Ongepland — wel gefietst, telt mee in week-volume.')
         .setFontStyle('italic').setFontColor('#6b7280');
       r += 2;
       return;
@@ -389,6 +418,12 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
 function truncate_(s, n) {
   s = String(s || '');
   return s.length > n ? s.substring(0, n - 1) + '…' : s;
+}
+
+/** Eerste letter hoofdletter, rest unchanged. */
+function capitalize_(s) {
+  s = String(s || '');
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 /**
