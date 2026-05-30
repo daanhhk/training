@@ -342,7 +342,7 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   var weekVolMin = computeWeekVolumeMin_(ss, weekStartDate(new Date()));
   sh.getRange(r, 1).setValue('Totaal tijd:').setFontWeight('bold');
   var tijdStr = Math.floor(weekVolMin / 60) + 'u ' + (weekVolMin % 60) + 'm';
-  var volTarget = VOLUME_TARGETS[macro.fase];
+  var volTarget = getVolumeTargets()[macro.fase];
   if (volTarget) tijdStr += '   ·   richting ' + macro.fase + ': ' + volTarget[0] + '-' + volTarget[1] + 'u';
   sh.getRange(r, 2, 1, 4).merge().setValue(tijdStr);
   r += 1;

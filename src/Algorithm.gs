@@ -15,16 +15,24 @@ var DEKKING_MIN_MIN     = 15;   // ≥15min werkelijk in bucket = gedekt
 var DEBT_FORCE_HIGH_MIN = 30;   // high-debt > 30min → force weekend combo
 var DEBT_FORCE_ANAER_MIN = 20;  // anaerobic-debt > 20min → idem
 
-// Volume-advies: target uren/week per macroFase [min, max] (informatief).
-var VOLUME_TARGETS = {
-  Base:     [4, 7],
-  Build:    [6, 9],
-  Peak:     [6, 9],
-  Taper:    [3, 5],
-  Recovery: [2, 4]
-};
+// Volume-advies drempels (informatief).
 var VOLUME_ADVIES_MIN_TEKORT   = 60;   // niet adviseren onder 60min tekort
 var VOLUME_ADVIES_MAX_SUGGESTIE = 120; // cap suggestie per rit op 120min
+
+/**
+ * Target uren/week per macroFase, op basis van de gekozen profiel-preset
+ * uit Settings. 'Gevorderd 7u' (default) reproduceert het pre-scope-B
+ * gedrag exact. 'Custom' valt v1 terug op 'Gevorderd 7u'.
+ */
+function getVolumeTargets() {
+  var presets = {
+    'Amateur 3u':   { Base: [2, 4],  Build: [3, 5],   Peak: [3, 5],   Taper: [2, 3], Recovery: [1, 2] },
+    'Gemiddeld 5u': { Base: [4, 6],  Build: [5, 7],   Peak: [5, 7],   Taper: [3, 4], Recovery: [2, 3] },
+    'Gevorderd 7u': { Base: [4, 7],  Build: [6, 9],   Peak: [6, 9],   Taper: [3, 5], Recovery: [2, 4] },
+    'Pro 10u+':     { Base: [8, 11], Build: [10, 14], Peak: [10, 14], Taper: [5, 7], Recovery: [3, 5] }
+  };
+  return presets[getProfielPreset()] || presets['Gevorderd 7u'];
+}
 
 // Activity-types die als fiets-volume tellen (incl. gravel/MTB).
 var CYCLING_TYPES = ['Ride', 'VirtualRide', 'GravelRide', 'MountainBikeRide'];

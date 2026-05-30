@@ -498,3 +498,70 @@ function removeDailySyncTrigger_() {
   });
   return n;
 }
+
+// ── Scope-B: athlete autocast (FTP + gewicht uit intervals.icu) ──
+
+var ATHLETE_SYNC_HANDLER = 'syncAthleteFromIcu';
+
+/**
+ * Haalt athlete-data uit intervals.icu en updatet FTP/gewicht in
+ * Settings IF de auto-update vinkjes aan staan. Sanity-bounds:
+ * FTP 100-500W, gewicht 40-150kg. Stille fail zonder API-key.
+ */
+function syncAthleteFromIcu() {
+  if (!getApiKey()) {
+    console.warn('Geen intervals.icu API key — autocast geskipt');
+    return;
+  }
+
+  var info;
+  try { info = getAthleteInfo(); } catch (e) {
+    console.warn('syncAthleteFromIcu: getAthleteInfo faalde: ' + e.message);
+    return;
+  }
+  if (!info) return;
+  var raw = info.raw || {};
+
+  if (getFtpAutoUpdate()) {
+    // Spec: icu_rolling_ftp eerst, dan icu_pm_ftp. info.ftp als laatste fallback.
+    var newFtp = Number(raw.icu_rolling_ftp || raw.icu_pm_ftp || info.ftp);
+    if (newFtp && newFtp > 100 && newFtp < 500) {
+      setFtp(newFtp);
+      setFtpLastSync(new Date());
+      console.log('FTP geüpdatet naar ' + newFtp);
+    } else {
+      console.warn('FTP-waarde verdacht: ' + newFtp + ' — geskipt');
+    }
+  }
+
+  if (getWeightAutoUpdate()) {
+    var newWeight = Number(info.weight);
+    if (newWeight && newWeight > 40 && newWeight < 150) {
+      setGewicht(newWeight);
+      setWeightLastSync(new Date());
+      console.log('Gewicht geüpdatet naar ' + newWeight);
+    } else {
+      console.warn('Gewicht-waarde verdacht: ' + newWeight + ' — geskipt');
+    }
+  }
+}
+
+/**
+ * Installeert/herinstalleert de wekelijkse athlete-sync trigger
+ * (zondag 23:00 Europe/Amsterdam). Idempotent.
+ */
+function installAthleteSyncTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === ATHLETE_SYNC_HANDLER) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger(ATHLETE_SYNC_HANDLER)
+    .timeBased()
+    .everyWeeks(1)
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
+    .atHour(23)
+    .inTimezone(TZ)
+    .create();
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  if (ui) ui.alert('Athlete-sync trigger geïnstalleerd — zondag 23:00 (Europe/Amsterdam).');
+}

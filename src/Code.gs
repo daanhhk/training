@@ -24,6 +24,8 @@ function onOpen() {
     .addSeparator()
     .addItem('Installeer dagelijkse sync (08:00)', 'installDailySyncTrigger')
     .addItem('Verwijder dagelijkse sync', 'removeDailySyncTrigger')
+    .addItem('🔄 Sync athlete nu', 'syncAthleteFromIcu')
+    .addItem('🔧 Setup: athlete-sync trigger', 'installAthleteSyncTrigger')
     .addSeparator()
     .addItem('Volgende mesocyclus-week ▶', 'advanceMeso')
     .addItem('Reset mesocyclus naar week 1', 'resetMeso')

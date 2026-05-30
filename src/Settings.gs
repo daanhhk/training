@@ -27,7 +27,14 @@ var SETTINGS_FIELDS = {
   CHAT_ID:    { row: 29, label: 'Telegram chat ID',        unit: ''                   },
   EMAIL:      { row: 33, label: 'Email digest naar',       unit: ''                   },
   MESO_WEEK:  { row: 37, label: 'Huidige meso-week (1-4)', unit: ''                   },
-  MACRO_FASE: { row: 38, label: 'Huidige macro-fase',      unit: ''                   }
+  MACRO_FASE: { row: 38, label: 'Huidige macro-fase',      unit: ''                   },
+  // ── Scope-B uitbreidingen (rij 40+; bestaande rijen ongewijzigd) ──
+  GEWICHT:           { row: 42, label: 'Gewicht',              unit: 'kg' },
+  PROFIEL_PRESET:    { row: 43, label: 'Profiel-preset',       unit: ''   },
+  FTP_AUTO:          { row: 47, label: 'FTP auto-update',      unit: ''   },
+  WEIGHT_AUTO:       { row: 48, label: 'Gewicht auto-update',  unit: ''   },
+  FTP_LAST_SYNC:     { row: 49, label: 'FTP laatst gesynct',   unit: ''   },
+  WEIGHT_LAST_SYNC:  { row: 50, label: 'Gewicht laatst gesynct', unit: '' }
 };
 
 /** Rij → docprop key. Alleen velden die de gebruiker kan bewerken. */
@@ -45,7 +52,12 @@ var SETTINGS_ROW_TO_KEY = {
   24: 'intervals_api_key',
   28: 'telegram_bot_token',
   29: 'telegram_chat_id',
-  33: 'email_digest'
+  33: 'email_digest',
+  // Scope-B (read-write velden; last-sync rijen blijven uit deze map)
+  42: 'gewicht',
+  43: 'profiel_preset',
+  47: 'ftp_auto_update',
+  48: 'weight_auto_update'
 };
 
 /** Harde defaults, gebruikt als prop niet ingesteld is. */
@@ -63,11 +75,19 @@ var SETTINGS_DEFAULTS = {
   intervals_api_key:    '',
   telegram_bot_token:   '',
   telegram_chat_id:     '',
-  email_digest:         ''
+  email_digest:         '',
+  // Scope-B (defaults reproduceren huidige gedrag exact)
+  gewicht:              75,
+  profiel_preset:       'Gevorderd 7u',
+  ftp_auto_update:      false,
+  weight_auto_update:   false,
+  ftp_last_sync:        '',
+  weight_last_sync:     ''
 };
 
 var DOEL_OPTIONS = ['FTP', 'Conditie', 'Beklimmingen', 'VO2max'];
 var FASE_OPTIONS = ['build', 'maintain'];
+var PROFIEL_PRESET_OPTIONS = ['Amateur 3u', 'Gemiddeld 5u', 'Gevorderd 7u', 'Pro 10u+', 'Custom'];
 
 var SETTINGS_SECTIONS = [
   { row: 1,  title: '⚙️  Atleet baseline' },
@@ -76,13 +96,17 @@ var SETTINGS_SECTIONS = [
   { row: 21, title: '🔌  intervals.icu (vul in voor sync)' },
   { row: 26, title: '🤖  Telegram bot (placeholder)' },
   { row: 31, title: '✉️  Notificaties' },
-  { row: 35, title: '📊  Status (auto — niet bewerken)' }
+  { row: 35, title: '📊  Status (auto — niet bewerken)' },
+  { row: 40, title: '👤  Profiel' },
+  { row: 45, title: '📡  Auto-sync vanuit intervals.icu' }
 ];
 
-/** Numerieke + datum velden (kind hint voor parsen). */
+/** Numerieke + datum + bool velden (kind hint voor parsen). */
 var SETTINGS_KIND = {
   ftp: 'num', hr_max: 'num', hr_rest: 'num', lthr: 'num', doel_duur: 'num',
-  doel_start: 'date'
+  gewicht: 'num',
+  doel_start: 'date', ftp_last_sync: 'date', weight_last_sync: 'date',
+  ftp_auto_update: 'bool', weight_auto_update: 'bool'
 };
 
 function buildSettings(ss) {
@@ -108,9 +132,14 @@ function buildSettings(ss) {
 
     sh.getRange(row, 1).setValue(field.label).setFontWeight('bold');
 
-    var val = loadSettingValue(key);
-    if (val !== null && val !== undefined && val !== '') {
-      sh.getRange(row, 2).setValue(val);
+    if (SETTINGS_KIND[key] === 'bool') {
+      sh.getRange(row, 2).insertCheckboxes();
+      sh.getRange(row, 2).setValue(loadSettingValue(key) === true);
+    } else {
+      var val = loadSettingValue(key);
+      if (val !== null && val !== undefined && val !== '') {
+        sh.getRange(row, 2).setValue(val);
+      }
     }
     if (SETTINGS_KIND[key] === 'date') {
       sh.getRange(row, 2).setNumberFormat('dd-MM-yyyy');
@@ -127,6 +156,25 @@ function buildSettings(ss) {
   sh.getRange(SETTINGS_FIELDS.FASE.row, 2).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(FASE_OPTIONS, true).setAllowInvalid(false).build()
   );
+  sh.getRange(SETTINGS_FIELDS.PROFIEL_PRESET.row, 2).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(PROFIEL_PRESET_OPTIONS, true).setAllowInvalid(false).build()
+  );
+
+  // Read-only last-sync rijen (worden door syncAthleteFromIcu beschreven)
+  [
+    { field: SETTINGS_FIELDS.FTP_LAST_SYNC,    key: 'ftp_last_sync' },
+    { field: SETTINGS_FIELDS.WEIGHT_LAST_SYNC, key: 'weight_last_sync' }
+  ].forEach(function (e) {
+    sh.getRange(e.field.row, 1).setValue(e.field.label + ':').setFontWeight('bold');
+    var raw = getDocProp(e.key, '');
+    if (raw) {
+      var d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        sh.getRange(e.field.row, 2).setValue(d).setNumberFormat('dd-MM-yyyy HH:mm');
+      }
+    }
+    sh.getRange(e.field.row, 2).setFontStyle('italic').setFontColor('#6b7280');
+  });
 
   // Status (auto) — meso week + macro fase
   sh.getRange(SETTINGS_FIELDS.MESO_WEEK.row, 1).setValue(SETTINGS_FIELDS.MESO_WEEK.label).setFontWeight('bold');
@@ -180,8 +228,9 @@ function loadSettingValue(key) {
     if (key === 'doel_start') return new Date();
     return SETTINGS_DEFAULTS[key];
   }
-  if (kind === 'num') return Number(raw);
+  if (kind === 'num')  return Number(raw);
   if (kind === 'date') return new Date(raw);
+  if (kind === 'bool') return raw === 'true' || raw === true;
   return raw;
 }
 
@@ -232,3 +281,34 @@ function computeMacroPhase(startDate, today) {
   if (week > 12) week = 12;
   return { week: week, fase: fase, isTestWeek: isTestWeek };
 }
+
+// ── Scope-B getters/setters ───────────────────────────────────────
+
+function getGewicht()           { return Number(loadSettingValue('gewicht')) || SETTINGS_DEFAULTS.gewicht; }
+function getProfielPreset()     { return String(loadSettingValue('profiel_preset') || SETTINGS_DEFAULTS.profiel_preset); }
+function getTelegramChatId()    { return String(loadSettingValue('telegram_chat_id') || ''); }
+function getTelegramBotToken()  { return String(loadSettingValue('telegram_bot_token') || ''); }
+function getFtpAutoUpdate()     { return loadSettingValue('ftp_auto_update') === true; }
+function getWeightAutoUpdate()  { return loadSettingValue('weight_auto_update') === true; }
+function getApiKey()            { return getDocProp('intervals_api_key', ''); }
+
+/**
+ * Schrijft een waarde naar zowel DocProp als de Settings-tab cel.
+ * Voor numerieke/datum velden gebruikt in autocast.
+ */
+function _writeSettingCell_(key, fieldName, value, dateFormat) {
+  setDocProp(key, value instanceof Date ? value.toISOString() : value);
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(SETTINGS_SHEET);
+  if (!sh) return;
+  var f = SETTINGS_FIELDS[fieldName];
+  if (!f) return;
+  var cell = sh.getRange(f.row, 2);
+  cell.setValue(value);
+  if (dateFormat) cell.setNumberFormat(dateFormat);
+}
+
+function setFtp(n)              { _writeSettingCell_('ftp', 'FTP', Number(n)); }
+function setGewicht(n)          { _writeSettingCell_('gewicht', 'GEWICHT', Number(n)); }
+function setFtpLastSync(d)      { _writeSettingCell_('ftp_last_sync', 'FTP_LAST_SYNC', d, 'dd-MM-yyyy HH:mm'); }
+function setWeightLastSync(d)   { _writeSettingCell_('weight_last_sync', 'WEIGHT_LAST_SYNC', d, 'dd-MM-yyyy HH:mm'); }
