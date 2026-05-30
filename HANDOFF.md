@@ -10,6 +10,20 @@ Garmin-push. Uitrolbaar voor vrienden.
   via combo_long_with_efforts, expliciete compensatie-regel in 
   feedback-blok.
 
+### Sessie 30 mei 2026
+- Feedback-loop adaptief gemaakt: dekking-op-actuals, debt-weegt 
+  weekend, expliciete no-compensation (5bdfc94, 2f2abc7, 3dfcdca).
+- Scope-B foundation 1-2 af: Settings uitbreiding (gewicht / profiel-
+  preset / telegram-velden / autocast-vinkjes), VOLUME_TARGETS via 
+  preset-getter, FTP-autocast (1605dd1, 11a748a). FTP-bron na 
+  diagnose: sportSettings[Ride].mmp_model.ftp (106a93b).
+- buildPlanner idempotent: save→rebuild→restore + vangnet in 
+  ensureCurrentWeek (68f8c8d, dcabb40).
+- renderProposal planned-mode: voltooide dagen renderen netjes ook 
+  zonder voorgesteldType (dcd62c4).
+- Workout-duur scaling: long_z2 en combo_long_with_efforts honoreren 
+  d.minuten i.p.v. event-target override (f5203a8).
+
 ## Locaties
 - Lokaal: C:\Users\daan\Projects\training
 - GitHub: github.com/daanhhk/training
@@ -106,6 +120,15 @@ vallen nu terug op blok-structuur in ZWO (verfijn-punt).
 - Dekking: ≥15min werkelijke minuten per bucket = gedekt 
   (DEKKING_MIN_MIN). Debt-force op weekend-dag: high>30 of anaerobic>20 
   → combo_long_with_efforts, uitgeschakeld in taper/recovery.
+- Render-bug patroon: render-conditie die leunt op afgeleid veld 
+  (bv. d.voorgesteldType, alleen door assignWorkouts gevuld voor 
+  toekomstige dagen) i.p.v. brondata (d.train kolom A) geeft 
+  fout-negatieven bij voltooide dagen. Bij render-bugs eerst checken: 
+  leunt de conditie op een afgeleid veld dat nog niet gevuld kan zijn 
+  in deze lifecycle? Brondata = kolommen waar gebruiker direct schrijft 
+  (Train, Datum, Dagtype, Toelichting, Gedaan). Afgeleide velden 
+  (Voorgesteld type, weekplan-snapshot intent, dekking-flags) komen 
+  later in de flow.
 
 ## Roadmap — scope B (app/bot)
 
@@ -113,10 +136,13 @@ Vastgelegd mei 2026: Telegram bot + open-source, single-user-Sheet
 per gebruiker.
 
 ### Foundation (uitrol-klaar zonder bot)
-1. Settings uitbreiden: gewicht, profiel-preset, telegram_chat_id,
-   telegram_bot_token. FTP-autocast vanuit icu_rolling_ftp + override.
-2. Profielen-presets (Amateur 3u / Gemiddeld 5u / Gevorderd 7u /
-   Pro 10u+) — bundelt VOLUME_TARGETS en andere drempels.
+1. [DONE — commits 1605dd1, 11a748a, 106a93b] Settings uitbreiden:
+   gewicht, profiel-preset, telegram_chat_id, telegram_bot_token.
+   FTP-autocast vanuit **sportSettings[Ride].mmp_model.ftp** (de
+   werkende bron na diagnose; icu_rolling_ftp bleek athlete-level niet
+   te bestaan).
+2. [DONE — commit 1605dd1] Profielen-presets (Amateur 3u / Gemiddeld
+   5u / Gevorderd 7u / Pro 10u+) via `getVolumeTargets()` getter.
 3. Multi-user-klaar code: state-keys met chat_id-prefix.
 4. Onboarding-wizard ("🎯 Eerste keer instellen" menu).
 5. README + install guide in repo.
@@ -135,8 +161,15 @@ per gebruiker.
 14. Workout-library scraping van whatsonzwift.
 15. FTP-groei-voorspelling.
 16. Wellness drijft workout-keuze (oude roadmap-punt 2).
-17. recentHardDayDate_ op actuals (oude open patch).
+17. recentHardDayDate_ op actuals i.p.v. intent — dan kan
+    debtForced-exemptie van avoid-consecutive-hard weg.
 18. Off-bike training (krachttraining, mobility).
+19. Workout-duur volledig: combo en pendel-types ook scaleable maken,
+    plus variant-pools met duur-tags voor type-selectie op basis van
+    beschikbaarheid (Aanpak B/C uit ontwerp-discussie).
+20. TSS-berekening uit actuals (analoog aan week-volume-uit-actuals).
+21. Live cyclus-verificatie maandag 1 juni met hele nieuwe week aan
+    data (verificatie-taak, geen feature).
 
 ### Achterhouden tot duidelijk waarom
 - Voeding (intervals.icu doet 't).
