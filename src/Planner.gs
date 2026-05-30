@@ -21,6 +21,15 @@ var PLANNER_DEFAULTS = {
 var PLANNER_HEADERS = ['Train?', 'Dag', 'Datum', 'Minuten', 'Dagtype', 'Toelichting', 'Voorgesteld type', 'Gedaan?'];
 
 function buildPlanner(ss) {
+  // Bewaar bestaande rij-data (3-9, A-H) vóór de clear in getOrCreateSheet.
+  // Maakt buildPlanner idempotent: een rebuild herstelt user-edits exact.
+  var existing = ss.getSheetByName(PLANNER_SHEET);
+  var savedRows = null;
+  if (existing && existing.getMaxRows() >= 9 &&
+      existing.getRange(3, 3).getValue() instanceof Date) {
+    savedRows = existing.getRange(3, 1, 7, 8).getValues();
+  }
+
   var sh = getOrCreateSheet(ss, PLANNER_SHEET);
 
   // Title
@@ -65,10 +74,23 @@ function buildPlanner(ss) {
   rules.push(rule);
   sh.setConditionalFormatRules(rules);
 
-  // Rij-data NIET overschrijven bij rebuild — alleen bij echte rollover.
-  // ensureCurrentWeek vult de week uit het patroon wanneer tab_week_start
-  // verouderd of leeg is (eerste setup). Voor een lopende week (stored ===
-  // huidige maandag) is dit een no-op → behoudt alle gebruikers-edits.
+  // Restore bewaarde rij-data (idempotent rebuild) — kol B (dagnamen)
+  // is hierboven al expliciet hergezet, dus die slaan we over.
+  if (savedRows) {
+    for (var k = 0; k < 7; k++) {
+      var rr = 3 + k;
+      sh.getRange(rr, 1).setValue(savedRows[k][0]);                    // Train? checkbox
+      sh.getRange(rr, 3).setValue(savedRows[k][2]).setNumberFormat('ddd dd-MM'); // Datum
+      sh.getRange(rr, 4).setValue(savedRows[k][3]);                    // Minuten
+      sh.getRange(rr, 5).setValue(savedRows[k][4]);                    // Dagtype
+      sh.getRange(rr, 6).setValue(savedRows[k][5]);                    // Toelichting
+      sh.getRange(rr, 7).setValue(savedRows[k][6]);                    // Voorgesteld
+      sh.getRange(rr, 8).setValue(savedRows[k][7]);                    // Gedaan?
+    }
+  }
+
+  // Vangnet: materializeWeek_ als ensureCurrentWeek constateert dat de
+  // tab (nog) leeg is — bv. allereerste build, of als savedRows null was.
   ensureCurrentWeek(ss);
 
   SpreadsheetApp.flush();
@@ -108,9 +130,18 @@ function materializeWeek_(sh, monday) {
 }
 
 /**
+ * Returnt true als de Weekplanner-rij-data gevuld is (C3 = maandag-datum
+ * aanwezig). Gebruikt door ensureCurrentWeek als vangnet.
+ */
+function plannerHasData_(sh) {
+  if (!sh || sh.getMaxRows() < 3) return false;
+  return sh.getRange(3, 3).getValue() instanceof Date;
+}
+
+/**
  * LAAG 2 — week-state guard. Rolt de Weekplanner automatisch naar de
- * huidige kalenderweek wanneer tab_week_start verouderd/leeg is.
- * Actueel → niks doen (behoud gebruikers-edits van deze week).
+ * huidige kalenderweek wanneer tab_week_start verouderd/leeg is, OF
+ * wanneer de tab leeg is (vangnet voor rebuilds die de cellen wisten).
  */
 function ensureCurrentWeek(ss) {
   var sh = ss.getSheetByName(PLANNER_SHEET);
@@ -118,7 +149,9 @@ function ensureCurrentWeek(ss) {
   var monday = weekStartDate(new Date());
   var mondayStr = formatDate(monday, 'yyyy-MM-dd');
   var stored = getDocProp('tab_week_start', '');
-  if (stored === mondayStr) return; // tab is actueel
+  // Vangnet: ook materializen als tab_week_start matcht maar de data leeg
+  // is (bv. na een rebuild die de cellen wiste).
+  if (stored === mondayStr && plannerHasData_(sh)) return; // tab actueel én gevuld
 
   // ROLLOVER: materialiseer nieuwe week uit patroon
   materializeWeek_(sh, monday);
