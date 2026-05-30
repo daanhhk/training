@@ -523,14 +523,34 @@ function syncAthleteFromIcu() {
   var raw = info.raw || {};
 
   if (getFtpAutoUpdate()) {
-    // Spec: icu_rolling_ftp eerst, dan icu_pm_ftp. info.ftp als laatste fallback.
-    var newFtp = Number(raw.icu_rolling_ftp || raw.icu_pm_ftp || info.ftp);
+    // Dynamische FTP uit sportSettings[Ride].mmp_model.ftp (intervals.icu's
+    // rollende schatting per discipline). Fallback op entry.ftp (gebruikers-
+    // instelling) en daarna info.ftp (huidige Settings-waarde = silent no-op).
+    var newFtp = null, ftpSource = 'info.ftp (fallback)';
+    if (Array.isArray(raw.sportSettings)) {
+      for (var i = 0; i < raw.sportSettings.length; i++) {
+        var s = raw.sportSettings[i];
+        if (s && Array.isArray(s.types) && s.types.indexOf('Ride') >= 0) {
+          if (s.mmp_model && s.mmp_model.ftp) {
+            newFtp = s.mmp_model.ftp; ftpSource = 'sportSettings[Ride].mmp_model.ftp';
+          } else if (s.ftp) {
+            newFtp = s.ftp; ftpSource = 'sportSettings[Ride].ftp';
+          }
+          break;
+        }
+      }
+    }
+    if (newFtp == null) {
+      console.warn('sportSettings[Ride] niet gevonden of zonder FTP — fallback op info.ftp');
+      newFtp = info.ftp;
+    }
+    newFtp = Number(newFtp);
     if (newFtp && newFtp > 100 && newFtp < 500) {
       setFtp(newFtp);
       setFtpLastSync(new Date());
-      console.log('FTP geüpdatet naar ' + newFtp);
+      console.log('FTP geüpdatet naar ' + newFtp + ' (bron: ' + ftpSource + ')');
     } else {
-      console.warn('FTP-waarde verdacht: ' + newFtp + ' — geskipt');
+      console.warn('FTP-waarde verdacht: ' + newFtp + ' (bron: ' + ftpSource + ') — geskipt');
     }
   }
 
