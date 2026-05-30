@@ -332,6 +332,15 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
       .setBackground('#f3f4f6').setFontColor('#374151').setFontStyle('italic');
     r += 1;
 
+    // tooLong-waarschuwing: workout-template paste niet binnen d.minuten.
+    if (wo.tooLong) {
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('⚠️  Workout vereist meer tijd dan beschikbaar (gepland ' + wo.tooLong.needed +
+                  'min, beschikbaar ' + wo.tooLong.available + 'min). Overweeg langere beschikbaarheid of korter workout-type.')
+        .setBackground('#fef3c7').setFontColor('#92400e').setFontStyle('italic').setWrap(true);
+      r += 1;
+    }
+
     // Structuur header
     sh.getRange(r, 1, 1, COLS).setValues([['Segment', 'Duur', 'Vermogen', 'Hartslag', 'Toelichting']])
       .setFontWeight('bold').setBackground('#e5e7eb');

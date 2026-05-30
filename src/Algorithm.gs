@@ -112,10 +112,18 @@ function generateProposal() {
   // DEEL 4 — persisteer per-dag workout (proposal_<datum>) + weekplan-snapshot
   var eventCtx = eventContextFrom_(macro);
   var weekplan = [];
+  // Types die hun template ZELF schalen naar d.minuten (zie genericLongZ2 /
+  // genericCombo). Voor andere types loggen we als template > 30min afwijkt.
+  var SCALABLE_TYPES = { long_z2: 1, combo_long_with_efforts: 1 };
   days.forEach(function (d) {
     if (!d.train || !d.voorgesteldType || !d.datum) return;
     var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx);
     if (!wo) return;
+    if (!SCALABLE_TYPES[d.voorgesteldType] && d.minuten > 0 &&
+        Math.abs(d.minuten - (wo.totaalMin || 0)) > 30) {
+      Logger.log('Workout-duur mismatch: dag=' + d.dag + ' type=' + d.voorgesteldType +
+                 ' beschikbaar=' + d.minuten + 'min template=' + wo.totaalMin + 'min');
+    }
     var dISO = formatDate(d.datum, 'yyyy-MM-dd');
     setDocProp('proposal_' + dISO, JSON.stringify(wo));
     weekplan.push({
@@ -1305,49 +1313,63 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx) {
  */
 function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
   var ftp = settings.ftp, lthr = settings.lthr;
-  mins = Math.max(60, Math.round(mins * mesoFactor(mesoWeek)));
+  // Beschikbaarheid (d.minuten via mins) is leidend; meso-factor mag nog
+  // krimpen voor recovery-week. EventCtx geeft alleen het hilly-profiel,
+  // NIET een duur-override (eerder werd 120 → 163 gepusht, fout).
+  var requested = Math.max(60, Math.round((mins || 90) * mesoFactor(mesoWeek)));
 
-  var hilly = false;
+  var hilly = !!(eventCtx && eventCtx.hm > 0 && eventCtx.afstandKm > 0 &&
+                 (eventCtx.hm / Math.max(1, eventCtx.afstandKm) > 1.0));
+
+  // Vaste blokken (warmup + intervals incl. intra-rest + cooldown):
+  //   hilly:    10 warmup + 34 klim-sim (3×8 work + 2×5 rest) + 5 cd = 49
+  //   non-hilly: 10 warmup + 5 cd                                    = 15
+  var fixed = hilly ? 49 : 15;
+  var minBase = 30; // onder 30min Z2 base is een long-rit niet zinvol
+
+  var fits = requested >= fixed + minBase;
+  var baseMin = fits ? (requested - fixed) : minBase;
+  var totaalMin = fixed + baseMin;
+  var tooLong = fits ? null : { available: requested, needed: fixed + minBase };
+
   var eind = 'Volume zonder vermoeidheid — de basis voor alle andere workouts.';
-
-  if (eventCtx && eventCtx.afstandKm > 0 && eventCtx.weken != null) {
-    // Geschatte event-rijtijd in minuten (~28 km/h gemiddelde toer-snelheid)
-    var eventMin = eventCtx.afstandKm / 28 * 60;
-    // Progressie 40%→80%: hoe dichter bij event, hoe langer de rit
-    var progress = Math.max(0.4, Math.min(0.8, (13 - eventCtx.weken) / 12 * 0.8 + 0.4));
-    var target = Math.min(300, Math.round(eventMin * progress)); // cap 5u
-    if (target > mins) mins = target;
-
-    hilly = eventCtx.hm > 0 && (eventCtx.hm / Math.max(1, eventCtx.afstandKm) > 1.0);
-    eind = 'Bouw richting ' + (eventCtx.naam || 'event') + ' — ' +
-           eventCtx.afstandKm + 'km/' + eventCtx.hm + 'hm.';
+  if (eventCtx && eventCtx.naam) {
+    eind = 'Bouw richting ' + eventCtx.naam + ' — ' +
+           (eventCtx.afstandKm || '?') + 'km/' + (eventCtx.hm || '?') + 'hm.';
   }
+  if (hilly) eind += ' Bergachtig profiel → klim-simulatie blokken erin.';
 
   var structuur;
   if (hilly) {
     structuur = [
-      ['Warmup',    '10 min', wattsRange(ftp, 50, 65), bpmBelow(lthr, 80), 'Rustig opbouwen'],
-      ['Z2 base',   Math.max(30, mins - 49) + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2'],
-      ['Klim-sim',  '3x 8 min', wattsRange(ftp, 88, 95), bpmRange(lthr, 92, 99), '5 min rust @ 60% — simuleert de cols'],
-      ['Cooldown',  '5 min', wattsRange(ftp, 45, 55), '—', 'Easy']
+      ['Warmup',   '10 min',         wattsRange(ftp, 50, 65), bpmBelow(lthr, 80), 'Rustig opbouwen'],
+      ['Z2 base',  baseMin + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2'],
+      ['Klim-sim', '3x 8 min',       wattsRange(ftp, 88, 95), bpmRange(lthr, 92, 99), '5 min rust @ 60% — simuleert de cols'],
+      ['Cooldown', '5 min',          wattsRange(ftp, 45, 55), '—', 'Easy']
     ];
-    eind += ' Bergachtig profiel → klim-simulatie blokken erin.';
   } else {
     structuur = [
-      ['Warmup', '10 min', wattsRange(ftp, 50, 65), bpmBelow(lthr, 80), 'Rustig opbouwen'],
-      ['Hoofd',  (mins - 15) + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2 — aerobic base'],
-      ['Cooldown', '5 min', wattsRange(ftp, 45, 55), '—', 'Easy']
+      ['Warmup',  '10 min',         wattsRange(ftp, 50, 65), bpmBelow(lthr, 80), 'Rustig opbouwen'],
+      ['Hoofd',   baseMin + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2 — aerobic base'],
+      ['Cooldown','5 min',          wattsRange(ftp, 45, 55), '—', 'Easy']
     ];
   }
 
+  // Intent: high (klim-sim work) is vast, low schaalt met base.
+  var intent = hilly
+    ? { low: 10 + baseMin + 10 + 5, high: 24, anaerobic: 0 }  // warmup + base + intra-rest + cooldown
+    : { low: totaalMin, high: 0, anaerobic: 0 };
+
   return {
-    naam: 'Lange Z2 (' + mins + ' min)',
+    naam: 'Lange Z2 (' + totaalMin + ' min)',
     focus: 'aerobic base',
     zones: hilly ? ['low', 'high'] : ['low'],
-    totaalMin: mins,
+    totaalMin: totaalMin,
     structuur: structuur,
-    tss: Math.round(mins * (hilly ? 0.8 : 0.7)),
-    eindopmerking: eind
+    intent: intent,
+    tss: Math.round(totaalMin * (hilly ? 0.8 : 0.7)),
+    eindopmerking: eind,
+    tooLong: tooLong
   };
 }
 
@@ -1547,20 +1569,31 @@ function genericCombo(type, mins, settings, mesoWeek, doel) {
   var f = mesoFactor(mesoWeek);
 
   if (type === 'combo_long_with_efforts') {
-    mins = mins || 120;
+    // Beschikbaarheid leidend (zelfde patroon als genericLongZ2).
+    var requested = Math.max(60, mins || 120);
+    var fixed = 75; // 15 warmup + 45 efforts (3×(10+5)) + 15 uitrijden
+    var minBase = 30;
+    var fits = requested >= fixed + minBase;
+    var baseMin = fits ? (requested - fixed) : minBase;
+    var totaalMin = fixed + baseMin;
+    var tooLong = fits ? null : { available: requested, needed: fixed + minBase };
+
     return {
-      naam: 'Lange rit + ' + doel + ' efforts (' + mins + ' min)',
+      naam: 'Lange rit + ' + doel + ' efforts (' + totaalMin + ' min)',
       focus: 'volume + key zone',
       zones: ['low', 'high'],
-      totaalMin: mins,
+      totaalMin: totaalMin,
       structuur: [
-        ['Warmup',  '15 min', wattsRange(ftp, 55, 70), bpmBelow(lthr, 85), 'Inrijden Z2'],
-        ['Z2 base', Math.max(30, mins - 75) + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2'],
-        ['Efforts', '3x 10min', wattsRange(ftp, Math.round(85 * f), Math.round(92 * f)), bpmRange(lthr, 92, 99), 'Tempo/SS blokken, 5 min rust'],
-        ['Uitrijden', '15 min', wattsRange(ftp, 55, 65), '—', 'Z2 uit']
+        ['Warmup',    '15 min',         wattsRange(ftp, 55, 70), bpmBelow(lthr, 85), 'Inrijden Z2'],
+        ['Z2 base',   baseMin + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2'],
+        ['Efforts',   '3x 10min',       wattsRange(ftp, Math.round(85 * f), Math.round(92 * f)), bpmRange(lthr, 92, 99), 'Tempo/SS blokken, 5 min rust'],
+        ['Uitrijden', '15 min',         wattsRange(ftp, 55, 65), '—', 'Z2 uit']
       ],
-      tss: Math.round(mins * 0.85),
-      eindopmerking: 'Lange rit met geïntegreerde efforts — dekt low + high in één sessie.'
+      // Intent: efforts work (30) is vast high, low = warmup + base + intra-rest + uitrijden
+      intent: { low: 15 + baseMin + 10 + 15, high: 30, anaerobic: 0 },
+      tss: Math.round(totaalMin * 0.85),
+      eindopmerking: 'Lange rit met geïntegreerde efforts — dekt low + high in één sessie.',
+      tooLong: tooLong
     };
   }
 
