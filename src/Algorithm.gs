@@ -425,8 +425,8 @@ function computeWeekVolumeMin_(ss, weekStart) {
     var key = formatDate(dayDate, 'yyyy-MM-dd');
     if (minByDate[key] > 0) {
       total += minByDate[key];                      // actuals winnen
-    } else if (stripTime_(dayDate).getTime() > today.getTime() && planner[i] && planner[i].train === true) {
-      total += planner[i].minuten || 0;             // toekomstige geplande dag → intent
+    } else if (stripTime_(dayDate).getTime() >= today.getTime() && planner[i] && planner[i].train === true) {
+      total += planner[i].minuten || 0;             // vandaag + toekomstige geplande dag → intent (actuals winnen sowieso al hierboven)
     }
   }
   return Math.round(total);
