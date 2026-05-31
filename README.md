@@ -71,6 +71,49 @@ repo public te maken.
 genegeerd zodat lokaal-gegenereerde keys niet per ongeluk gecommit
 worden.
 
+## Telegram bot setup
+
+De bot stuurt later in de week voorstellen en vraagt feedback na ritten.
+Eerste keer instellen:
+
+a. **Maak een bot bij @BotFather** in Telegram, kopieer het token.
+b. **Vind je eigen chat-ID** — stuur een bericht naar @userinfobot of
+   @RawDataBot in Telegram, die geeft je `id`.
+c. Sheet > `🚴 Coach > 🔐 Setup > Set Telegram bot token` → plak token.
+d. Sheet > `🚴 Coach > 🔐 Setup > Set Telegram chat ID` → plak chat-ID.
+e. Sheet > `🚴 Coach > 🔐 Setup > Test bot connectie (getMe)` → moet
+   alert met bot username tonen. Bevestigt dat het token klopt.
+f. **Deploy als Web App**: Sheet > Extensions > Apps Script > rechts­
+   boven knop `Deploy > New deployment` > type `Web app`.
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+
+   Klik Deploy, kopieer de Web app URL (eindigt op `/exec`).
+g. Sheet > `🚴 Coach > 🔐 Setup > Set Apps Script Deploy URL` → plak URL.
+h. Sheet > `🚴 Coach > 🔐 Setup > Test send message naar mij` → krijg
+   testbericht in Telegram. Bevestigt end-to-end.
+i. Sheet > `🚴 Coach > 🔐 Setup > Registreer webhook bij Telegram` →
+   alert toont `ok: true`. Telegram POST't vanaf nu updates naar de
+   deploy-URL.
+j. **Test in Telegram**: stuur `/start` aan de bot → bot antwoordt
+   met welkomstbericht.
+k. `/help` → krijg lijst van commands.
+l. Random tekst (bv. `abc`) → krijg `Onbekend commando. Stuur /help.`
+
+### Bij code-updates aan TelegramBot.gs
+
+Apps Script Editor > Deploy > Manage deployments > edit current
+deployment > New version > Deploy. URL blijft hetzelfde → géén
+opnieuw-registreren bij Telegram nodig.
+
+### Webhook-secret
+
+doPost valideert een per-document UUID-secret die als `?s=<secret>`
+query-param in de webhook-URL meegaat. Wordt automatisch gegenereerd
+bij eerste `getWebhookSecret_()`-aanroep en blijft in PropertiesService.
+Wis hem via `🔐 Setup > Wis alle secrets` als je 'm wil roteren —
+daarna webhook opnieuw registreren.
+
 ## Development
 
 - `clasp push`    → wijzigingen naar Apps Script sturen
