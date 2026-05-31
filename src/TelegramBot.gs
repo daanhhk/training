@@ -180,13 +180,11 @@ function doPost(e) {
     }
     if (String(chatId) !== String(authorizedChatId)) {
       console.warn('doPost: onbevoegde chat_id=' + chatId);
-      var authOk = false;
-      try { tgSendMessage(chatId, 'Niet geautoriseerd.'); authOk = true; } catch (sendErr) { /* swallow */ }
       audit.branch = 'auth_failed';
-      audit.response_ok = authOk;
+      audit.response_ok = true;     // respons SAMENGESTELD = ok in respond-via-webhook model
       audit.duration_ms = Date.now() - startMs;
       auditLog_(audit);
-      return _tgOk_();
+      return _tgWebhookResponse_(chatId, 'Niet geautoriseerd.');
     }
 
     // 6. Negeer non-text berichten in v1. Geen audit — te ruisig.
@@ -195,19 +193,33 @@ function doPost(e) {
       return _tgOk_();
     }
 
-    // 7. Dispatch — branch label uit routeCommand_ vullen we in audit in.
+    // 7. Dispatch via respond-via-webhook: handler returnt tekst, doPost
+    // stopt die in de HTTP-response body als sendMessage-payload.
     console.log('doPost: chat=' + chatId + ' text="' + text.substring(0, 80) + '"');
+    var routeResult = null;
     var routeOk = true;
     try {
-      audit.branch = routeCommand_(text, chatId) || 'default';
+      routeResult = routeCommand_(text, chatId);
     } catch (routeErr) {
       console.error('routeCommand_ throw: ' + (routeErr && routeErr.stack ? routeErr.stack : routeErr));
-      audit.branch = audit.branch || 'crash';
       routeOk = false;
     }
-    audit.response_ok = routeOk;
+    if (!routeOk) {
+      audit.branch = audit.branch || 'crash';
+      audit.response_ok = false;
+      audit.duration_ms = Date.now() - startMs;
+      auditLog_(audit);
+      return _tgOk_();
+    }
+    audit.branch = (routeResult && routeResult.branch) || 'default';
+    audit.response_ok = true;       // we hebben succesvol een respons geconstrueerd (of bewust null)
     audit.duration_ms = Date.now() - startMs;
     auditLog_(audit);
+
+    var responseText = routeResult && routeResult.responseText;
+    if (responseText) {
+      return _tgWebhookResponse_(chatId, responseText);
+    }
     return _tgOk_();
 
   } catch (err) {
@@ -228,11 +240,40 @@ function _tgOk_() {
   return ContentService.createTextOutput('').setMimeType(ContentService.MimeType.TEXT);
 }
 
+/**
+ * Respond-via-webhook: in plaats van een aparte UrlFetchApp POST naar
+ * api.telegram.org/bot.../sendMessage te doen, returnen we de sendMessage-
+ * actie als JSON-body in onze HTTP-response op de webhook-call zelf.
+ * Telegram herkent dit formaat en verwerkt het als een impliciete
+ * sendMessage. Eén HTTP round-trip in plaats van twee, en — belangrijker —
+ * Apps Script's Web App response-pipeline geeft het 200-signaal sneller
+ * en betrouwbaarder door, wat de retry-loops oplost die we eerder zagen.
+ *
+ * NB: parse_mode wordt opzettelijk NIET in de payload gezet — plain text
+ * default, conform tgSendMessage. Caller die styling wil kan de tekst zelf
+ * opmaken via tg-acceptabele Markdown- of HTML-syntaxis EN dan
+ * _tgWebhookResponseWithMode_ gebruiken (nu niet ingebouwd; toekomst).
+ */
+function _tgWebhookResponse_(chatId, text) {
+  var body = JSON.stringify({
+    method: 'sendMessage',
+    chat_id: chatId,
+    text: text
+  });
+  return ContentService.createTextOutput(body)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 // ── Command router ───────────────────────────────────────────────
 
 /**
  * Splitst text op spatie, eerste token is de command (eventueel met
  * @botname suffix die we strippen). Onbekend → /help-hint.
+ */
+/**
+ * Returnt { branch, responseText }. responseText is de string die via
+ * respond-via-webhook teruggestuurd wordt naar Telegram — null als er
+ * niets gestuurd moet worden (bv. lege input).
  */
 function routeCommand_(text, chatId) {
   Logger.log('routeCommand_ ontving: ' + JSON.stringify(text));
@@ -242,7 +283,7 @@ function routeCommand_(text, chatId) {
   var head = tokens[0] || '';
   if (!head) {
     Logger.log('routeCommand_ leeg, niets te doen');
-    return 'empty';
+    return { branch: 'empty', responseText: null };
   }
   // Strip @botname suffix (Telegram appendt die in group chats — defensief
   // ook voor private chats waar het niet zou moeten gebeuren).
@@ -250,50 +291,41 @@ function routeCommand_(text, chatId) {
   var cmd = head.toLowerCase();
   Logger.log('routeCommand_ matched cmd: ' + JSON.stringify(cmd));
 
-  // Explicit if/else-if met early-return per branch. Return-waarde =
-  // branch-label dat door doPost in de Audit-tab wordt gelogd.
+  // Explicit if/else-if met early-return per branch. Handlers RETURNEN
+  // hun bericht-tekst (string); routeCommand_ wrapt in {branch,responseText}
+  // zodat doPost de tekst in een respond-via-webhook response kan stoppen.
   if (cmd === '/start') {
     Logger.log('routeCommand_ -> handleStart_');
-    handleStart_(chatId);
-    return 'start';
+    return { branch: 'start', responseText: handleStart_(chatId) };
   }
   if (cmd === '/status') {
     Logger.log('routeCommand_ -> handleStatus_');
-    handleStatus_(chatId);
-    return 'status';
+    return { branch: 'status', responseText: handleStatus_(chatId) };
   }
   if (cmd === '/help') {
     Logger.log('routeCommand_ -> handleHelp_');
-    handleHelp_(chatId);
-    return 'help';
+    return { branch: 'help', responseText: handleHelp_(chatId) };
   }
   Logger.log('routeCommand_ -> default (onbekend cmd=' + JSON.stringify(cmd) + ')');
-  tgSendMessage(chatId, 'Onbekend commando. Stuur /help.');
-  return 'default';
+  return { branch: 'default', responseText: 'Onbekend commando. Stuur /help.' };
 }
 
 function handleStart_(chatId) {
   Logger.log('handleStart_ aangeroepen voor chatId: ' + chatId);
-  var txt =
-    '👋 Welkom bij je FTP Trainings Coach.\n\n' +
+  return '👋 Welkom bij je FTP Trainings Coach.\n\n' +
     'Deze bot stuurt je later in de week voorstellen en vraagt feedback ' +
     'na je ritten.\n\n' +
     'Probeer /help voor beschikbare commands.';
-  var resp = tgSendMessage(chatId, txt);
-  Logger.log('handleStart_ tgSendMessage response: ' + JSON.stringify(resp));
 }
 
 function handleHelp_(chatId) {
   Logger.log('handleHelp_ aangeroepen voor chatId: ' + chatId);
   // Plain text — gewone hyphens, geen em-dashes, geen markdown/HTML markers.
-  var txt =
-    'Beschikbare commands:\n' +
+  return 'Beschikbare commands:\n' +
     '/start - welkomstbericht\n' +
     '/status - week samenvatting\n' +
     '/help - deze lijst\n\n' +
     'Meer commands volgen later (voorstel, sync, RPE).';
-  var resp = tgSendMessage(chatId, txt);
-  Logger.log('handleHelp_ tgSendMessage response: ' + JSON.stringify(resp));
 }
 
 /**
@@ -369,11 +401,12 @@ function handleStatus_(chatId) {
       debtLines.forEach(function (l) { lines.push(l); });
     }
 
-    var resp = tgSendMessage(chatId, lines.join('\n'));
-    Logger.log('handleStatus_ tgSendMessage response: ' + JSON.stringify(resp));
+    var out = lines.join('\n');
+    Logger.log('handleStatus_ returnt ' + out.length + ' chars');
+    return out;
   } catch (err) {
     console.error('handleStatus_ crashed: ' + (err && err.stack ? err.stack : err));
-    try { tgSendMessage(chatId, 'Status kon niet worden opgebouwd: ' + (err && err.message ? err.message : err)); } catch (e2) {}
+    return 'Status kon niet worden opgebouwd: ' + (err && err.message ? err.message : err);
   }
 }
 

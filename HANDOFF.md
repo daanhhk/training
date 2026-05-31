@@ -84,6 +84,20 @@ is. onOpen roept beide ensure-functies aan; buildAll bouwt beide
 tabs in volgorde en plaatst +1 direct na Weekplanner in de tab-
 order.
 
+Respond-via-webhook techniek toegevoegd in laatste avond-sessie om
+Telegram retry-blokkering op te lossen — doPost retourneert nu de
+sendMessage actie direct in de HTTP-response body als JSON in
+plaats van een separate UrlFetchApp POST naar api.telegram.org te
+doen. Handlers (handleStart_/handleHelp_/handleStatus_/default)
+returnen tekst-strings; routeCommand_ wrapt in {branch,responseText};
+doPost stopt responseText in een JSON-body met method sendMessage
+chat_id en text, en zet MimeType expliciet op JSON via ContentService.
+Niet-routed paden (duplicate, auth_failed, empty, crash) krijgen
+ofwel een eigen webhook-response (auth_failed) of een lege OK.
+tgSendMessage blijft bestaan voor proactieve berichten zoals
+zondag-reminders en post-rit RPE-prompts waar er geen webhook-
+context is.
+
 Open punten voor morgen, in volgorde van prioriteit:
 
 1. Live cyclus-verificatie van afgelopen week (taper naar Girona)
@@ -103,11 +117,6 @@ Open punten voor morgen, in volgorde van prioriteit:
 4. Volgende bot commands: /voorstel voor het weekvoorstel als
    Telegram-bericht, /sync voor handmatige sync-trigger. Beide
    relatief klein bovenop de bestaande /status fundering.
-
-5. Robuustheid: root-cause onderzoeken van Telegram retry-gedrag op
-   Apps Script Web Apps. Mogelijk fix via expliciete ContentService
-   MimeType plus minimale OK-body in doPost response. Dedupe vangt
-   het nu af maar dat is een symptoom-mitigatie.
 
 Notitie: repo is sinds 31 mei avond public. Secrets-refactor en
 history-audit hebben dit veilig gemaakt — geen secrets in code of
