@@ -9,8 +9,10 @@
  */
 
 function onOpen() {
-  // Rol de Weekplanner automatisch naar de huidige week (LAAG 2).
+  // Rol de Weekplanner automatisch naar de huidige week (LAAG 2). De
+  // ensureCurrentWeek-stap trekt waar mogelijk Weekplanner +1 erin.
   try { ensureCurrentWeek(SpreadsheetApp.getActive()); } catch (e) { console.warn('ensureCurrentWeek onOpen: ' + e.message); }
+  try { ensureCurrentWeekPlus1(SpreadsheetApp.getActive()); } catch (e) { console.warn('ensureCurrentWeekPlus1 onOpen: ' + e.message); }
 
   var ui = SpreadsheetApp.getUi();
   var setupMenu = ui.createMenu('🔐 Setup')
@@ -48,6 +50,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Open Events-tab', 'openEventsTab')
     .addItem('Sla huidige week op als standaardpatroon', 'savePatternFromTab')
+    .addItem('📋 Rol Weekplanner +1 naar huidig', 'rolWeekplannerPlus1NaarHuidig')
     .addSeparator()
     .addSubMenu(setupMenu)
     .addItem('Bouw alles opnieuw (reset Sheet)', 'buildAll')
@@ -112,6 +115,7 @@ function buildAll() {
   buildDoel(ss);
   buildEvents(ss);
   buildPlanner(ss);
+  buildPlannerPlus1(ss);
   buildVoorstelPlaceholder(ss);
   buildActiviteiten(ss);
   buildWellness(ss);
@@ -126,6 +130,7 @@ function buildAll() {
 
   // Volgorde van tabs
   var order = [SETTINGS_SHEET, ZONES_SHEET, DOEL_SHEET, EVENTS_SHEET, PLANNER_SHEET,
+               WEEKPLANNER_PLUS1_SHEET,
                PROPOSAL_SHEET, ACTIVITEITEN_SHEET, WELLNESS_SHEET];
   order.forEach(function (name, i) {
     var sh = ss.getSheetByName(name);
@@ -135,9 +140,10 @@ function buildAll() {
     }
   });
 
-  // Zorg dat de Weekplanner de huidige week toont (buildPlanner deed dit al;
-  // dit is de expliciete guard zodat de tab altijd klopt na rebuild).
+  // Zorg dat beide Weekplanner-tabs op de juiste week staan (buildPlanner +
+  // buildPlannerPlus1 deden dit al; dit is de expliciete guard na rebuild).
   ensureCurrentWeek(ss);
+  ensureCurrentWeekPlus1(ss);
 
   ss.setActiveSheet(ss.getSheetByName(SETTINGS_SHEET));
   ss.toast('Alle tabs opgebouwd ✓', '🚴 Coach', 5);

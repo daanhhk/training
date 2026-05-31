@@ -1,12 +1,27 @@
 /**
- * Planner.gs — Tab "Weekplanner".
+ * Planner.gs — Tab "Weekplanner" + "Weekplanner +1".
  *
- * Invoer per dag (ma-zo) voor de huidige week: train? / minuten /
- * dagtype / toelichting + door generator gevuld voorgesteldType + gedaan?
- * Conditional formatting: rij grijs als gedaan = TRUE.
+ * Twee identieke tabs. "Weekplanner" toont de huidige week (monday → zondag).
+ * "Weekplanner +1" toont de week erna (monday+7 → zondag+13), zodat Daan
+ * zondag-avond al beschikbaarheid voor de week erna kan invullen zonder
+ * op maandag-rollover te wachten.
+ *
+ * Rollover op maandag (in ensureCurrentWeek): als +1 user-data heeft,
+ * wordt die naar Weekplanner gekopieerd; daarna materialiseert
+ * ensureCurrentWeekPlus1 een verse +1 voor week +2. Manual fallback via
+ * Coach-menu item "📋 Rol Weekplanner +1 naar huidig".
+ *
+ * Invoer per dag (ma-zo): train? / minuten / dagtype / toelichting + door
+ * generator gevuld voorgesteldType + gedaan?. Conditional formatting: rij
+ * grijs als gedaan = TRUE.
  */
 
-var PLANNER_SHEET = 'Weekplanner';
+var PLANNER_SHEET           = 'Weekplanner';
+var WEEKPLANNER_PLUS1_SHEET = 'Weekplanner +1';
+
+/** DocProp-keys voor de twee tab_week_start mirrors. */
+var TAB_WEEK_KEY        = 'tab_week_start';
+var TAB_WEEK_PLUS1_KEY  = 'tab_week_plus1_start';
 
 var DAGEN_NL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 
@@ -20,21 +35,49 @@ var PLANNER_DEFAULTS = {
 
 var PLANNER_HEADERS = ['Train?', 'Dag', 'Datum', 'Minuten', 'Dagtype', 'Toelichting', 'Voorgesteld type', 'Gedaan?'];
 
+// ── Public build entries ─────────────────────────────────────────
+
 function buildPlanner(ss) {
+  var sh = _buildPlannerLike_(ss, PLANNER_SHEET,
+    '📆  Weekplanner — invoer per dag (rolt automatisch naar deze week)');
+  // Vangnet: materializeWeek_ wordt door ensureCurrentWeek aangeroepen als
+  // de tab leeg is — bv. allereerste build, of als savedRows null was.
+  ensureCurrentWeek(ss);
+  SpreadsheetApp.flush();
+  _setPlannerColumnWidths_(sh);
+  sh.setFrozenRows(2);
+}
+
+function buildPlannerPlus1(ss) {
+  var sh = _buildPlannerLike_(ss, WEEKPLANNER_PLUS1_SHEET,
+    '📅  Weekplanner +1 — beschikbaarheid volgende week');
+  ensureCurrentWeekPlus1(ss);
+  SpreadsheetApp.flush();
+  _setPlannerColumnWidths_(sh);
+  sh.setFrozenRows(2);
+}
+
+// ── Shared structure helper ──────────────────────────────────────
+
+/**
+ * Bouwt de visuele structuur van een planner-tab (titel, headers, checkboxes,
+ * dropdown, conditional formatting) met save→clear→restore van bestaande
+ * rij-data. Idempotent: een rebuild herstelt user-edits exact.
+ */
+function _buildPlannerLike_(ss, sheetName, title) {
   // Bewaar bestaande rij-data (3-9, A-H) vóór de clear in getOrCreateSheet.
-  // Maakt buildPlanner idempotent: een rebuild herstelt user-edits exact.
-  var existing = ss.getSheetByName(PLANNER_SHEET);
+  var existing = ss.getSheetByName(sheetName);
   var savedRows = null;
   if (existing && existing.getMaxRows() >= 9 &&
       existing.getRange(3, 3).getValue() instanceof Date) {
     savedRows = existing.getRange(3, 1, 7, 8).getValues();
   }
 
-  var sh = getOrCreateSheet(ss, PLANNER_SHEET);
+  var sh = getOrCreateSheet(ss, sheetName);
 
   // Title
   sh.getRange(1, 1, 1, PLANNER_HEADERS.length).merge()
-    .setValue('📆  Weekplanner — invoer per dag (rolt automatisch naar deze week)')
+    .setValue(title)
     .setFontWeight('bold').setFontSize(13)
     .setBackground('#1f2937').setFontColor('#ffffff')
     .setHorizontalAlignment('left').setVerticalAlignment('middle');
@@ -89,11 +132,10 @@ function buildPlanner(ss) {
     }
   }
 
-  // Vangnet: materializeWeek_ als ensureCurrentWeek constateert dat de
-  // tab (nog) leeg is — bv. allereerste build, of als savedRows null was.
-  ensureCurrentWeek(ss);
+  return sh;
+}
 
-  SpreadsheetApp.flush();
+function _setPlannerColumnWidths_(sh) {
   sh.setColumnWidth(1, 70);
   sh.setColumnWidth(2, 100);
   sh.setColumnWidth(3, 100);
@@ -102,12 +144,13 @@ function buildPlanner(ss) {
   sh.setColumnWidth(6, 280);
   sh.setColumnWidth(7, 220);
   sh.setColumnWidth(8, 80);
-  sh.setFrozenRows(2);
 }
 
+// ── Materialize + has-data helpers ───────────────────────────────
+
 /**
- * Schrijft 7 dagen (datums + patroon-defaults) naar de Weekplanner-tab
- * voor de week beginnend op `monday`. Reset Voorgesteld type + Gedaan?.
+ * Schrijft 7 dagen (datums + patroon-defaults) naar een planner-tab voor
+ * de week beginnend op `monday`. Reset Voorgesteld type + Gedaan?.
  * Vereist dat checkboxes (kol A/H) al bestaan.
  */
 function materializeWeek_(sh, monday) {
@@ -130,34 +173,136 @@ function materializeWeek_(sh, monday) {
 }
 
 /**
- * Returnt true als de Weekplanner-rij-data gevuld is (C3 = maandag-datum
- * aanwezig). Gebruikt door ensureCurrentWeek als vangnet.
+ * Returnt true als een planner-tab-rij gevuld is (C3 = maandag-datum
+ * aanwezig). Gebruikt door ensureCurrentWeek-varianten als vangnet.
  */
 function plannerHasData_(sh) {
   if (!sh || sh.getMaxRows() < 3) return false;
   return sh.getRange(3, 3).getValue() instanceof Date;
 }
 
+// ── Week-state guards ────────────────────────────────────────────
+
 /**
  * LAAG 2 — week-state guard. Rolt de Weekplanner automatisch naar de
  * huidige kalenderweek wanneer tab_week_start verouderd/leeg is, OF
  * wanneer de tab leeg is (vangnet voor rebuilds die de cellen wisten).
+ *
+ * Rollover-pad: als Weekplanner +1 user-data heeft, wordt die naar
+ * Weekplanner gekopieerd (met de huidige-week datums in kol C). Anders
+ * wordt vanuit het opgeslagen pattern gematerialiseerd. Na rollover wordt
+ * +1 vers neergezet voor week +2.
  */
 function ensureCurrentWeek(ss) {
   var sh = ss.getSheetByName(PLANNER_SHEET);
   if (!sh) return;
   var monday = weekStartDate(new Date());
   var mondayStr = formatDate(monday, 'yyyy-MM-dd');
-  var stored = getDocProp('tab_week_start', '');
+  var stored = getDocProp(TAB_WEEK_KEY, '');
   // Vangnet: ook materializen als tab_week_start matcht maar de data leeg
   // is (bv. na een rebuild die de cellen wiste).
-  if (stored === mondayStr && plannerHasData_(sh)) return; // tab actueel én gevuld
+  if (stored === mondayStr && plannerHasData_(sh)) return;
 
-  // ROLLOVER: materialiseer nieuwe week uit patroon
-  materializeWeek_(sh, monday);
-  setDocProp('tab_week_start', mondayStr);
-  try { ss.toast('Weekplanner gerold naar nieuwe week (' + mondayStr + ')', '🚴 Coach', 5); } catch (e) {}
+  // ROLLOVER. Probeer eerst +1 te trekken — dat preserveert beschikbaarheid
+  // die Daan zondag-avond al had ingevuld voor deze week.
+  var rolledFromPlus1 = _pullPlus1IntoCurrent_(ss, monday);
+  if (!rolledFromPlus1) {
+    materializeWeek_(sh, monday);
+  }
+  setDocProp(TAB_WEEK_KEY, mondayStr);
+
+  // Refresh +1 voor de NIEUWE volgende week (na rollover schoof "+1" een
+  // week op zodat de gebruiker de week erna alvast kan vullen).
+  try { ensureCurrentWeekPlus1(ss); }
+  catch (e) { console.warn('ensureCurrentWeekPlus1 from rollover: ' + e.message); }
+
+  var msg = 'Weekplanner gerold naar nieuwe week (' + mondayStr + ')' +
+            (rolledFromPlus1 ? ' — gevuld vanuit Weekplanner +1' : '');
+  try { ss.toast(msg, '🚴 Coach', 5); } catch (e) {}
 }
+
+/**
+ * Symmetrisch met ensureCurrentWeek: zorgt dat Weekplanner +1 de week
+ * NA de huidige toont. Materialiseert vanuit pattern bij verloop of leeg.
+ */
+function ensureCurrentWeekPlus1(ss) {
+  var sh = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
+  if (!sh) return;
+  var monday = weekStartDate(new Date());
+  var plus1Monday = new Date(monday);
+  plus1Monday.setDate(monday.getDate() + 7);
+  var plus1Str = formatDate(plus1Monday, 'yyyy-MM-dd');
+  var stored = getDocProp(TAB_WEEK_PLUS1_KEY, '');
+  if (stored === plus1Str && plannerHasData_(sh)) return;
+
+  materializeWeek_(sh, plus1Monday);
+  setDocProp(TAB_WEEK_PLUS1_KEY, plus1Str);
+  try { ss.toast('Weekplanner +1 gerold naar nieuwe week (' + plus1Str + ')', '🚴 Coach', 4); } catch (e) {}
+}
+
+/**
+ * Kopieer +1 user-data (train/min/dagtype/notitie) naar de huidige
+ * Weekplanner met VERSE datums voor `monday`. Reset voorgesteldType
+ * en gedaan zodat de nieuwe week vers begint.
+ *
+ * Returnt false als er geen +1-tab is of geen data — dan moet de caller
+ * vanuit pattern materializen.
+ */
+function _pullPlus1IntoCurrent_(ss, monday) {
+  var sh = ss.getSheetByName(PLANNER_SHEET);
+  var plus1Sh = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
+  if (!sh || !plus1Sh) return false;
+  if (!plannerHasData_(plus1Sh)) return false;
+
+  var data = plus1Sh.getRange(3, 1, 7, 8).getValues();
+  for (var i = 0; i < 7; i++) {
+    var r = 3 + i;
+    var date = new Date(monday);
+    date.setDate(monday.getDate() + i);
+    sh.getRange(r, 1).setValue(data[i][0] === true);                 // train
+    sh.getRange(r, 2).setValue(DAGEN_NL[i]).setFontWeight('bold');   // dag (safety)
+    sh.getRange(r, 3).setValue(date).setNumberFormat('ddd dd-MM');   // datum: verse huidige-week
+    sh.getRange(r, 4).setValue(data[i][3]);                          // minuten
+    sh.getRange(r, 5).setValue(data[i][4]);                          // dagtype
+    sh.getRange(r, 6).setValue(data[i][5]);                          // toelichting
+    sh.getRange(r, 7).setValue('');                                  // voorgesteld leeg
+    sh.getRange(r, 8).setValue(false);                               // gedaan leeg
+  }
+  return true;
+}
+
+/**
+ * Coach-menu item "📋 Rol Weekplanner +1 naar huidig". Forceert de
+ * rollover-stap ongeacht stored-state. Handig wanneer de auto-rollover
+ * gemist is (geen onOpen op maandag) of wanneer Daan een herhaling wil.
+ */
+function rolWeekplannerPlus1NaarHuidig() {
+  var ss = SpreadsheetApp.getActive();
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  var sh = ss.getSheetByName(PLANNER_SHEET);
+  var plus1Sh = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
+  if (!sh || !plus1Sh) {
+    if (ui) ui.alert('Tabs ontbreken', 'Draai eerst "Bouw alles opnieuw" zodat beide planner-tabs bestaan.', ui.ButtonSet.OK);
+    return;
+  }
+  if (!plannerHasData_(plus1Sh)) {
+    if (ui) ui.alert('Weekplanner +1 is leeg', 'Vul eerst beschikbaarheid in op de "Weekplanner +1"-tab.', ui.ButtonSet.OK);
+    return;
+  }
+  var monday = weekStartDate(new Date());
+  var mondayStr = formatDate(monday, 'yyyy-MM-dd');
+  var ok = _pullPlus1IntoCurrent_(ss, monday);
+  if (!ok) {
+    if (ui) ui.alert('Rollover mislukt', 'Onbekende fout — check Apps Script Executions.', ui.ButtonSet.OK);
+    return;
+  }
+  setDocProp(TAB_WEEK_KEY, mondayStr);
+  try { ensureCurrentWeekPlus1(ss); } catch (e) { console.warn('ensureCurrentWeekPlus1 from manual rollover: ' + e.message); }
+  if (ui) ui.alert('✅ Rollover gedaan', 'Volgende week is nu de huidige Weekplanner geworden.', ui.ButtonSet.OK);
+}
+
+// ── Menu-actie: patroon promoten ─────────────────────────────────
 
 /**
  * Menu-actie: promoveer de huidige Weekplanner tot standaardpatroon.
@@ -173,6 +318,8 @@ function savePatternFromTab() {
   try { ui = SpreadsheetApp.getUi(); } catch (e) {}
   if (ui) ui.alert('Patroon bijgewerkt', 'Dit is voortaan je standaardweek. Losse afwijkingen rollen vanzelf weg bij de volgende week.', ui.ButtonSet.OK);
 }
+
+// ── Lezen + voorgesteld-type schrijven ───────────────────────────
 
 function readPlanner(ss) {
   var sh = ss.getSheetByName(PLANNER_SHEET);

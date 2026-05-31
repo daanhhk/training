@@ -71,33 +71,40 @@ het Setup-menu en triggers via Setup-acties opnieuw installeren. De
 in PROMPT G ingebouwde migratie van cel naar PropertiesService werkt
 alleen binnen één account-context, niet over account-grenzen.
 
+Weekplanner +1 implementatie toegevoegd vóór sluit-tijd vandaag,
+zodat Daan zondag-avond beschikbaarheid voor volgende week kan
+invullen zonder op maandag-rollover te wachten. Tweede tab
+"Weekplanner +1" gespiegeld aan de bestaande Weekplanner, met een
+gedeelde structuur-helper. ensureCurrentWeek trekt nu op rollover
+de +1 user-data verbatim naar de huidige week (train/min/dagtype/
+notitie, met verse datums in kol C en G+H gereset) en materialiseert
++1 vers voor week +2. Manual fallback in Coach-menu via "📋 Rol
+Weekplanner +1 naar huidig" voor het geval onOpen op maandag gemist
+is. onOpen roept beide ensure-functies aan; buildAll bouwt beide
+tabs in volgorde en plaatst +1 direct na Weekplanner in de tab-
+order.
+
 Open punten voor morgen, in volgorde van prioriteit:
 
-1. Beschikbaarheid volgende week. Tweede Weekplanner-tab toevoegen
-   genaamd "Weekplanner +1" met identiek format. Rollover-logica op
-   maandag: huidige tab archiveren, +1 tab wordt de nieuwe huidige,
-   +1 wordt vers leeg. Voorwaarde voor zinvolle voorstellen van
-   volgende-week workouts terwijl de huidige week loopt.
-
-2. Live cyclus-verificatie van afgelopen week (taper naar Girona)
+1. Live cyclus-verificatie van afgelopen week (taper naar Girona)
    na maandag's data-input. Beoordeel of FTP-build de Garmin
    Productive-status heeft vastgehouden onder de week-prikkel.
 
-3. README aanvullen met Setup en Deployment secties inclusief alle
+2. README aanvullen met Setup en Deployment secties inclusief alle
    hard-earned lessons hierboven, plus een security-sectie voor
    toekomstige vrienden of open-source users die het template
    willen kopiëren. Repo is sinds vanavond public.
 
-4. Form-score TSB integratie in feedback-loop. CTL en ATL uit
+3. Form-score TSB integratie in feedback-loop. CTL en ATL uit
    intervals.icu activities oprollend baseline berekenen en
    integreren in de wellness-banner als adaptiviteits-gat van het
    huidige systeem. Roadmap-punt 11 wordt hiermee geadresseerd.
 
-5. Volgende bot commands: /voorstel voor het weekvoorstel als
+4. Volgende bot commands: /voorstel voor het weekvoorstel als
    Telegram-bericht, /sync voor handmatige sync-trigger. Beide
    relatief klein bovenop de bestaande /status fundering.
 
-6. Robuustheid: root-cause onderzoeken van Telegram retry-gedrag op
+5. Robuustheid: root-cause onderzoeken van Telegram retry-gedrag op
    Apps Script Web Apps. Mogelijk fix via expliciete ContentService
    MimeType plus minimale OK-body in doPost response. Dedupe vangt
    het nu af maar dat is een symptoom-mitigatie.
