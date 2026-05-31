@@ -118,17 +118,6 @@ function isDuplicateUpdate_(updateId) {
  * Body is een Telegram Update-object (JSON).
  */
 function doPost(e) {
-  var startMs = Date.now();
-  var audit = {
-    timestamp: new Date(),
-    update_id: '',
-    chat_id: '',
-    text: '',
-    branch: '',
-    response_ok: undefined,
-    duration_ms: 0
-  };
-
   try {
     // 1. Secret-token validatie via query-param. GEEN audit — anonymous probes
     // zouden anders de tab vervuilen.
@@ -147,80 +136,106 @@ function doPost(e) {
       console.warn('doPost: ongeldige JSON body: ' + parseErr.message);
       return _tgOk_();
     }
-    audit.update_id = update && update.update_id != null ? update.update_id : '';
 
-    // 3. v1 negeert non-message updates (callback_query, edited_message, etc.).
+    // 3. Process via gedeelde update-processor (zelfde logica als polling).
+    _processTelegramUpdate_(update, 'webhook');
+    return _tgOk_();
+
+  } catch (err) {
+    console.error('doPost crashed: ' + (err && err.stack ? err.stack : err));
+    return _tgOk_();
+  }
+}
+
+/**
+ * Gedeelde update-processor voor beide entry points (webhook doPost en
+ * polling). Doet dedupe, autorisatie, audit en dispatch via routeCommand_.
+ * Source-parameter is alleen voor logging zodat we in Executions zien
+ * waar de update vandaan komt.
+ */
+function _processTelegramUpdate_(update, source) {
+  var startMs = Date.now();
+  var audit = {
+    timestamp: new Date(),
+    update_id: update && update.update_id != null ? update.update_id : '',
+    chat_id: '',
+    text: '',
+    branch: '',
+    response_ok: undefined,
+    duration_ms: 0
+  };
+
+  try {
+    // v1 negeert non-message updates (callback_query, edited_message, etc.).
     var msg = update && update.message;
-    if (!msg) return _tgOk_();
+    if (!msg) return;
 
     var chatId = msg.chat && msg.chat.id;
     var text   = msg.text ? String(msg.text) : '';
-    if (!chatId) return _tgOk_();
+    if (!chatId) return;
     audit.chat_id = chatId;
     audit.text = text;
 
-    // 4. Dedupe — Telegram kan dezelfde update_id opnieuw leveren bij
-    // timeouts/retries. Vroeg eruit zodat we geen dubbele sends doen.
+    // Dedupe — zelfde FIFO ring buffer. In polling-mode komt dit zelden voor
+    // (Telegram cleart updates met offset-confirmatie) maar redundancy schaadt
+    // niet en blijft het webhook-pad robuust.
     if (isDuplicateUpdate_(audit.update_id)) {
-      console.log('doPost: duplicate update_id=' + audit.update_id + ', skipping');
+      console.log(source + ': duplicate update_id=' + audit.update_id + ', skipping');
       audit.branch = 'duplicate';
       audit.response_ok = true;
       audit.duration_ms = Date.now() - startMs;
       auditLog_(audit);
-      return _tgOk_();
+      return;
     }
 
-    // 5. Autorisatie — alleen Daan's eigen chat mag interageren.
+    // Autorisatie — alleen Daan's eigen chat mag interageren.
     var authorizedChatId;
     try {
       authorizedChatId = getTelegramChatId_();
     } catch (authErr) {
-      console.warn('doPost: TELEGRAM_CHAT_ID niet ingesteld — ' + authErr.message);
-      return _tgOk_();
+      console.warn(source + ': TELEGRAM_CHAT_ID niet ingesteld — ' + authErr.message);
+      return;
     }
     if (String(chatId) !== String(authorizedChatId)) {
-      console.warn('doPost: onbevoegde chat_id=' + chatId);
+      console.warn(source + ': onbevoegde chat_id=' + chatId);
       var authOk = false;
       try { tgSendMessage(chatId, 'Niet geautoriseerd.'); authOk = true; } catch (sendErr) { /* swallow */ }
       audit.branch = 'auth_failed';
       audit.response_ok = authOk;
       audit.duration_ms = Date.now() - startMs;
       auditLog_(audit);
-      return _tgOk_();
+      return;
     }
 
-    // 6. Negeer non-text berichten in v1. Geen audit — te ruisig.
+    // Negeer non-text berichten in v1. Geen audit — te ruisig.
     if (!text) {
-      console.log('doPost: non-text message genegeerd (chat ' + chatId + ').');
-      return _tgOk_();
+      console.log(source + ': non-text message genegeerd (chat ' + chatId + ').');
+      return;
     }
 
-    // 7. Dispatch — handlers sturen zelf via tgSendMessage. routeCommand_
+    // Dispatch — handlers sturen zelf via tgSendMessage. routeCommand_
     // returnt de branch-string die we in de Audit-tab loggen.
-    console.log('doPost: chat=' + chatId + ' text="' + text.substring(0, 80) + '"');
+    console.log(source + ': chat=' + chatId + ' text="' + text.substring(0, 80) + '"');
     var routeOk = true;
     try {
       audit.branch = routeCommand_(text, chatId) || 'default';
     } catch (routeErr) {
-      console.error('routeCommand_ throw: ' + (routeErr && routeErr.stack ? routeErr.stack : routeErr));
+      console.error('routeCommand_ throw (' + source + '): ' + (routeErr && routeErr.stack ? routeErr.stack : routeErr));
       audit.branch = audit.branch || 'crash';
       routeOk = false;
     }
     audit.response_ok = routeOk;
     audit.duration_ms = Date.now() - startMs;
     auditLog_(audit);
-    return _tgOk_();
 
   } catch (err) {
-    // Vangnet — Telegram blijft anders retryen.
-    console.error('doPost crashed: ' + (err && err.stack ? err.stack : err));
+    console.error('_processTelegramUpdate_ crashed (' + source + '): ' + (err && err.stack ? err.stack : err));
     try {
       audit.branch = audit.branch || 'crash';
       audit.response_ok = false;
       audit.duration_ms = Date.now() - startMs;
       auditLog_(audit);
     } catch (auditErr) { /* swallow */ }
-    return _tgOk_();
   }
 }
 
@@ -527,9 +542,145 @@ function tgGetWebhookInfo() {
  * DELETE webhook + drop pending updates. Gebruikt om de queue 100% leeg
  * te maken vóór een opnieuw registreren — voorkomt herhaling van het
  * burst-symptoom waar oude /start-berichten in 30+ retries binnenkwamen.
+ * Wordt ook gebruikt door Start polling: een bot kan niet tegelijk in
+ * webhook- en polling-mode staan.
  */
 function tgDeleteWebhook() {
   return _tgRequest_('deleteWebhook', { drop_pending_updates: true });
+}
+
+// ── Long polling ─────────────────────────────────────────────────
+
+var POLL_OFFSET_KEY  = 'TELEGRAM_POLL_OFFSET';
+var POLL_TRIGGER_KEY = 'TELEGRAM_POLL_TRIGGER_ID';
+var POLL_HANDLER     = 'pollTelegramUpdates';
+
+/**
+ * Time-based trigger entry-point. Roept getUpdates aan met de opgeslagen
+ * offset, processed elke update via _processTelegramUpdate_, en advance't
+ * de offset op de hoogste update_id plus 1.
+ *
+ * timeout=0 = short polling (geen long-hold). We bouwen long-poll niet in
+ * omdat Apps Script triggers maximaal 6 minuten draaien en we toch al
+ * elke minuut polten.
+ */
+function pollTelegramUpdates() {
+  try {
+    var props = PropertiesService.getDocumentProperties();
+    var offset = Number(props.getProperty(POLL_OFFSET_KEY) || 0);
+
+    var response;
+    try {
+      response = _tgRequest_('getUpdates', {
+        offset: offset,
+        timeout: 0,
+        allowed_updates: ['message', 'callback_query']
+      });
+    } catch (e) {
+      console.error('pollTelegramUpdates getUpdates faalde: ' + e.message);
+      return;
+    }
+
+    var updates = (response && response.result) || [];
+    if (!updates.length) return;
+    console.log('pollTelegramUpdates: ' + updates.length + ' update(s) ontvangen (offset=' + offset + ')');
+
+    var maxUpdateId = offset - 1;
+    updates.forEach(function (update) {
+      if (update && typeof update.update_id === 'number' && update.update_id > maxUpdateId) {
+        maxUpdateId = update.update_id;
+      }
+      _processTelegramUpdate_(update, 'polling');
+    });
+
+    // Confirm processed updates: volgende getUpdates-call met deze offset
+    // verwijdert ze van Telegram's server-side queue.
+    if (maxUpdateId >= 0) {
+      props.setProperty(POLL_OFFSET_KEY, String(maxUpdateId + 1));
+    }
+  } catch (outerErr) {
+    console.error('pollTelegramUpdates crashed: ' + (outerErr && outerErr.stack ? outerErr.stack : outerErr));
+  }
+}
+
+/** Verwijder alle bestaande polling-triggers. Returnt aantal verwijderd. */
+function _removePollingTriggers_() {
+  var n = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === POLL_HANDLER) {
+      ScriptApp.deleteTrigger(t);
+      n++;
+    }
+  });
+  return n;
+}
+
+/**
+ * Setup-menu: schakel naar polling-mode. Verwijdert eerst de webhook
+ * (Telegram laat niet tegelijk webhook + polling toe), installeert dan
+ * een time-based trigger elke minuut op pollTelegramUpdates, en slaat
+ * de trigger-ID op in DocProperties zodat Stop polling 'm netjes kan
+ * verwijderen.
+ */
+function startTelegramPolling() {
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  try {
+    var del;
+    try { del = tgDeleteWebhook(); }
+    catch (e) { del = { error: e.message }; }
+
+    _removePollingTriggers_();
+    var trigger = ScriptApp.newTrigger(POLL_HANDLER)
+      .timeBased()
+      .everyMinutes(1)
+      .create();
+    PropertiesService.getDocumentProperties()
+      .setProperty(POLL_TRIGGER_KEY, trigger.getUniqueId());
+
+    var msg = 'Webhook verwijderd, trigger geïnstalleerd (elke minuut).\n' +
+              'Bot reageert nu binnen 0-60 seconden op berichten.\n\n' +
+              'deleteWebhook response:\n' + JSON.stringify(del, null, 2);
+    if (ui) ui.alert('✅ Polling actief', msg, ui.ButtonSet.OK);
+  } catch (err) {
+    if (ui) ui.alert('Polling start mislukt', err.message, ui.ButtonSet.OK);
+    else throw err;
+  }
+}
+
+/**
+ * Setup-menu: stop polling-mode. Verwijdert alle polling-triggers en
+ * wist de trigger-ID DocProp. De webhook blijft uit (bot ontvangt
+ * niets tot je weer Start polling of Registreer webhook draait).
+ */
+function stopTelegramPolling() {
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  var n = _removePollingTriggers_();
+  PropertiesService.getDocumentProperties().deleteProperty(POLL_TRIGGER_KEY);
+  if (ui) {
+    ui.alert('Polling gestopt',
+      n + ' trigger(s) verwijderd.\n\nBot ontvangt geen berichten meer tot je opnieuw Start polling of Registreer webhook kiest.',
+      ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Setup-menu: roep pollTelegramUpdates eenmalig aan. Handig voor testing
+ * zonder op de minuut-trigger te wachten.
+ */
+function pollTelegramUpdatesOnce() {
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  try {
+    pollTelegramUpdates();
+    if (ui) ui.alert('✓ Poll gedaan',
+      'getUpdates is eenmalig aangeroepen. Check de Audit-tab voor binnengekomen berichten.',
+      ui.ButtonSet.OK);
+  } catch (err) {
+    if (ui) ui.alert('Poll mislukt', err.message, ui.ButtonSet.OK);
+    else throw err;
+  }
 }
 
 // ── Setup-menu acties ────────────────────────────────────────────

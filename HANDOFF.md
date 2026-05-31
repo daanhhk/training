@@ -102,6 +102,24 @@ blijkt niet via code-fix oplosbaar binnen dit platform. Een echte
 oplossing vereist migratie naar Cloud Functions of een ander
 hosting-model.
 
+Switch naar long polling architectuur in PROMPT Q. Telegram retry-
+blokkering definitief opgelost door webhook te verlaten en
+getUpdates te pollen elke minuut via Apps Script time-driven
+trigger. pollTelegramUpdates leest TELEGRAM_POLL_OFFSET uit
+DocProperties, roept getUpdates aan met die offset en timeout 0,
+processed elke update via een gedeelde _processTelegramUpdate_-
+helper (gerefactord uit doPost zodat webhook- en polling-pad
+identiek dezelfde dedupe/auth/audit/dispatch-flow gebruiken), en
+zet de offset op de hoogste update_id plus 1 zodat Telegram de
+verwerkte updates server-side opschoont. Nieuwe Setup-menu acties:
+Start polling (deleteWebhook + install minute-trigger + opslag
+trigger-ID), Stop polling (verwijdert triggers + wist DocProp),
+Poll nu (eenmalig voor testing). doPost en de webhook-acties blijven
+in de code als optie voor toekomstige migratie naar Cloud Functions.
+Trade-off: 0-60 sec latency tussen bericht en antwoord. Voor coach-
+bot acceptabel. Voor real-time chat-ervaring later: migratie naar
+Cloud Functions of Cloudflare Worker.
+
 Open punten voor morgen, in volgorde van prioriteit:
 
 1. Live cyclus-verificatie van afgelopen week (taper naar Girona)
@@ -122,12 +140,12 @@ Open punten voor morgen, in volgorde van prioriteit:
    Telegram-bericht, /sync voor handmatige sync-trigger. Beide
    relatief klein bovenop de bestaande /status fundering.
 
-5. Telegram retry-issue blijft cosmetisch in de audit-tab maar
-   gebruiker-impact is nul dankzij dedupe. Alleen onderzoeken als
-   Apps Script ooit een fix krijgt voor de Web App response-
-   pipeline (302-redirect verwijderen) of als we naar Cloud
-   Functions migreren — dan is respond-via-webhook alsnog
-   bruikbaar.
+5. Real-time bot latency verbeteren via Cloud Functions of
+   Cloudflare Worker migratie als 0-60 sec polling-latency op
+   termijn te traag voelt. Webhook-mode is dan ook weer bruikbaar
+   (doPost en register-webhook acties staan nog in de code) en
+   respond-via-webhook zou dan ook eindelijk werken zonder de Apps
+   Script 302-redirect die het hier blokkeerde.
 
 Notitie: repo is sinds 31 mei avond public. Secrets-refactor en
 history-audit hebben dit veilig gemaakt — geen secrets in code of
