@@ -84,19 +84,23 @@ is. onOpen roept beide ensure-functies aan; buildAll bouwt beide
 tabs in volgorde en plaatst +1 direct na Weekplanner in de tab-
 order.
 
-Respond-via-webhook techniek toegevoegd in laatste avond-sessie om
-Telegram retry-blokkering op te lossen — doPost retourneert nu de
-sendMessage actie direct in de HTTP-response body als JSON in
-plaats van een separate UrlFetchApp POST naar api.telegram.org te
-doen. Handlers (handleStart_/handleHelp_/handleStatus_/default)
-returnen tekst-strings; routeCommand_ wrapt in {branch,responseText};
-doPost stopt responseText in een JSON-body met method sendMessage
-chat_id en text, en zet MimeType expliciet op JSON via ContentService.
-Niet-routed paden (duplicate, auth_failed, empty, crash) krijgen
-ofwel een eigen webhook-response (auth_failed) of een lege OK.
-tgSendMessage blijft bestaan voor proactieve berichten zoals
-zondag-reminders en post-rit RPE-prompts waar er geen webhook-
-context is.
+Respond-via-webhook techniek geprobeerd in PROMPT O — doPost zou
+de sendMessage actie direct als JSON-body in de HTTP-response
+teruggeven (formaat method/chat_id/text met MimeType JSON) om de
+extra UrlFetchApp round-trip naar api.telegram.org te besparen en
+het 200-signaal eerder te leveren. Bleek niet te werken op Apps
+Script Web Apps: Telegram herkent de JSON-sendMessage-body niet,
+vermoedelijk omdat Apps Script de response via een 302-redirect
+naar googleusercontent.com routeert waardoor het JSON-formaat niet
+direct aankomt. Bot stuurde geen bericht meer en retries gingen
+gewoon door. PROMPT P rollback naar tgSendMessage als primaire
+route — handlers gebruiken weer UrlFetchApp via _tgRequest_,
+routeCommand_ returnt enkel branch-string, doPost retourneert
+altijd lege OK. Dedupe blijft de praktische mitigatie voor het
+retry-symptoom; root-cause op Apps Script's HTTP response-pipeline
+blijkt niet via code-fix oplosbaar binnen dit platform. Een echte
+oplossing vereist migratie naar Cloud Functions of een ander
+hosting-model.
 
 Open punten voor morgen, in volgorde van prioriteit:
 
@@ -117,6 +121,13 @@ Open punten voor morgen, in volgorde van prioriteit:
 4. Volgende bot commands: /voorstel voor het weekvoorstel als
    Telegram-bericht, /sync voor handmatige sync-trigger. Beide
    relatief klein bovenop de bestaande /status fundering.
+
+5. Telegram retry-issue blijft cosmetisch in de audit-tab maar
+   gebruiker-impact is nul dankzij dedupe. Alleen onderzoeken als
+   Apps Script ooit een fix krijgt voor de Web App response-
+   pipeline (302-redirect verwijderen) of als we naar Cloud
+   Functions migreren — dan is respond-via-webhook alsnog
+   bruikbaar.
 
 Notitie: repo is sinds 31 mei avond public. Secrets-refactor en
 history-audit hebben dit veilig gemaakt — geen secrets in code of
