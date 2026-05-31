@@ -37,7 +37,10 @@ var SETTINGS_FIELDS = {
   WEIGHT_LAST_SYNC:  { row: 50, label: 'Gewicht laatst gesynct', unit: '' }
 };
 
-/** Rij → docprop key. Alleen velden die de gebruiker kan bewerken. */
+/** Rij → docprop key. Alleen velden die de gebruiker kan bewerken.
+ *  NB: secret-velden (API key / Telegram bot token / Telegram chat ID)
+ *  staan hier bewust NIET in — die wonen in PropertiesService via Secrets.gs
+ *  en het Coach > Setup menu. Rij 24/28/29 tonen alleen instructie-tekst. */
 var SETTINGS_ROW_TO_KEY = {
   3:  'ftp',
   4:  'hr_max',
@@ -48,10 +51,7 @@ var SETTINGS_ROW_TO_KEY = {
   12: 'doel_start',
   13: 'doel_duur',
   19: 'fase',
-  23: 'intervals_athlete_id',
-  24: 'intervals_api_key',
-  28: 'telegram_bot_token',
-  29: 'telegram_chat_id',
+  23: 'intervals_athlete_id',  // niet-secret, blijft normale cel
   33: 'email_digest',
   // Scope-B (read-write velden; last-sync rijen blijven uit deze map)
   42: 'gewicht',
@@ -72,9 +72,8 @@ var SETTINGS_DEFAULTS = {
   doel_duur:            12,
   fase:                 'build',
   intervals_athlete_id: '',
-  intervals_api_key:    '',
-  telegram_bot_token:   '',
-  telegram_chat_id:     '',
+  // intervals_api_key / telegram_bot_token / telegram_chat_id zitten in
+  // PropertiesService (Secrets.gs), niet meer in deze defaults-map.
   email_digest:         '',
   // Scope-B (defaults reproduceren huidige gedrag exact)
   gewicht:              75,
@@ -147,6 +146,21 @@ function buildSettings(ss) {
     if (field.unit) {
       sh.getRange(row, 3).setValue(field.unit).setFontColor('#6b7280');
     }
+  });
+
+  // Secret-velden: NIET als invoer-cel, maar als label + instructie-tekst
+  // die naar het Setup-menu wijst. De waardes wonen in PropertiesService.
+  [
+    { field: SETTINGS_FIELDS.API_KEY,   setupLabel: 'intervals.icu API key' },
+    { field: SETTINGS_FIELDS.BOT_TOKEN, setupLabel: 'Telegram bot token'    },
+    { field: SETTINGS_FIELDS.CHAT_ID,   setupLabel: 'Telegram chat ID'      }
+  ].forEach(function (e) {
+    sh.getRange(e.field.row, 1).setValue(e.field.label).setFontWeight('bold');
+    sh.getRange(e.field.row, 2)
+      .clearContent()
+      .setValue('(via Coach > Setup > Set ' + e.setupLabel + ')')
+      .setFontStyle('italic').setFontColor('#6b7280');
+    sh.getRange(e.field.row, 2).clearDataValidations();
   });
 
   // Dropdowns
@@ -253,9 +267,9 @@ function readSettings(ss) {
     doelDuur:   Number(v('DOEL_DUUR')) || SETTINGS_DEFAULTS.doel_duur,
     fase:       String(v('FASE')    || SETTINGS_DEFAULTS.fase),
     athleteId:  String(v('ATHLETE_ID') || ''),
-    apiKey:     String(v('API_KEY')    || ''),
-    botToken:   String(v('BOT_TOKEN')  || ''),
-    chatId:     String(v('CHAT_ID')    || ''),
+    // apiKey / botToken / chatId zijn secrets — niet uit cellen lezen.
+    // Roep getIntervalsApiKey_() / getTelegramBotToken_() / getTelegramChatId_()
+    // rechtstreeks aan vanuit code dat ze nodig heeft.
     email:      String(v('EMAIL')      || '')
   };
 }
@@ -286,11 +300,12 @@ function computeMacroPhase(startDate, today) {
 
 function getGewicht()           { return Number(loadSettingValue('gewicht')) || SETTINGS_DEFAULTS.gewicht; }
 function getProfielPreset()     { return String(loadSettingValue('profiel_preset') || SETTINGS_DEFAULTS.profiel_preset); }
-function getTelegramChatId()    { return String(loadSettingValue('telegram_chat_id') || ''); }
-function getTelegramBotToken()  { return String(loadSettingValue('telegram_bot_token') || ''); }
 function getFtpAutoUpdate()     { return loadSettingValue('ftp_auto_update') === true; }
 function getWeightAutoUpdate()  { return loadSettingValue('weight_auto_update') === true; }
-function getApiKey()            { return getDocProp('intervals_api_key', ''); }
+
+// Secret-getters (getIntervalsApiKey_ / getTelegramBotToken_ /
+// getTelegramChatId_) staan in Secrets.gs. Niet hier importeren —
+// Apps Script .gs files delen één global scope.
 
 /**
  * Schrijft een waarde naar zowel DocProp als de Settings-tab cel.
