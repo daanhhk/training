@@ -12,8 +12,18 @@ function onOpen() {
   // Rol de Weekplanner automatisch naar de huidige week (LAAG 2).
   try { ensureCurrentWeek(SpreadsheetApp.getActive()); } catch (e) { console.warn('ensureCurrentWeek onOpen: ' + e.message); }
 
-  SpreadsheetApp.getUi()
-    .createMenu('🚴 Coach')
+  var ui = SpreadsheetApp.getUi();
+  var setupMenu = ui.createMenu('🔐 Setup')
+    .addItem('Set intervals.icu API key',  'setIntervalsApiKey')
+    .addItem('Set Telegram bot token',     'setTelegramBotToken')
+    .addItem('Set Telegram chat ID',       'setTelegramChatId')
+    .addSeparator()
+    .addItem('Toon opgeslagen secrets',    'viewStoredSecrets')
+    .addItem('Wis alle secrets',           'clearAllSecrets')
+    .addSeparator()
+    .addItem('Installeer athlete-sync trigger', 'installAthleteSyncTrigger');
+
+  ui.createMenu('🚴 Coach')
     .addItem('Genereer voorstel voor deze week', 'generateProposal')
     .addItem('Push voorstel naar Garmin', 'pushAllPendingWorkouts')
     .addSeparator()
@@ -25,7 +35,6 @@ function onOpen() {
     .addItem('Installeer dagelijkse sync (08:00)', 'installDailySyncTrigger')
     .addItem('Verwijder dagelijkse sync', 'removeDailySyncTrigger')
     .addItem('🔄 Sync athlete nu', 'syncAthleteFromIcu')
-    .addItem('🔧 Setup: athlete-sync trigger', 'installAthleteSyncTrigger')
     .addSeparator()
     .addItem('Volgende mesocyclus-week ▶', 'advanceMeso')
     .addItem('Reset mesocyclus naar week 1', 'resetMeso')
@@ -33,6 +42,7 @@ function onOpen() {
     .addItem('Open Events-tab', 'openEventsTab')
     .addItem('Sla huidige week op als standaardpatroon', 'savePatternFromTab')
     .addSeparator()
+    .addSubMenu(setupMenu)
     .addItem('Bouw alles opnieuw (reset Sheet)', 'buildAll')
     .addToUi();
 }

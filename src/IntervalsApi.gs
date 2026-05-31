@@ -2,8 +2,9 @@
  * IntervalsApi.gs — intervals.icu REST API laag.
  *
  * Auth: HTTP Basic met username "API_KEY" en password = API key uit
- * intervals.icu Developer Settings. Credentials worden uit
- * DocumentProperties gelezen ('intervals_api_key' + 'intervals_athlete_id').
+ * intervals.icu Developer Settings. Credentials worden via Secrets.gs
+ * gelezen — API key uit PropertiesService (key 'INTERVALS_API_KEY'),
+ * athlete ID uit DocProp 'intervals_athlete_id' (via Instellingen!B23).
  *
  * Error handling: descriptive errors per HTTP status (401/403/404/429/5xx)
  * zodat de UI ze in een alert kan tonen.
@@ -26,10 +27,8 @@ var COACH_NAME_PREFIX = '🚴 Coach: ';
 function intervalsRequest_(endpoint, options) {
   options = options || {};
 
-  var apiKey = getDocProp('intervals_api_key', '');
-  var athleteId = getDocProp('intervals_athlete_id', '');
-  if (!apiKey)    throw new Error('intervals.icu API key niet ingesteld in Instellingen (rij 22).');
-  if (!athleteId) throw new Error('intervals.icu Athlete ID niet ingesteld in Instellingen (rij 21).');
+  var apiKey    = getIntervalsApiKey_();   // throws met menu-hint als leeg
+  var athleteId = getAthleteId_();         // throws met instellingen-hint als leeg
 
   var path = endpoint.replace('{id}', athleteId);
   var url = INTERVALS_BASE_URL + path;
@@ -274,8 +273,7 @@ function buildWorkoutDescription_(workout) {
  * van intervals.icu kunnen leren. Resultaat → Executions → console.
  */
 function debugExistingWorkout() {
-  var athleteId = getDocProp('intervals_athlete_id', '');
-  if (!athleteId) throw new Error('Athlete ID niet ingesteld in Instellingen.');
+  var athleteId = getAthleteId_();
 
   // Probeer events met category=WORKOUT — laatste 2 maanden
   var today = Utilities.formatDate(new Date(), 'Europe/Amsterdam', 'yyyy-MM-dd');
@@ -335,8 +333,7 @@ function debugExistingWorkout() {
  * Resultaat staat in Apps Script Editor → Executions → expand console output.
  */
 function debugApiResponse() {
-  var athleteId = getDocProp('intervals_athlete_id', '');
-  if (!athleteId) throw new Error('Athlete ID niet ingesteld in Instellingen.');
+  var athleteId = getAthleteId_();
 
   console.log('=== ATHLETE OBJECT (volledige JSON) ===');
   var athlete = intervalsRequest_('/athlete/' + athleteId);

@@ -509,8 +509,8 @@ var ATHLETE_SYNC_HANDLER = 'syncAthleteFromIcu';
  * FTP 100-500W, gewicht 40-150kg. Stille fail zonder API-key.
  */
 function syncAthleteFromIcu() {
-  if (!getApiKey()) {
-    console.warn('Geen intervals.icu API key — autocast geskipt');
+  try { getIntervalsApiKey_(); } catch (e) {
+    console.warn('Geen intervals.icu API key — autocast geskipt (' + e.message + ')');
     return;
   }
 
