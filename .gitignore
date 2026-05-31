@@ -5,3 +5,10 @@ node_modules/
 Thumbs.db
 .claude/
 .claude/settings.local.json
+
+# Secrets — nooit committen
+.env
+.env.*
+*.local
+secrets.json
+credentials.json
