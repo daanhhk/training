@@ -16,9 +16,11 @@
 
 /** Property-keys waar de secrets opgeslagen worden. */
 var SECRET_KEYS = {
-  INTERVALS_API_KEY:  'INTERVALS_API_KEY',
-  TELEGRAM_BOT_TOKEN: 'TELEGRAM_BOT_TOKEN',
-  TELEGRAM_CHAT_ID:   'TELEGRAM_CHAT_ID'
+  INTERVALS_API_KEY:       'INTERVALS_API_KEY',
+  TELEGRAM_BOT_TOKEN:      'TELEGRAM_BOT_TOKEN',
+  TELEGRAM_CHAT_ID:        'TELEGRAM_CHAT_ID',
+  TELEGRAM_WEBHOOK_SECRET: 'TELEGRAM_WEBHOOK_SECRET',
+  APPS_SCRIPT_DEPLOY_URL:  'APPS_SCRIPT_DEPLOY_URL'
 };
 
 /** Rijen in Instellingen-tab waar de secrets HISTORISCH stonden
@@ -111,6 +113,60 @@ function getAthleteId_() {
   return String(v);
 }
 
+/**
+ * Webhook-secret voor Telegram doPost-validatie. Apps Script web apps
+ * geven custom HTTP-headers (zoals X-Telegram-Bot-Api-Secret-Token) NIET
+ * door aan doPost. Daarom passen we de secret als URL query-parameter
+ * (?s=...) aan. setWebhook registreert die URL bij Telegram, en doPost
+ * leest e.parameter.s en vergelijkt.
+ *
+ * Auto-generate bij eerste read: UUID zonder dashes. Wordt persistent
+ * tot expliciete rotate (handmatig key uit DocProps wissen).
+ */
+function getWebhookSecret_() {
+  var props = PropertiesService.getDocumentProperties();
+  var existing = props.getProperty(SECRET_KEYS.TELEGRAM_WEBHOOK_SECRET);
+  if (existing) return existing;
+  var fresh = Utilities.getUuid().replace(/-/g, '');
+  props.setProperty(SECRET_KEYS.TELEGRAM_WEBHOOK_SECRET, fresh);
+  return fresh;
+}
+
+/**
+ * Apps Script Web App deployment-URL (ends with /exec). Niet auto-detecteerbaar
+ * vanuit Apps Script zelf — moet handmatig na deploy via Setup-menu gezet
+ * worden. Webhook-registratie heeft deze nodig.
+ */
+function getDeployUrl_() {
+  var v = PropertiesService.getDocumentProperties()
+            .getProperty(SECRET_KEYS.APPS_SCRIPT_DEPLOY_URL);
+  if (!v) {
+    throw new Error('Deploy-URL niet ingesteld. Run eerst Coach > 🔐 Setup > ' +
+                    'Set Apps Script Deploy URL na deploy in Apps Script Editor.');
+  }
+  return String(v);
+}
+
+/** Menu-handler: prompt voor de deploy-URL en sla op. */
+function setDeployUrl() {
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) { return; }
+  var resp = ui.prompt('Set Apps Script Deploy URL',
+                       'Plak de Web app URL uit Apps Script Editor (eindigt op /exec).\n\n' +
+                       'Krijgen via: Editor > Deploy > Manage deployments > Web app URL.',
+                       ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  var raw = String(resp.getResponseText() || '').trim();
+  if (!raw) { ui.alert('Leeg — niets opgeslagen.'); return; }
+  if (raw.indexOf('script.google.com') < 0 || raw.indexOf('/exec') < 0) {
+    ui.alert('Verdacht', 'De URL bevat geen "script.google.com" of eindigt niet op "/exec".\n\nNiets opgeslagen.', ui.ButtonSet.OK);
+    return;
+  }
+  PropertiesService.getDocumentProperties()
+    .setProperty(SECRET_KEYS.APPS_SCRIPT_DEPLOY_URL, raw);
+  ui.alert('✓ Opgeslagen', 'Deploy-URL is opgeslagen. Vergeet niet "Registreer webhook bij Telegram" daarna.', ui.ButtonSet.OK);
+}
+
 // ── Setup-menu handlers ───────────────────────────────────────────
 
 /**
@@ -151,17 +207,20 @@ function viewStoredSecrets() {
 
   var props = PropertiesService.getDocumentProperties();
   var labels = [
-    { key: SECRET_KEYS.INTERVALS_API_KEY,  label: 'intervals.icu API key' },
-    { key: SECRET_KEYS.TELEGRAM_BOT_TOKEN, label: 'Telegram bot token'    },
-    { key: SECRET_KEYS.TELEGRAM_CHAT_ID,   label: 'Telegram chat ID'      }
+    { key: SECRET_KEYS.INTERVALS_API_KEY,       label: 'intervals.icu API key',  mask: true  },
+    { key: SECRET_KEYS.TELEGRAM_BOT_TOKEN,      label: 'Telegram bot token',     mask: true  },
+    { key: SECRET_KEYS.TELEGRAM_CHAT_ID,        label: 'Telegram chat ID',       mask: false },
+    { key: SECRET_KEYS.TELEGRAM_WEBHOOK_SECRET, label: 'Telegram webhook secret',mask: true  },
+    { key: SECRET_KEYS.APPS_SCRIPT_DEPLOY_URL,  label: 'Apps Script Deploy URL', mask: false }
   ];
 
   var lines = labels.map(function (e) {
     var raw = props.getProperty(e.key) || '';
-    var masked = raw
+    if (!raw) return e.label + ': (niet ingesteld)';
+    var shown = e.mask
       ? ('•••• ' + raw.substring(Math.max(0, raw.length - 4)))
-      : '(niet ingesteld)';
-    return e.label + ': ' + masked;
+      : raw;
+    return e.label + ': ' + shown;
   });
 
   ui.alert('Opgeslagen secrets', lines.join('\n'), ui.ButtonSet.OK);
@@ -181,8 +240,10 @@ function clearAllSecrets() {
   try { ui = SpreadsheetApp.getUi(); } catch (e) { return; }
 
   var resp = ui.alert('Alle secrets wissen?',
-                      'Dit verwijdert intervals.icu API key, Telegram bot token en Telegram chat ID uit PropertiesService.\n\n' +
+                      'Dit verwijdert intervals.icu API key, Telegram bot token, Telegram chat ID,\n' +
+                      'Telegram webhook secret en Apps Script Deploy URL uit PropertiesService.\n\n' +
                       'Andere app-state (FTP, zones, pattern, weekplan, intent) blijft staan.\n\n' +
+                      'NB: na deze actie moet je de webhook opnieuw registreren bij Telegram.\n\n' +
                       'Doorgaan?',
                       ui.ButtonSet.YES_NO);
   if (resp !== ui.Button.YES) return;
@@ -196,5 +257,5 @@ function clearAllSecrets() {
   props.deleteProperty('telegram_bot_token');
   props.deleteProperty('telegram_chat_id');
 
-  ui.alert('✓ Secrets gewist', 'Alle 3 secrets zijn verwijderd uit PropertiesService. App-state blijft intact.', ui.ButtonSet.OK);
+  ui.alert('✓ Secrets gewist', 'Alle secrets zijn verwijderd uit PropertiesService. App-state blijft intact.', ui.ButtonSet.OK);
 }
