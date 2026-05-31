@@ -10,6 +10,102 @@ Garmin-push. Uitrolbaar voor vrienden.
   via combo_long_with_efforts, expliciete compensatie-regel in 
   feedback-blok.
 
+### Sessie 31 mei 2026 avond — bot-foundation klaar
+
+Volledige scope-B fundering live. Secrets verhuisd van Sheet-cellen
+naar PropertiesService met een 🔐 Setup-submenu voor set/view/clear,
+inclusief migratie-logica die oude cel-waarden bij eerste read
+automatisch overzet. Apps Script project gemigreerd naar persoonlijk
+gmail account (dtkorteweg@gmail.com) wegens Workspace-domain-restrictie
+op Web App deployment — het oude werk-account weigerde externe webhook-
+calls. Telegram bot foundation gebouwd: doPost-endpoint met query-param
+secret-validatie, autorisatie tegen TELEGRAM_CHAT_ID, command-router
+voor /start /help, plus Setup-menu acties voor getMe-test, send-self-
+test, webhook-registratie en een "Reset webhook (delete + register)"
+voor queue-flush. update_id dedupe via FIFO ring buffer (cap 50) in
+DocumentProperties tegen herhaalde verwerking. Audit-tab in de Sheet
+die elke doPost-call logt (timestamp, update_id, chat_id, text, branch,
+response_ok, duration_ms) met nieuwste rij bovenaan en cap op 200,
+plus een Setup-menu actie "Toon laatste 10 audit-rijen" voor mobiele
+diagnose zonder Apps Script Editor te hoeven openen. Vandaag toegevoegd:
+/status command voor beknopte mobile-friendly weeksamenvatting (periode,
+week TSS+tijd, wellness, debt) die de bestaande Algorithm.gs en
+Doel.gs helpers hergebruikt zonder generateProposal te triggeren.
+
+Hard-earned lessons uit deze sessie:
+
+Apps Script Web App deployment onder Google Workspace account is
+domain-restricted en NIET toegankelijk voor externe diensten zoals
+Telegram, ook al staat Who-has-access op Anyone. Persoonlijk gmail
+account vereist. De URL van een geforceerd-Workspace deploy heeft het
+patroon /a/macros/<domain>/ in het pad — die is direct te herkennen
+als onbruikbaar voor publieke webhooks. Een persoonlijk-account deploy
+gebruikt de schone /macros/s/<id>/exec vorm.
+
+clasp push update alleen de editor-snapshot, niet de gedeployde Web
+App. Na elke clasp push die TelegramBot.gs of het doPost-pad raakt
+moet Daan in de Apps Script Editor rechtsboven Implementeren openen,
+Implementaties beheren kiezen, het potlood-icoon bij de actieve
+deployment klikken, Versie op Nieuwe versie zetten en Implementeren
+klikken. Zonder die stap blijft Telegram op de oude code roeren en
+lijken bugs onverklaarbaar persistent. Dit is de meest voorkomende
+diagnose-valkuil in deze stack.
+
+Telegram retried webhook deliveries met klassiek exponential backoff
+ook al retourneert doPost netjes 200 OK. Vermoedelijke oorzaak: Apps
+Script's response signaal komt niet correct of niet snel genoeg door
+aan Telegram. update_id dedupe in DocProperties cache is daarom
+noodzakelijk om duplicate verwerking en herhaalde antwoorden te
+voorkomen. Tijdens debug-sessie kwam een burst van 30+ /start-replies
+binnen wat exact dit symptoom was.
+
+Apps Script API moet expliciet enabled zijn op een nieuw Google
+account voor clasp push te laten werken. Toggle is te vinden via
+script.google.com/home/usersettings. Zonder dat geeft clasp push de
+weinig informatieve foutmelding Invalid script key en list-scripts
+toont No script files found.
+
+DocumentProperties wordt niet meegekopieerd bij Sheet-kopie naar
+ander account. Bij migratie moet je alle secrets opnieuw invoeren via
+het Setup-menu en triggers via Setup-acties opnieuw installeren. De
+in PROMPT G ingebouwde migratie van cel naar PropertiesService werkt
+alleen binnen één account-context, niet over account-grenzen.
+
+Open punten voor morgen, in volgorde van prioriteit:
+
+1. Beschikbaarheid volgende week. Tweede Weekplanner-tab toevoegen
+   genaamd "Weekplanner +1" met identiek format. Rollover-logica op
+   maandag: huidige tab archiveren, +1 tab wordt de nieuwe huidige,
+   +1 wordt vers leeg. Voorwaarde voor zinvolle voorstellen van
+   volgende-week workouts terwijl de huidige week loopt.
+
+2. Live cyclus-verificatie van afgelopen week (taper naar Girona)
+   na maandag's data-input. Beoordeel of FTP-build de Garmin
+   Productive-status heeft vastgehouden onder de week-prikkel.
+
+3. README aanvullen met Setup en Deployment secties inclusief alle
+   hard-earned lessons hierboven, plus een security-sectie voor
+   toekomstige vrienden of open-source users die het template
+   willen kopiëren. Repo is sinds vanavond public.
+
+4. Form-score TSB integratie in feedback-loop. CTL en ATL uit
+   intervals.icu activities oprollend baseline berekenen en
+   integreren in de wellness-banner als adaptiviteits-gat van het
+   huidige systeem. Roadmap-punt 11 wordt hiermee geadresseerd.
+
+5. Volgende bot commands: /voorstel voor het weekvoorstel als
+   Telegram-bericht, /sync voor handmatige sync-trigger. Beide
+   relatief klein bovenop de bestaande /status fundering.
+
+6. Robuustheid: root-cause onderzoeken van Telegram retry-gedrag op
+   Apps Script Web Apps. Mogelijk fix via expliciete ContentService
+   MimeType plus minimale OK-body in doPost response. Dedupe vangt
+   het nu af maar dat is een symptoom-mitigatie.
+
+Notitie: repo is sinds 31 mei avond public. Secrets-refactor en
+history-audit hebben dit veilig gemaakt — geen secrets in code of
+git history, alleen propertynamen.
+
 ### Sessie 30 mei 2026
 - Feedback-loop adaptief gemaakt: dekking-op-actuals, debt-weegt 
   weekend, expliciete no-compensation (5bdfc94, 2f2abc7, 3dfcdca).
