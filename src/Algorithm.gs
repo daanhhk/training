@@ -1116,6 +1116,91 @@ function workoutZones(type, doel) {
   return [];
 }
 
+// ── RPE-3: expected RPE + mismatch flag ─────────────────────────────
+// Peak intensity drives perceived exertion → combos take their hardest bucket.
+// Bucket lists mirror workoutZones. workoutZones() vereist een `doel`-arg
+// (pendel/test hangen ervan af) die deze context-vrije helpers niet hebben;
+// daarom hier expliciete lijsten i.p.v. workoutZones-reuse.
+var RPE_LOW_TYPES_  = ['long_z2','recovery','pendel_z2','fatox','taper_z2_kort','tour_taper_z2'];
+var RPE_HIGH_TYPES_ = ['sweet_spot','threshold','tempo','klim','conditie','ss_lang','low_cad','big_gear','bergsim','threshold_long','sweet_spot_long'];
+var RPE_ANA_TYPES_  = ['vo2max','vo2_short','vo2_medium','vo2_long','vo2_3015','microbursts','taper_openers','vo2_hill_repeats','anaerobic_capacity'];
+var RPE_EXPECTED_   = { low: 3.5, high: 7, anaerobic: 9 };
+
+function rpeBucket_(type) {
+  if (!type) return null;
+  var t = String(type);
+  if (RPE_ANA_TYPES_.indexOf(t)  >= 0) return 'anaerobic';
+  if (RPE_HIGH_TYPES_.indexOf(t) >= 0) return 'high';
+  if (RPE_LOW_TYPES_.indexOf(t)  >= 0) return 'low';
+  // combos / variants not in explicit lists: classify by hardest component
+  if (t.indexOf('vo2') >= 0 || t === 'combo_z2_vo2' || t === 'combo_ss_sprints' || t === 'combo_all_three') return 'anaerobic';
+  if (t === 'combo_long_with_efforts' || t === 'combo_z2_tempo' || t.indexOf('tempo') >= 0 || t.indexOf('sweet') >= 0 || t.indexOf('threshold') >= 0) return 'high';
+  if (t.indexOf('pendel') >= 0) return 'high';
+  if (t.indexOf('z2') >= 0 || t.indexOf('recovery') >= 0 || t.indexOf('taper') >= 0) return 'low';
+  return null;
+}
+
+function expectedRpe_(type) {
+  var b = rpeBucket_(type);
+  return b ? RPE_EXPECTED_[b] : null;
+}
+
+function plannedTypeForDate_(dISO, mondayISO) {
+  try {
+    var w = getDocProp('weekplan_' + mondayISO, '');
+    if (w) { var arr = JSON.parse(w); for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      if (e && formatDate(new Date(e.datum),'yyyy-MM-dd') === dISO && e.workoutType) return e.workoutType;
+    } }
+  } catch (e) {}
+  try {
+    var p = getDocProp('proposal_' + dISO, '');
+    if (p) { var o = JSON.parse(p); if (o) return o.workoutType || o.type || null; }
+  } catch (e) {}
+  return null;
+}
+
+function rpeWeekData_() {
+  var today = new Date();
+  var monday = weekStartDate(today);   // hergebruik bestaande maandag-helper
+  var mondayISO = formatDate(monday,'yyyy-MM-dd');
+  var out = []; var d = new Date(monday);
+  while (d <= today) {
+    var dISO = formatDate(d,'yyyy-MM-dd');
+    var raw = getDocProp('rpe_' + dISO, '');
+    if (raw !== '') {
+      var type = plannedTypeForDate_(dISO, mondayISO);
+      out.push({ dISO: dISO, date: new Date(d), actual: parseInt(raw,10), type: type, expected: expectedRpe_(type) });
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function rpeMismatchFlag_() {
+  var data = rpeWeekData_().filter(function (x) { return x.expected != null; });
+  if (data.length < 2) return '';
+  var recent = data.slice(-3);  // most recent up to 3
+  var sum = 0; for (var i = 0; i < recent.length; i++) sum += (recent[i].actual - recent[i].expected);
+  var avg = sum / recent.length;
+  if (avg >= 2) return '⚠️ Laatste ' + recent.length + ' sessies voelden zwaarder dan gepland (gem. +' + avg.toFixed(1).replace('.', ',') + ' RPE) — overweeg een rustdag.';
+  return '';
+}
+
+function rpeStatusLines_() {
+  var data = rpeWeekData_();
+  if (!data.length) return [];
+  var lines = ['', '🟦 Recente RPE'];
+  for (var i = 0; i < data.length; i++) {
+    var x = data[i];
+    var expTxt = (x.expected != null) ? ' (verwacht ~' + Math.round(x.expected) + ')' : '';
+    lines.push('  ' + formatDate(x.date,'d/M') + ': RPE ' + x.actual + expTxt);
+  }
+  var flag = rpeMismatchFlag_();
+  if (flag) lines.push(flag);
+  return lines;
+}
+
 // ════════════════════════════════════════════════════════════════
 // VARIANT-ENGINE (DEEL 3) — pools + selectie + renderer
 // ════════════════════════════════════════════════════════════════

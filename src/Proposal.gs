@@ -145,6 +145,16 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
       .setValue(wText)
       .setBackground(wBg).setFontColor(wFg).setFontWeight('bold').setWrap(true);
     r += 1;
+
+    // RPE-3: mismatch-vlag (werkelijke RPE zwaarder dan gepland). Mirror van
+    // de wellness-row hierboven, amber warning-styling. Skip als geen vlag.
+    var rpeFlag = rpeMismatchFlag_();
+    if (rpeFlag) {
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue(rpeFlag)
+        .setBackground('#fef3c7').setFontColor('#92400e').setFontWeight('bold').setWrap(true);
+      r += 1;
+    }
   }
 
   // ── Feedback op voltooide trainingen (DEEL 4) ──

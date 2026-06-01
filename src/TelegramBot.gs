@@ -448,6 +448,9 @@ function handleStatus_(chatId) {
     }
     lines.push(slaapStr);
 
+    // RPE-3: recente RPE + mismatch-vlag (lege array bij geen RPE deze week)
+    Array.prototype.push.apply(lines, rpeStatusLines_());
+
     // ── Debt (alleen als open) ──
     var debtLines = _statusDebtLines_(debt);
     if (debtLines.length) {
