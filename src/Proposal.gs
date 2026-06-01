@@ -516,22 +516,38 @@ function bcRacesThisWeek_(days) {
   });
 }
 
+// CTL ramp/week onder deze drempel = fitheid vasthouden, niet opbouwen.
+// Tune na live check tegen Garmin's eigen verdict.
+var RAMP_BUILD_MIN = 3;
+
 /**
- * Heuristic — zonder echte CTL-data inschatting op basis van weektotaal TSS,
+ * Heuristic — schat Garmin's trainingsstatus op basis van weektotaal TSS,
  * mesoWeek en macroFase. Drempels gekozen voor een 280W FTP cyclist met
- * ongeveer 6-9u/week training.
+ * ongeveer 6-9u/week training. Optionele fs (form-score) gate't "Productive"
+ * op de CTL-ramp: vlakke/dalende ramp bij productieve TSS → "Aanhouden".
  */
-function garminHeuristic(totalTss, mesoWeek, macroFase) {
+function garminHeuristic(totalTss, mesoWeek, macroFase, fs) {
+  if (fs === undefined) fs = getFormScore_();
+  var ramp = (fs && fs.ramp != null) ? fs.ramp : null;
+
+  var verdict;
   if (mesoWeek === 4) {
-    if (totalTss < 200) return 'Recovering / Unproductive → Productive (na herstel)';
-    return 'Recovering — load lager dan vorige week is gewenst';
+    if (totalTss < 200) verdict = 'Recovering / Unproductive → Productive (na herstel)';
+    else                verdict = 'Recovering — load lager dan vorige week is gewenst';
+  } else if (macroFase === 'Test') {
+    verdict = 'Maintaining / Peaking — test week, kort en specifiek';
+  } else if (totalTss < 200) verdict = 'Maintaining / Low load — sub-optimaal voor groei';
+  else if (totalTss < 350)   verdict = 'Productive — load ligt in groei-zone';
+  else if (totalTss < 500)   verdict = 'Productive — bovenkant van groei-zone';
+  else if (totalTss < 650)   verdict = 'Productive (hoog) — let op slaap + voeding';
+  else                       verdict = 'Overreaching risk — overweeg of dit duurzaam is';
+
+  // Refinement: Garmin rapporteert pas "Productive" als CTL daadwerkelijk
+  // omhoog ramp't. Vlakke/dalende ramp bij productieve TSS → "Aanhouden".
+  if (ramp != null && verdict.indexOf('Productive') === 0 && ramp < RAMP_BUILD_MIN) {
+    var ramp1 = Math.round(ramp * 10) / 10;
+    var rampStr = (typeof nlNumber === 'function') ? nlNumber(ramp1) : String(ramp1).replace('.', ',');
+    verdict = 'Aanhouden — load houdt fitheid vast (ramp ' + rampStr + '/wk' + (macroFase ? ', ' + macroFase + '-fase' : '') + ')';
   }
-  if (macroFase === 'Test') {
-    return 'Maintaining / Peaking — test week, kort en specifiek';
-  }
-  if (totalTss < 200)      return 'Maintaining / Low load — sub-optimaal voor groei';
-  if (totalTss < 350)      return 'Productive — load ligt in groei-zone';
-  if (totalTss < 500)      return 'Productive — bovenkant van groei-zone';
-  if (totalTss < 650)      return 'Productive (hoog) — let op slaap + voeding';
-  return 'Overreaching risk — overweeg of dit duurzaam is';
+  return verdict;
 }

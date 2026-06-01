@@ -450,7 +450,7 @@ function handleStatus_(chatId) {
 
     // Form-score (Vorm = CTL - ATL) uit intervals.icu — null → geen regel.
     var fs = getFormScore_();
-    if (fs) lines.push('Vorm ' + Math.round(fs.form) + ' · ' + fs.label + ' (Conditie ' + Math.round(fs.ctl) + ' / Verm. ' + Math.round(fs.atl) + ')');
+    if (fs) lines.push('Vorm ' + Math.round(fs.form) + ' · ' + fs.label + ' (Conditie ' + Math.round(fs.ctl) + ' / Verm. ' + Math.round(fs.atl) + (fs.ramp != null ? ' · ramp ' + (Math.round(fs.ramp * 10) / 10) + '/wk' : '') + ')');
 
     // RPE-3: recente RPE + mismatch-vlag (lege array bij geen RPE deze week)
     Array.prototype.push.apply(lines, rpeStatusLines_());
