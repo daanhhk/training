@@ -28,6 +28,8 @@ function onOpen() {
     .addItem('Poll nu (eenmalig)', 'pollTelegramUpdatesOnce')
     .addItem('🏋️ Installeer RPE-avondcheck (20:00)', 'installRpeAvondTrigger')
     .addItem('Verwijder RPE-avondcheck', 'removeRpeAvondTrigger')
+    .addItem('🗓️ Installeer zondag-reminder (19:00)', 'installZondagReminderTrigger')
+    .addItem('Verwijder zondag-reminder', 'removeZondagReminderTrigger')
     .addSeparator()
     .addItem('Registreer webhook bij Telegram', 'registerTelegramWebhook')
     .addItem('Reset webhook (delete + register)', 'resetTelegramWebhook')

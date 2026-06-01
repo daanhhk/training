@@ -840,17 +840,47 @@ function rpeAvondCheck() {
   } catch (err) { console.error('rpeAvondCheck crashed: ' + (err && err.stack ? err.stack : err)); }
 }
 
+/** Silent shared helper: verwijder alle triggers voor een handler-naam. */
+function removeTriggersByHandler(handlerName) {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === handlerName) ScriptApp.deleteTrigger(t);
+  });
+}
+
 function installRpeAvondTrigger() {
-  removeRpeAvondTrigger();
+  removeTriggersByHandler('rpeAvondCheck');
   ScriptApp.newTrigger('rpeAvondCheck').timeBased().everyDays(1).atHour(20).create();
   var ui; try { ui = SpreadsheetApp.getUi(); } catch (e) {}
   if (ui) ui.alert('✅ RPE-avondcheck geïnstalleerd', 'Rond 20:00 vraagt de bot RPE als je die dag een trainingsdag had en nog niets invulde.', ui.ButtonSet.OK);
 }
 
 function removeRpeAvondTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'rpeAvondCheck') ScriptApp.deleteTrigger(t); });
+  removeTriggersByHandler('rpeAvondCheck');
   var ui; try { ui = SpreadsheetApp.getUi(); } catch (e) {}
   if (ui) ui.alert('RPE-avondcheck verwijderd.');
+}
+
+function zondagReminder() {
+  try {
+    var chatId; try { chatId = getTelegramChatId_(); } catch (e) { console.warn('zondagReminder: geen chat_id'); return; }
+    var txt = '🗓️ Zondagavond — plan je week:\n' +
+      '• Vul je beschikbaarheid voor volgende week in (Weekplanner +1).\n' +
+      '• Draai daarna Coach > Genereer voorstel, of stuur /voorstel zodra het klaarstaat.';
+    tgSendMessage(chatId, txt);
+  } catch (err) { console.error('zondagReminder crashed: ' + (err && err.stack ? err.stack : err)); }
+}
+
+function installZondagReminderTrigger() {
+  removeTriggersByHandler('zondagReminder');
+  ScriptApp.newTrigger('zondagReminder').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(19).create();
+  var ui; try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  if (ui) ui.alert('✅ Zondag-reminder geïnstalleerd', 'Elke zondag rond 19:00 een herinnering om je week in te plannen.', ui.ButtonSet.OK);
+}
+
+function removeZondagReminderTrigger() {
+  removeTriggersByHandler('zondagReminder');
+  var ui; try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  if (ui) ui.alert('Zondag-reminder verwijderd.');
 }
 
 // ── Setup-menu acties ────────────────────────────────────────────
