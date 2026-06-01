@@ -121,7 +121,7 @@ function generateProposal() {
   var SCALABLE_TYPES = { long_z2: 1, combo_long_with_efforts: 1 };
   days.forEach(function (d) {
     if (!d.train || !d.voorgesteldType || !d.datum) return;
-    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx);
+    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx, d.dagIdx);
     if (!wo) return;
     if (!SCALABLE_TYPES[d.voorgesteldType] && d.minuten > 0 &&
         Math.abs(d.minuten - (wo.totaalMin || 0)) > 30) {
@@ -438,7 +438,13 @@ function computeWeekVolumeMin_(ss, weekStart) {
     if (minByDate[key] > 0) {
       total += minByDate[key];                      // actuals winnen
     } else if (stripTime_(dayDate).getTime() >= today.getTime() && planner[i] && planner[i].train === true) {
-      total += planner[i].minuten || 0;             // vandaag + toekomstige geplande dag → intent (actuals winnen sowieso al hierboven)
+      // Toekomst/vandaag geplande dag → geplande (geschaalde) workout-duur uit
+      // de proposal-snapshot; val terug op beschikbaarheid als er nog geen
+      // voorstel voor die dag bestaat.
+      var raw = getDocProp('proposal_' + key, '');
+      var plannedMin = 0;
+      if (raw) { try { plannedMin = JSON.parse(raw).totaalMin || 0; } catch (e) {} }
+      total += plannedMin || (planner[i].minuten || 0);
     }
   }
   return Math.round(total);
@@ -1132,33 +1138,19 @@ function findVariantById_(pool, id) {
 }
 
 /**
- * Kiest een variant uit de pool voor `type`.
- * - index = weekIndex % pool.length (deterministisch roterend).
- * - Vermijd directe herhaling t.o.v. vorige keuze → +1 (mod length).
- * - Idempotent binnen dezelfde week: opslag {week, id} onder
- *   DocProp 'variant_<type>' zodat herhaalde buildWorkout-calls in één
- *   generateProposal NIET doorrotteren (anders mismatch storage/render).
+ * Kiest een variant uit de pool voor `type`. Pure functie van
+ * (type, weekIndex, slot) — geen DocProp-state meer.
+ *
+ * Roteert wekelijks via weekIndex EN verschilt per dag via slot (dagIdx),
+ * zodat twee dagen van hetzelfde type NIET dezelfde workout krijgen.
+ * Omdat opslag (assignWorkouts) en render (renderProposal) beide met
+ * dezelfde (weekIndex, dagIdx) aanroepen, matchen ze altijd zonder cache.
  */
-function selectVariant_(type, weekIndex) {
+function selectVariant_(type, weekIndex, slot) {
   var pool = getPool_(type);
   if (!pool || !pool.length) return null;
-
-  var key = 'variant_' + type;
-  var prev = null;
-  var raw = getDocProp(key, '');
-  if (raw) { try { prev = JSON.parse(raw); } catch (e) {} }
-
-  // Zelfde week al gekozen → geef exact dezelfde variant terug.
-  if (prev && prev.week === weekIndex) {
-    var same = findVariantById_(pool, prev.id);
-    if (same) return same;
-  }
-
-  var idx = ((weekIndex % pool.length) + pool.length) % pool.length;
-  if (prev && pool[idx].id === prev.id) idx = (idx + 1) % pool.length; // avoid-repeat
-  var chosen = pool[idx];
-  setDocProp(key, JSON.stringify({ week: weekIndex, id: chosen.id }));
-  return chosen;
+  var idx = (((weekIndex + (slot || 0)) % pool.length) + pool.length) % pool.length;
+  return pool[idx];
 }
 
 /**
@@ -1233,11 +1225,17 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
   var adj = function (p) { return Math.round(p * f) + off; };
 
   var warm = variant.warmup || 12, cool = variant.cooldown || 10;
+  // Pack short sessions: bij ≤75 min beschikbaar trimmen we de warmup/
+  // cooldown alvast, anders eet die overhead te veel van de main op
+  // (een 3×10 threshold past dan niet meer in 60 min).
+  if (mins && mins <= 75) { warm = Math.min(warm, 10); cool = Math.min(cool, 8); }
   var structuur = [['Warmup', warm + ' min', wattsRange(ftp, 50, 68), bpmBelow(lthr, 85), 'Inrijden, opbouwend']];
   var intent = { low: warm + cool, high: 0, anaerobic: 0 };
   var mainMin = 0;
 
-  var blocks = scaleBlocksToFit_(variant.blocks(adj), mins, warm, cool);
+  var rawBlocks = variant.blocks(adj);
+  var blocks = scaleBlocksToFit_(rawBlocks, mins, warm, cool);
+  var ingekort = (blocks !== rawBlocks);
   blocks.forEach(function (b) {
     if (b.kind === 'int') {
       var onMin  = b.onMin != null ? b.onMin : b.onSec / 60;
@@ -1275,7 +1273,7 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
   var tooLong = (mins && totaalMin > mins) ? { available: mins, needed: totaalMin } : null;
 
   return {
-    naam: variant.naam + ' (' + macroFase + ')',
+    naam: variant.naam + ' (' + macroFase + (ingekort ? ', ingekort' : '') + ')',
     focus: variant.zone,
     zones: [variant.zone],
     variantId: variant.id,
@@ -1326,7 +1324,7 @@ function genericPools_() {
  * Bouwt een concrete workout. Variant-pools eerst, dan generieke/doel-
  * specifieke routing. macroFase/meso schalen intensiteit binnen de variant.
  */
-function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx) {
+function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx, slot) {
   var doel = settings.doel;
   var ftp = settings.ftp, lthr = settings.lthr;
 
@@ -1339,7 +1337,7 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx) {
 
   // Variant-pool categorie? (vo2max/sweet_spot/threshold/tempo/long_z2/klim/conditie)
   if (getPool_(type)) {
-    var variant = selectVariant_(type, weekIndexFromStart_(settings));
+    var variant = selectVariant_(type, weekIndexFromStart_(settings), slot);
     if (variant) return renderVariant_(variant, settings, mesoWeek, macroFase, mins);
   }
 

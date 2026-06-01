@@ -313,7 +313,7 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     if (!d.train && !(dayActs && dayActs.length)) return;
 
     var wo = d.voorgesteldType
-      ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx)
+      ? buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx, d.dagIdx)
       : null;
 
     // Aggregeer eventueel gematchte fiets-activities van die dag.
