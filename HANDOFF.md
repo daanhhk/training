@@ -5,6 +5,46 @@ gericht op Garmin "Productive" status, met intervals.icu sync en
 Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
+
+### Sessie 1 juni 2026 — proposal-engine + RPE-loop (HEAD bij sessie-einde: deze commit)
+- Rollover-bug: Weekplanner +1 start blanco; rollover trekt +1 alleen
+  binnen bij echte user-input (plannerHasUserInput_), anders patroon-
+  fallback. Menu "🧹 Weekplanner +1 leegmaken".
+- Proposal-engine duration-aware: scaleBlocksToFit_ schaalt reps ->
+  interval-lengte, respecteert per-blok minMin; genericLongZ2 schaalt
+  klim-sim reps; warmup/cooldown ingekort bij <=75 min; ingekorte
+  workouts dragen ", ingekort". Beschikbare minuten = plafond, geen target.
+- selectVariant_(type, week, dagIdx) nu deterministisch (geen DocProp-
+  cache) -> twee dagen zelfde type krijgen verschillende variant.
+  computeWeekVolumeMin_ leest geplande (geschaalde) duur uit
+  proposal_<dISO> i.p.v. beschikbaarheid.
+- Messaging: Peak-banner houdt volume (niet "niet opbouwen"); volume-
+  nudge zacht, stelt geen niet-aangevinkte dagen voor. Tour-taper:
+  trip-event -> tour_taper_z2 (endurance vasthouden, laatste 2 dagen
+  kort) i.p.v. race-openers-taper; banner schakelt mee.
+- Over/under-workouts: één rij per set i.p.v. per minuut. Bot:
+  /voorstel + /sync.
+- RPE-loop (MVP capture): /klaar -> syncActivities + RPE 1-10 inline-
+  knoppen -> opslag DocProp rpe_<datum>. callback_query verwerkt via
+  handleRpeCallback. Avond-vangnet rpeAvondCheck (20:00) + zondag-
+  reminder zondagReminder (19:00). Beide via Setup-menu te installeren.
+- Nieuwe convention: op long polling is clasp push genoeg, GEEN redeploy
+  (triggers/menu/onOpen draaien editor-code). Redeploy alleen bij terug
+  naar webhook (doPost via /exec).
+- Openstaande handmatige stappen (Daan): Setup > Installeer RPE-
+  avondcheck + zondag-reminder (elk 1x); test /klaar in Telegram; live
+  cyclus- + tour-taper-validatie maandag.
+- Volgende code-stap: RPE-3 — RPE tonen in /status + wellness-banner met
+  mismatch-vlag (werkelijke RPE vs verwachte RPE uit intensiteit: Z2
+  ~3-4, sweet spot ~6, threshold ~7-8, vo2 ~9; bij gemiddelde mismatch
+  >= +2 over laatste 2-3 sessies een rust-signaal). MVP = tonen +
+  vlaggen, GEEN auto-bijsturen.
+- Backlog daarna: (1) TSS=0-bug — gematchte/voltooide ritten tellen niet
+  in week-TSS; fix = icu_training_load uit gematchte activities
+  optellen. (2) Form-score TSB (CTL/ATL rolling baseline in wellness-
+  banner, stretch). (3) README gap-check (grotendeels af). (4) Bot-
+  latency Cloud Functions/Cloudflare — defer.
+
 - ✅ Feedback-loop (mei 2026): zone-mapping geverifieerd, HR-fallback 
   voor power-loze rides, dekking-op-actuals, weekend-branch debt-aware 
   via combo_long_with_efforts, expliciete compensatie-regel in 
