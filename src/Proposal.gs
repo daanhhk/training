@@ -57,7 +57,7 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
 
       if (macro.wekenTotEvent != null && macro.wekenTotEvent <= 2 && !macro.isTaper) {
         sh.getRange(r, 1, 1, COLS).merge()
-          .setValue('⚠️  <2 weken tot event: fitness is gemaakt. Nu fris worden, niet meer opbouwen.')
+          .setValue('⚠️  Peak-fase (<2 weken tot event): fitness is gemaakt — geen nieuwe opbouw meer, maar volume + kwaliteit vasthouden voor specificiteit.')
           .setBackground('#fef3c7').setFontStyle('italic').setFontColor('#92400e').setWrap(true);
         r += 1;
       }
@@ -449,23 +449,13 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
   if (volTarget && totalUur < volTarget[0] && wellness && wellness.signal === 'normal') {
     var tekortMin = Math.round((volTarget[0] - totalUur) * 60);
     if (tekortMin >= VOLUME_ADVIES_MIN_TEKORT) {
-      var vToday = new Date(); vToday.setHours(0, 0, 0, 0);
-      var vrij = null;
-      days.forEach(function (d) {
-        if (vrij || !d.datum) return;
-        var dd = new Date(d.datum.getFullYear(), d.datum.getMonth(), d.datum.getDate());
-        if (dd < vToday) return;
-        if (d.train === false || !d.type) vrij = d;
-      });
-      if (vrij) {
-        var sugg = Math.round(Math.min(tekortMin, VOLUME_ADVIES_MAX_SUGGESTIE) / 15) * 15;
-        sh.getRange(r, 1, 1, COLS).merge()
-          .setValue('💡  Plan is ' + totalUur.toFixed(1) + 'u — onder dosering voor ' + macro.fase +
-            '-fase (richting ' + volTarget[0] + '-' + volTarget[1] + 'u). ' + vrij.dag +
-            ' is nog vrij, overweeg ' + sugg + ' min rustige Z2-rit toe te voegen.')
-          .setBackground('#e0f2fe').setFontStyle('italic').setFontColor('#075985').setWrap(true);
-        r += 1;
-      }
+      sh.getRange(r, 1, 1, COLS).merge()
+        .setValue('💡  Plan is ' + totalUur.toFixed(1) + 'u — wat onder het ' + macro.fase +
+          '-volume (richting ' + volTarget[0] + '-' + volTarget[1] + 'u). Lukt het je deze week ergens ' +
+          'een extra rondje te pakken, doe dat dan rustig (Z2) — extra duur helpt richting je doel, ' +
+          'extra intensiteit kost juist frisheid. Geen ruimte? Dan is dit prima binnen je beschikbare tijd.')
+        .setBackground('#e0f2fe').setFontStyle('italic').setFontColor('#075985').setWrap(true);
+      r += 1;
     }
   }
 
