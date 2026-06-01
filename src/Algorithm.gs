@@ -1201,7 +1201,7 @@ function scaleBlocksToFit_(blocks, mins, warm, cool) {
       var floorReps = Math.min(b.reps, on >= 8 ? 2 : 3);
       b.reps = Math.max(floorReps, Math.round(b.reps * factor));
     } else {
-      b.durMin = Math.max(10, Math.round(b.durMin * factor));
+      b.durMin = Math.max(b.minMin != null ? b.minMin : 10, Math.round(b.durMin * factor));
     }
   });
   var guard = 0;
@@ -1232,7 +1232,7 @@ function scaleBlocksToFit_(blocks, mins, warm, cool) {
           if (b.offMin != null) b.offMin = Math.max(2, Math.round(b.offMin * f2));
         }
       } else {
-        b.durMin = Math.max(8, Math.round(b.durMin * f2));
+        b.durMin = Math.max(b.minMin != null ? b.minMin : 8, Math.round(b.durMin * f2));
       }
     });
   }

@@ -33,8 +33,8 @@ function ftpPools_() {
         ]; } },
       { id: 'ss_overunder', naam: 'Sweet Spot over/under 4×(2-3)', zone: 'high', warmup: 15, cooldown: 10,
         blocks: function (a) { var arr = []; for (var i = 0; i < 4; i++) {
-          arr.push({ kind: 'steady', label: 'Over', durMin: 2, pct: a(95) });
-          arr.push({ kind: 'steady', label: 'Under', durMin: 3, pct: a(88) });
+          arr.push({ kind: 'steady', label: 'Over/under', durMin: 5, pct: a(91), minMin: 4,
+            note: '2 min @ ' + a(95) + '% / 3 min @ ' + a(88) + '% FTP' });
         } return arr; } }
     ],
     threshold: [
@@ -47,11 +47,9 @@ function ftpPools_() {
         blocks: function (a) { return [{ kind: 'int', label: 'Threshold', reps: 2, onMin: 20, onPct: a(100), offMin: 6, offPct: 50 }]; } },
       { id: 'thr_overunder', naam: 'Threshold over/under 3×8', zone: 'high', warmup: 15, cooldown: 10,
         blocks: function (a) { var arr = []; for (var s = 0; s < 3; s++) {
-          for (var i = 0; i < 4; i++) {
-            arr.push({ kind: 'steady', label: 'Over', durMin: 1, pct: a(105) });
-            arr.push({ kind: 'steady', label: 'Under', durMin: 1, pct: a(95) });
-          }
-          if (s < 2) arr.push({ kind: 'steady', label: 'rust', durMin: 4, pct: a(50), zone: 'low' });
+          arr.push({ kind: 'steady', label: 'Over/under', durMin: 8, pct: a(100), minMin: 4,
+            note: 'Wissel 1 min @ ' + a(105) + '% / 1 min @ ' + a(95) + '% FTP (4×)' });
+          if (s < 2) arr.push({ kind: 'steady', label: 'rust', durMin: 4, pct: a(50), zone: 'low', minMin: 2 });
         } return arr; } }
     ]
   };
