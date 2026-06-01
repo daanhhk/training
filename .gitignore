@@ -12,3 +12,7 @@ Thumbs.db
 *.local
 secrets.json
 credentials.json
+
+# Tijdelijke diagnose-bestanden — leven alleen in Apps Script via clasp push,
+# nooit in git history.
+src/_Diag.gs

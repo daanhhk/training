@@ -1162,11 +1162,71 @@ function selectVariant_(type, weekIndex) {
 }
 
 /**
+ * Schaalt een blocks-array (steady + interval entries) zodat de hoofd-
+ * duur past binnen (mins - warm - cool). Returnt de originele array als
+ * mins ontbreekt, target ≤ 0, of de blocks al passen. Anders een kopie
+ * met aangepaste reps/durMin.
+ *
+ * Strategie: één globale factor toepassen op alle reps (intervals) en
+ * durMin (steady). Daarna in een guard-loop nog 1-rep-tegelijk per
+ * grootste interval-blok eraf trimmen tot het past. Floor per interval:
+ * 2 reps voor lange werk-intervals (onMin >= 8), anders 3. Steady minimum
+ * 10 min.
+ */
+function scaleBlocksToFit_(blocks, mins, warm, cool) {
+  if (!mins || mins <= 0) return blocks;
+  function mainDur(bs) {
+    var t = 0;
+    bs.forEach(function (b) {
+      if (b.kind === 'int') {
+        var on  = b.onMin != null ? b.onMin : b.onSec / 60;
+        var off = b.offMin != null ? b.offMin : b.offSec / 60;
+        t += b.reps * (on + off);
+      } else { t += b.durMin; }
+    });
+    return t;
+  }
+  var target = mins - warm - cool;
+  if (target <= 0) return blocks;
+  if (mainDur(blocks) <= target) return blocks;
+  var out = blocks.map(function (b) { var c = {}; for (var k in b) c[k] = b[k]; return c; });
+  var factor = target / mainDur(out);
+  out.forEach(function (b) {
+    if (b.kind === 'int') {
+      var on = b.onMin != null ? b.onMin : b.onSec / 60;
+      var floorReps = Math.min(b.reps, on >= 8 ? 2 : 3);
+      b.reps = Math.max(floorReps, Math.round(b.reps * factor));
+    } else {
+      b.durMin = Math.max(10, Math.round(b.durMin * factor));
+    }
+  });
+  var guard = 0;
+  while (mainDur(out) > target && guard++ < 50) {
+    var pick = null, pickDur = -1;
+    out.forEach(function (b) {
+      if (b.kind !== 'int') return;
+      var on = b.onMin != null ? b.onMin : b.onSec / 60;
+      var floorReps = Math.min(b.reps, on >= 8 ? 2 : 3);
+      if (b.reps > floorReps) {
+        var off = b.offMin != null ? b.offMin : b.offSec / 60;
+        var dur = b.reps * (on + off);
+        if (dur > pickDur) { pickDur = dur; pick = b; }
+      }
+    });
+    if (!pick) break;
+    pick.reps -= 1;
+  }
+  return out;
+}
+
+/**
  * Rendert een variant-spec naar een workout-object met intent.
  * adj(basePct) = round(basePct * mesoFactor) + fase-offset.
  * intent = target tijd-in-zone (min) per load-focus bucket.
+ * mins (optioneel) = beschikbare minuten — als gegeven, krimpen blocks
+ * via scaleBlocksToFit_ zodat totaalMin onder mins blijft waar mogelijk.
  */
-function renderVariant_(variant, settings, mesoWeek, macroFase) {
+function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
   var ftp = settings.ftp, lthr = settings.lthr;
   var f = mesoFactor(mesoWeek);
   var off = VARIANT_FASE_OFFSET[macroFase] || 0;
@@ -1177,7 +1237,8 @@ function renderVariant_(variant, settings, mesoWeek, macroFase) {
   var intent = { low: warm + cool, high: 0, anaerobic: 0 };
   var mainMin = 0;
 
-  variant.blocks(adj).forEach(function (b) {
+  var blocks = scaleBlocksToFit_(variant.blocks(adj), mins, warm, cool);
+  blocks.forEach(function (b) {
     if (b.kind === 'int') {
       var onMin  = b.onMin != null ? b.onMin : b.onSec / 60;
       var offMin = b.offMin != null ? b.offMin : b.offSec / 60;
@@ -1211,6 +1272,8 @@ function renderVariant_(variant, settings, mesoWeek, macroFase) {
   var rate = variant.zone === 'anaerobic' ? 1.05 : (variant.zone === 'high' ? 0.95 : 0.7);
   Object.keys(intent).forEach(function (k) { intent[k] = Math.round(intent[k]); });
 
+  var tooLong = (mins && totaalMin > mins) ? { available: mins, needed: totaalMin } : null;
+
   return {
     naam: variant.naam + ' (' + macroFase + ')',
     focus: variant.zone,
@@ -1220,7 +1283,8 @@ function renderVariant_(variant, settings, mesoWeek, macroFase) {
     structuur: structuur,
     intent: intent,
     tss: Math.round(totaalMin * rate),
-    eindopmerking: variant.tip || (variant.naam + ' — variant van deze week (roteert wekelijks).')
+    eindopmerking: variant.tip || (variant.naam + ' — variant van deze week (roteert wekelijks).'),
+    tooLong: tooLong
   };
 }
 
@@ -1276,7 +1340,7 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx) {
   // Variant-pool categorie? (vo2max/sweet_spot/threshold/tempo/long_z2/klim/conditie)
   if (getPool_(type)) {
     var variant = selectVariant_(type, weekIndexFromStart_(settings));
-    if (variant) return renderVariant_(variant, settings, mesoWeek, macroFase);
+    if (variant) return renderVariant_(variant, settings, mesoWeek, macroFase, mins);
   }
 
   // Klim-type-specifieke legacy workouts (nog callable; niet meer geselecteerd)
@@ -1325,12 +1389,18 @@ function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
   var hilly = !!(eventCtx && eventCtx.hm > 0 && eventCtx.afstandKm > 0 &&
                  (eventCtx.hm / Math.max(1, eventCtx.afstandKm) > 1.0));
 
-  // Vaste blokken (warmup + intervals incl. intra-rest + cooldown):
-  //   hilly:    10 warmup + 34 klim-sim (3×8 work + 2×5 rest) + 5 cd = 49
-  //   non-hilly: 10 warmup + 5 cd                                    = 15
-  var fixed = hilly ? 49 : 15;
+  // Duration-aware klim-sim: schaal het aantal 8-min reps zodat warmup +
+  // klim + minimum Z2-base binnen de beschikbare tijd past. klimReps van
+  // 3 → 2 → 1 als nodig; valt nooit onder 1 rep zolang de tab hilly is.
   var minBase = 30; // onder 30min Z2 base is een long-rit niet zinvol
-
+  var overhead = 15; // 10 warmup + 5 cooldown
+  var klimReps = 0;
+  function klimMin_(r) { return r * 8 + Math.max(0, r - 1) * 5; } // work + intra-rest
+  if (hilly) {
+    klimReps = 3;
+    while (klimReps > 1 && overhead + klimMin_(klimReps) + minBase > requested) klimReps--;
+  }
+  var fixed = overhead + (hilly ? klimMin_(klimReps) : 0);
   var fits = requested >= fixed + minBase;
   var baseMin = fits ? (requested - fixed) : minBase;
   var totaalMin = fixed + baseMin;
@@ -1348,7 +1418,7 @@ function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
     structuur = [
       ['Warmup',   '10 min',         wattsRange(ftp, 50, 65), bpmBelow(lthr, 80), 'Rustig opbouwen'],
       ['Z2 base',  baseMin + ' min', wattsRange(ftp, 65, 75), bpmRange(lthr, 80, 89), 'Stabiele Z2'],
-      ['Klim-sim', '3x 8 min',       wattsRange(ftp, 88, 95), bpmRange(lthr, 92, 99), '5 min rust @ 60% — simuleert de cols'],
+      ['Klim-sim', klimReps + 'x 8 min', wattsRange(ftp, 88, 95), bpmRange(lthr, 92, 99), '5 min rust @ 60% — simuleert de cols'],
       ['Cooldown', '5 min',          wattsRange(ftp, 45, 55), '—', 'Easy']
     ];
   } else {
@@ -1361,7 +1431,7 @@ function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
 
   // Intent: high (klim-sim work) is vast, low schaalt met base.
   var intent = hilly
-    ? { low: 10 + baseMin + 10 + 5, high: 24, anaerobic: 0 }  // warmup + base + intra-rest + cooldown
+    ? { low: 10 + baseMin + Math.max(0, klimReps - 1) * 5 + 5, high: klimReps * 8, anaerobic: 0 }  // warmup + base + intra-rest + cooldown
     : { low: totaalMin, high: 0, anaerobic: 0 };
 
   return {
