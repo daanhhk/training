@@ -26,6 +26,8 @@ function onOpen() {
     .addItem('Start polling (delete webhook + install trigger)', 'startTelegramPolling')
     .addItem('Stop polling (remove trigger)', 'stopTelegramPolling')
     .addItem('Poll nu (eenmalig)', 'pollTelegramUpdatesOnce')
+    .addItem('🏋️ Installeer RPE-avondcheck (20:00)', 'installRpeAvondTrigger')
+    .addItem('Verwijder RPE-avondcheck', 'removeRpeAvondTrigger')
     .addSeparator()
     .addItem('Registreer webhook bij Telegram', 'registerTelegramWebhook')
     .addItem('Reset webhook (delete + register)', 'resetTelegramWebhook')

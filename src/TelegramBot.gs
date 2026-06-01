@@ -154,6 +154,10 @@ function doPost(e) {
  * waar de update vandaan komt.
  */
 function _processTelegramUpdate_(update, source) {
+  // Inline-button taps (RPE-knoppen) → aparte callback-flow, vóór de
+  // tekst-flow zodat ze niet als bericht worden geïnterpreteerd.
+  if (update && update.callback_query) { handleRpeCallback(update, source); return; }
+
   var startMs = Date.now();
   var audit = {
     timestamp: new Date(),
@@ -244,6 +248,45 @@ function _tgOk_() {
   return ContentService.createTextOutput('').setMimeType(ContentService.MimeType.TEXT);
 }
 
+/**
+ * Verwerkt een inline-button tap (callback_query) — RPE-knoppen. Parse
+ * callback_data 'rpe:<yyyy-MM-dd>:<n>', sla rpe_<date> op, bevestig via
+ * answerCallbackQuery + editMessageText. Zelfde dedupe/auth/audit-flow als
+ * de tekst-processor.
+ */
+function handleRpeCallback(update, source) {
+  var startMs = Date.now();
+  var cbq = update.callback_query || {};
+  var audit = { timestamp: new Date(), update_id: update.update_id != null ? update.update_id : '',
+    chat_id: '', text: cbq.data || '', branch: 'callback', response_ok: false, duration_ms: 0 };
+  try {
+    if (isDuplicateUpdate_(audit.update_id)) { audit.branch = 'duplicate'; audit.response_ok = true; audit.duration_ms = Date.now() - startMs; auditLog_(audit); return; }
+    var chatId = (cbq.message && cbq.message.chat) ? cbq.message.chat.id : (cbq.from ? cbq.from.id : null);
+    audit.chat_id = chatId;
+    var authChat;
+    try { authChat = getTelegramChatId_(); } catch (e) { console.warn(source + ': geen TELEGRAM_CHAT_ID'); return; }
+    if (String(chatId) !== String(authChat)) {
+      try { _tgRequest_('answerCallbackQuery', { callback_query_id: cbq.id, text: 'Niet geautoriseerd.' }); } catch (e2) {}
+      audit.branch = 'auth_failed'; audit.duration_ms = Date.now() - startMs; auditLog_(audit); return;
+    }
+    var m = (cbq.data || '').match(/^rpe:(\d{4}-\d{2}-\d{2}):(\d{1,2})$/);
+    if (!m) {
+      try { _tgRequest_('answerCallbackQuery', { callback_query_id: cbq.id }); } catch (e3) {}
+      audit.branch = 'callback_unknown'; audit.response_ok = true; audit.duration_ms = Date.now() - startMs; auditLog_(audit); return;
+    }
+    var dISO = m[1], rpe = parseInt(m[2], 10);
+    setDocProp('rpe_' + dISO, String(rpe));
+    try { _tgRequest_('answerCallbackQuery', { callback_query_id: cbq.id, text: 'RPE ' + rpe + ' opgeslagen' }); } catch (e4) {}
+    try { _tgRequest_('editMessageText', { chat_id: chatId, message_id: cbq.message.message_id,
+      text: '✅ RPE ' + rpe + '/10 genoteerd voor ' + dISO + '. Bedankt!' }); } catch (e5) {}
+    audit.branch = 'rpe'; audit.response_ok = true; audit.duration_ms = Date.now() - startMs; auditLog_(audit);
+  } catch (err) {
+    console.error('handleRpeCallback crashed (' + source + '): ' + (err && err.stack ? err.stack : err));
+    audit.branch = audit.branch || 'crash'; audit.duration_ms = Date.now() - startMs;
+    try { auditLog_(audit); } catch (e6) {}
+  }
+}
+
 // NB: PROMPT O probeerde respond-via-webhook (sendMessage als JSON-body in
 // de HTTP-response) maar Telegram herkent dat formaat niet op Apps Script
 // Web Apps — vermoedelijk wegens de 302-redirect naar googleusercontent.com
@@ -298,6 +341,11 @@ function routeCommand_(text, chatId) {
     handleSync_(chatId);
     return 'sync';
   }
+  if (cmd === '/klaar') {
+    Logger.log('routeCommand_ -> handleKlaar_');
+    handleKlaar_(chatId);
+    return 'klaar';
+  }
   if (cmd === '/help') {
     Logger.log('routeCommand_ -> handleHelp_');
     handleHelp_(chatId);
@@ -328,8 +376,9 @@ function handleHelp_(chatId) {
     '/status - week samenvatting\n' +
     '/voorstel - weekvoorstel als bericht\n' +
     '/sync - haal intervals.icu data op\n' +
+    '/klaar - log RPE na je rit\n' +
     '/help - deze lijst\n\n' +
-    'RPE-loop volgt.';
+    'RPE-loop actief.';
   var resp = tgSendMessage(chatId, txt);
   Logger.log('handleHelp_ tgSendMessage response: ' + JSON.stringify(resp));
 }
@@ -458,6 +507,35 @@ function handleSync_(chatId) {
     console.error('handleSync_ syncAll fout: ' + (e && e.stack ? e.stack : e));
     tgSendMessage(chatId, '⚠️ Sync mislukt: ' + (e && e.message ? e.message : 'onbekende fout') + '. Check de Audit-tab.');
   }
+}
+
+/**
+ * Stuurt een RPE 1-10 prompt met inline-buttons (twee rijen van 5).
+ * callback_data 'rpe:<dISO>:<n>' wordt door handleRpeCallback verwerkt.
+ */
+function sendRpePrompt(chatId, dISO, sessieNaam) {
+  var rows = [], r = [];
+  for (var n = 1; n <= 10; n++) {
+    r.push({ text: String(n), callback_data: 'rpe:' + dISO + ':' + n });
+    if (n === 5 || n === 10) { rows.push(r); r = []; }
+  }
+  var txt = 'Hoe zwaar voelde ' + (sessieNaam ? '"' + sessieNaam + '" ' : 'je rit ') +
+    'vandaag? Tik je RPE (1 = heel licht, 10 = maximaal):';
+  return tgSendMessage(chatId, txt, { replyMarkup: { inline_keyboard: rows } });
+}
+
+/** Leest de workout-naam uit de proposal-snapshot voor een datum (of ''). */
+function rpeSessieNaamVoorDatum(dISO) {
+  try { var raw = getDocProp('proposal_' + dISO, ''); if (raw) { var wo = JSON.parse(raw); return (wo && wo.naam) ? wo.naam : ''; } } catch (e) {}
+  return '';
+}
+
+/** /klaar — sync activities en vraag RPE voor vandaag via inline-buttons. */
+function handleKlaar_(chatId) {
+  Logger.log('handleKlaar_ aangeroepen voor chatId: ' + chatId);
+  try { syncActivities(); } catch (e) { console.warn('handleKlaar_ syncActivities: ' + (e && e.message ? e.message : e)); }
+  var dISO = formatDate(new Date(), 'yyyy-MM-dd');
+  sendRpePrompt(chatId, dISO, rpeSessieNaamVoorDatum(dISO));
 }
 
 /** Sum icu_training_load over cycling activities tussen weekStart en +7d. */
@@ -738,6 +816,41 @@ function pollTelegramUpdatesOnce() {
     if (ui) ui.alert('Poll mislukt', err.message, ui.ButtonSet.OK);
     else throw err;
   }
+}
+
+// ── RPE-avondcheck (fallback-trigger) ────────────────────────────
+
+/**
+ * Time-trigger ~20:00. Als vandaag een geplande trainingsdag was én er
+ * nog geen rpe_<date> bestaat, stuur de RPE-prompt. Stil falen zonder
+ * chat_id of buiten trainingsdag.
+ */
+function rpeAvondCheck() {
+  try {
+    var chatId; try { chatId = getTelegramChatId_(); } catch (e) { console.warn('rpeAvondCheck: geen chat_id'); return; }
+    var ss = SpreadsheetApp.getActive();
+    var dISO = formatDate(new Date(), 'yyyy-MM-dd');
+    if (getDocProp('rpe_' + dISO, '')) { Logger.log('rpeAvondCheck: RPE bestaat al voor ' + dISO); return; }
+    var planner = readPlanner(ss) || [];
+    var today = stripTime_(new Date()).getTime();
+    var row = null;
+    planner.forEach(function (p) { if (p.datum && stripTime_(p.datum).getTime() === today) row = p; });
+    if (!row || row.train !== true) { Logger.log('rpeAvondCheck: geen geplande trainingsdag vandaag'); return; }
+    sendRpePrompt(chatId, dISO, rpeSessieNaamVoorDatum(dISO));
+  } catch (err) { console.error('rpeAvondCheck crashed: ' + (err && err.stack ? err.stack : err)); }
+}
+
+function installRpeAvondTrigger() {
+  removeRpeAvondTrigger();
+  ScriptApp.newTrigger('rpeAvondCheck').timeBased().everyDays(1).atHour(20).create();
+  var ui; try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  if (ui) ui.alert('✅ RPE-avondcheck geïnstalleerd', 'Rond 20:00 vraagt de bot RPE als je die dag een trainingsdag had en nog niets invulde.', ui.ButtonSet.OK);
+}
+
+function removeRpeAvondTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'rpeAvondCheck') ScriptApp.deleteTrigger(t); });
+  var ui; try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  if (ui) ui.alert('RPE-avondcheck verwijderd.');
 }
 
 // ── Setup-menu acties ────────────────────────────────────────────
