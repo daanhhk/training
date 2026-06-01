@@ -99,8 +99,10 @@ function generateProposal() {
   });
 
   var klimType = (macro.hoofdEvent && macro.hoofdEvent.klimType) || null;
+  var isTripEvent = !!(macro.hoofdEvent && macro.hoofdEvent.type === 'trip');
+  var eventDate = macro.eventDate || (macro.hoofdEvent && macro.hoofdEvent.datum) || null;
   var recentHard = recentHardDayDate_(ss);
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType, recentHard, feedback.debt);
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, eventDate);
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
@@ -548,7 +550,7 @@ function ensureIntent_(wo) {
  * @param wellness  resultaat van getWellnessSignal(); demote/recovery
  *                  signal overschrijft de assignment cascade.
  */
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate) {
   var doel = settings.doel;
   var isTaper    = macroFase === 'Taper';
   var isEventRecovery = macroFase === 'Recovery';
@@ -575,12 +577,21 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       // Recovery-week na A-race: alles easy Z2.
       type = 'recovery';
     } else if (isTaper) {
-      // Taper-week: één korte intensieve openers-sessie, rest korte Z2.
-      if (!openersGedaan && (d.type === 'vrij' || d.type === 'weekend')) {
-        type = 'taper_openers';
-        openersGedaan = true;
+      if (isTripEvent) {
+        // Tour-taper: meerdaagse rittenreis vraagt durability, geen race-snap.
+        // Endurance-volume vasthouden; alleen de laatste 2 dagen kort + soepel.
+        var dToEvent = (eventDate && d.datum)
+          ? Math.round((stripTime_(eventDate).getTime() - stripTime_(d.datum).getTime()) / 86400000)
+          : null;
+        type = (dToEvent != null && dToEvent <= 2) ? 'taper_z2_kort' : 'tour_taper_z2';
       } else {
-        type = 'taper_z2_kort';
+        // Race-taper: één korte openers-sessie, rest korte Z2.
+        if (!openersGedaan && (d.type === 'vrij' || d.type === 'weekend')) {
+          type = 'taper_openers';
+          openersGedaan = true;
+        } else {
+          type = 'taper_z2_kort';
+        }
       }
     } else if (isRecovery) {
       // Recovery week: alleen lichte sessies
@@ -1076,6 +1087,7 @@ function climbTypeWorkout_(klimType, macroFase, dekking) {
 function workoutZones(type, doel) {
   if (!type) return [];
   if (type === 'taper_z2_kort') return ['low'];
+  if (type === 'tour_taper_z2') return ['low'];
   if (type === 'taper_openers') return ['anaerobic'];
   if (type === 'vo2_hill_repeats' || type === 'anaerobic_capacity') return ['anaerobic'];
   if (type === 'threshold_long' || type === 'sweet_spot_long') return ['high'];
@@ -1347,6 +1359,7 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx, slot)
   // Taper-workouts (event-driven laatste week)
   if (type === 'taper_openers')  return genericTaperOpeners(settings);
   if (type === 'taper_z2_kort')  return genericTaperZ2Kort(mins, settings);
+  if (type === 'tour_taper_z2')  return genericTourTaperZ2(mins, settings, eventCtx);
 
   // long_z2 met event-context → endurance scaling (behoud event-feature)
   if (type === 'long_z2' && eventCtx) return genericLongZ2(mins, settings, mesoWeek, eventCtx);
@@ -1509,6 +1522,30 @@ function genericTaperZ2Kort(mins, settings) {
     ],
     tss: Math.round(mins * 0.6),
     eindopmerking: 'Volume bewust gehalveerd. Niet opbouwen meer — fris worden is het doel.'
+  };
+}
+
+function genericTourTaperZ2(mins, settings, eventCtx) {
+  var ftp = settings.ftp, lthr = settings.lthr;
+  // Tour-taper endurance: NIET halveren — volume vasthouden voor durability,
+  // intensiteit blijft Z2. Gebruik beschikbare tijd tot een redelijk plafond.
+  var dur = Math.max(45, Math.min(120, Math.round(mins || 75)));
+  var warm = 8, cool = 5;
+  var base = dur - warm - cool;
+  var eind = 'Endurance vasthouden voor durability — back-to-back dagen vragen zadeltijd. Intensiteit eruit, fris blijven.';
+  if (eventCtx && eventCtx.naam) eind = 'Richting ' + eventCtx.naam + ': benen wennen aan uren, rustig aan. ' + eind;
+  return {
+    naam: 'Tour-taper Z2 (' + dur + ' min)',
+    focus: 'aerobic onderhoud',
+    zones: ['low'],
+    totaalMin: dur,
+    structuur: [
+      ['Warmup',   warm + ' min', wattsRange(ftp, 50, 62), bpmBelow(lthr, 80),    'Rustig op gang'],
+      ['Z2',       base + ' min', wattsRange(ftp, 62, 72), bpmRange(lthr, 76, 86), 'Soepel, tijd vol benutten'],
+      ['Cooldown', cool + ' min', wattsRange(ftp, 45, 55), '—',                    'Easy uit']
+    ],
+    tss: Math.round(dur * 0.65),
+    eindopmerking: eind
   };
 }
 

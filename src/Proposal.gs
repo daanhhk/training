@@ -62,8 +62,12 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
         r += 1;
       }
       if (macro.isTaper) {
+        var isTripTaper = !!(macro.hoofdEvent && macro.hoofdEvent.type === 'trip');
+        var taperMsg = isTripTaper
+          ? '🪶  Tour-taper: endurance-volume vasthouden voor durability, intensiteit eruit, laatste 2 dagen licht. Fris én duurzaam aan de start.'
+          : '🪶  Taper-week: volume gehalveerd, één korte openers-sessie voor scherpte. Kom fris aan de start.';
         sh.getRange(r, 1, 1, COLS).merge()
-          .setValue('🪶  Taper-week: volume gehalveerd, één korte openers-sessie voor scherpte. Kom fris aan de start.')
+          .setValue(taperMsg)
           .setBackground('#f5f3ff').setFontStyle('italic').setFontColor('#5b21b6').setWrap(true);
         r += 1;
       }
