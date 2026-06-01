@@ -317,6 +317,7 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
 
   var eventCtx = eventContextFrom_(macro);
   var actByDate = cyclingActivitiesByDate_(weekStartDate(new Date()));
+  var tssActual = actualTssByDate_(weekStartDate(new Date()));
   var totalTss = 0, totalMin = 0;
   days.forEach(function (d) {
     if (missedIdxSet[d.dagIdx]) return; // al getoond in missed-banner
@@ -383,6 +384,8 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
         .setValue(sub)
         .setFontStyle('italic').setFontColor('#374151').setBackground('#f3f4f6').setWrap(true);
       r += 2;
+      // Voltooide/verleden dag: tel WERKELIJKE TSS mee (0 als geen rit).
+      if (dISO) totalTss += (tssActual[dISO] || 0);
       return;
     }
 

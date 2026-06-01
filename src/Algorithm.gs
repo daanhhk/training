@@ -480,6 +480,33 @@ function cyclingActivitiesByDate_(weekStart) {
 }
 
 /**
+ * Werkelijke TSS per datum deze week. Spiegelt _statusWeekTss_ (TelegramBot.gs)
+ * qua bron/filter/keying, maar returnt een map { 'yyyy-MM-dd': Σ TSS } i.p.v.
+ * één som. Gebruikt voor de Voorstel-dashboard week-TSS zodat voltooide dagen
+ * hun ECHTE load bijdragen i.p.v. 0 (planned-only-bug).
+ */
+function actualTssByDate_(weekStart) {
+  var wsT = stripTime_(weekStart).getTime();
+  var weT = wsT + 7 * 24 * 60 * 60 * 1000;
+  var acts = [];
+  try { acts = getActivities(14) || []; } catch (e) { console.warn('actualTssByDate_ getActivities: ' + e.message); }
+
+  var byDate = {};
+  acts.forEach(function (a) {
+    if (CYCLING_TYPES.indexOf(String(a.type || '')) < 0) return;
+    if (!a.start_date_local) return;
+    var dd = stripTime_(new Date(a.start_date_local));
+    if (dd.getTime() < wsT || dd.getTime() >= weT) return;
+    var tss = a.icu_training_load != null ? a.icu_training_load
+            : (a.training_load != null ? a.training_load
+            : (a.tss != null ? a.tss : 0));
+    var key = formatDate(dd, 'yyyy-MM-dd');
+    byDate[key] = (byDate[key] || 0) + (Number(tss) || 0);
+  });
+  return byDate;
+}
+
+/**
  * Zorgt dat de data-tabs (Activiteiten + Wellness) gevuld zijn vóór
  * generateProposal draait, en reconcilet de Gedaan-checkboxes.
  *
