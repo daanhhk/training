@@ -1208,6 +1208,22 @@ function scaleBlocksToFit_(blocks, mins, warm, cool) {
     if (!pick) break;
     pick.reps -= 1;
   }
+  // Pass 3: reps zitten op de floor maar het past nog niet → kort de
+  // interval-lengte (onMin) en steady-duur in tot het past, met ondergrenzen.
+  // Korte (sec-based) intervallen blijven ongemoeid — die zijn al kort.
+  if (mainDur(out) > target) {
+    var f2 = target / mainDur(out); // < 1
+    out.forEach(function (b) {
+      if (b.kind === 'int') {
+        if (b.onMin != null) {
+          b.onMin = Math.max(5, Math.round(b.onMin * f2));
+          if (b.offMin != null) b.offMin = Math.max(2, Math.round(b.offMin * f2));
+        }
+      } else {
+        b.durMin = Math.max(8, Math.round(b.durMin * f2));
+      }
+    });
+  }
   return out;
 }
 
