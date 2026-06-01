@@ -55,6 +55,7 @@ function onOpen() {
     .addItem('Open Events-tab', 'openEventsTab')
     .addItem('Sla huidige week op als standaardpatroon', 'savePatternFromTab')
     .addItem('📋 Rol Weekplanner +1 naar huidig', 'rolWeekplannerPlus1NaarHuidig')
+    .addItem('🧹 Weekplanner +1 leegmaken', 'blankPlannerPlus1')
     .addSeparator()
     .addSubMenu(setupMenu)
     .addItem('Bouw alles opnieuw (reset Sheet)', 'buildAll')

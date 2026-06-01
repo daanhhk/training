@@ -173,12 +173,55 @@ function materializeWeek_(sh, monday) {
 }
 
 /**
+ * Schrijft een volledig LEEG 7-dagen-frame naar een planner-tab. Geen
+ * pattern-defaults: train uit, minuten/dagtype/notitie leeg, voorgesteld/
+ * gedaan leeg. Alleen de datums + dagnaam-labels worden gevuld.
+ *
+ * Gebruikt door ensureCurrentWeekPlus1 zodat +1 altijd blanco start —
+ * de gebruiker vult zelf in. Voorkomt dat ongemoeide pattern-defaults
+ * via _pullPlus1IntoCurrent_ als "user input" doorrollen.
+ */
+function blankWeek_(sh, monday) {
+  for (var i = 0; i < 7; i++) {
+    var r = 3 + i;
+    var date = new Date(monday);
+    date.setDate(monday.getDate() + i);
+    sh.getRange(r, 1).setValue(false);                              // train off
+    sh.getRange(r, 2).setValue(DAGEN_NL[i]).setFontWeight('bold');  // day
+    sh.getRange(r, 3).setValue(date).setNumberFormat('ddd dd-MM');  // date
+    sh.getRange(r, 4).setValue('');                                 // minutes empty
+    sh.getRange(r, 5).setValue('');                                 // dagtype empty
+    sh.getRange(r, 6).setValue('');                                 // note empty
+    sh.getRange(r, 7).setValue('');                                 // voorgesteld empty
+    sh.getRange(r, 8).setValue(false);                              // gedaan off
+  }
+}
+
+/**
  * Returnt true als een planner-tab-rij gevuld is (C3 = maandag-datum
- * aanwezig). Gebruikt door ensureCurrentWeek-varianten als vangnet.
+ * aanwezig). Gebruikt door ensureCurrentWeek-varianten als vangnet
+ * voor de "is dit tabblad gematerialiseerd?"-check.
  */
 function plannerHasData_(sh) {
   if (!sh || sh.getMaxRows() < 3) return false;
   return sh.getRange(3, 3).getValue() instanceof Date;
+}
+
+/**
+ * Returnt true als een planner-tab ECHTE user-input bevat (één of meer
+ * dagen met train=TRUE, óf met minuten > 0). Onderscheid t.o.v.
+ * plannerHasData_: dat returnt al true voor een verse materialize met
+ * pattern-defaults. Hiermee kan de rollover onderscheiden tussen
+ * "+1 is door gebruiker ingevuld" en "+1 is alleen leeg/gematerialiseerd".
+ */
+function plannerHasUserInput_(sh) {
+  if (!sh || sh.getMaxRows() < 9) return false;
+  var data = sh.getRange(3, 1, 7, 8).getValues();
+  for (var i = 0; i < 7; i++) {
+    if (data[i][0] === true) return true;
+    if (Number(data[i][3]) > 0) return true;
+  }
+  return false;
 }
 
 // ── Week-state guards ────────────────────────────────────────────
@@ -235,7 +278,11 @@ function ensureCurrentWeekPlus1(ss) {
   var stored = getDocProp(TAB_WEEK_PLUS1_KEY, '');
   if (stored === plus1Str && plannerHasData_(sh)) return;
 
-  materializeWeek_(sh, plus1Monday);
+  // +1 start ALTIJD blanco — gebruiker vult zelf in. Pattern-defaults
+  // doorrollen zou onbedoeld in de huidige Weekplanner terechtkomen via
+  // _pullPlus1IntoCurrent_ omdat plannerHasData_/plannerHasUserInput_ ze
+  // niet kan onderscheiden van echte input.
+  blankWeek_(sh, plus1Monday);
   setDocProp(TAB_WEEK_PLUS1_KEY, plus1Str);
   try { ss.toast('Weekplanner +1 gerold naar nieuwe week (' + plus1Str + ')', '🚴 Coach', 4); } catch (e) {}
 }
@@ -252,7 +299,10 @@ function _pullPlus1IntoCurrent_(ss, monday) {
   var sh = ss.getSheetByName(PLANNER_SHEET);
   var plus1Sh = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
   if (!sh || !plus1Sh) return false;
-  if (!plannerHasData_(plus1Sh)) return false;
+  // Alleen pullen bij ECHTE user input (train=TRUE of minuten>0 op enige
+  // rij). Een verse blankWeek_-materialize zou anders als "data" worden
+  // geïnterpreteerd en de huidige Weekplanner met nullen vullen.
+  if (!plannerHasUserInput_(plus1Sh)) return false;
 
   var data = plus1Sh.getRange(3, 1, 7, 8).getValues();
   for (var i = 0; i < 7; i++) {
@@ -286,7 +336,7 @@ function rolWeekplannerPlus1NaarHuidig() {
     if (ui) ui.alert('Tabs ontbreken', 'Draai eerst "Bouw alles opnieuw" zodat beide planner-tabs bestaan.', ui.ButtonSet.OK);
     return;
   }
-  if (!plannerHasData_(plus1Sh)) {
+  if (!plannerHasUserInput_(plus1Sh)) {
     if (ui) ui.alert('Weekplanner +1 is leeg', 'Vul eerst beschikbaarheid in op de "Weekplanner +1"-tab.', ui.ButtonSet.OK);
     return;
   }
@@ -300,6 +350,28 @@ function rolWeekplannerPlus1NaarHuidig() {
   setDocProp(TAB_WEEK_KEY, mondayStr);
   try { ensureCurrentWeekPlus1(ss); } catch (e) { console.warn('ensureCurrentWeekPlus1 from manual rollover: ' + e.message); }
   if (ui) ui.alert('✅ Rollover gedaan', 'Volgende week is nu de huidige Weekplanner geworden.', ui.ButtonSet.OK);
+}
+
+/**
+ * Coach-menu item "🧹 Weekplanner +1 leegmaken". Forceert een blanco
+ * +1-tab voor de volgende kalenderweek — handig als de tab per ongeluk
+ * met defaults of oude data gevuld staat en je vers wil beginnen.
+ */
+function blankPlannerPlus1() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  if (!sh) {
+    if (ui) ui.alert('Tab ontbreekt', 'Draai eerst "Bouw alles opnieuw".', ui.ButtonSet.OK);
+    return;
+  }
+  var monday = weekStartDate(new Date());
+  var plus1Monday = new Date(monday);
+  plus1Monday.setDate(monday.getDate() + 7);
+  blankWeek_(sh, plus1Monday);
+  setDocProp(TAB_WEEK_PLUS1_KEY, formatDate(plus1Monday, 'yyyy-MM-dd'));
+  if (ui) ui.alert('✅ Weekplanner +1 leeggemaakt', 'Vul je beschikbaarheid voor volgende week zelf in.', ui.ButtonSet.OK);
 }
 
 // ── Menu-actie: patroon promoten ─────────────────────────────────
