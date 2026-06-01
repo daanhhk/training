@@ -818,6 +818,38 @@ function wellnessFallback_(reason) {
   };
 }
 
+// ── Form-score TSB (Friel/intervals.icu Vorm = CTL - ATL) ────────
+// Friel/intervals.icu Vorm-zones. Dutch labels match the app.
+function formZone_(form) {
+  if (form >  25) return 'Overgang';
+  if (form >   5) return 'Fris';
+  if (form > -10) return 'Grijze zone';
+  if (form > -30) return 'Optimaal';
+  return 'Hoog risico';
+}
+
+// Latest CTL/ATL/Form from the most recent wellness record carrying them.
+// Defensive on field names (ctl vs icu_ctl etc.) — live-read at display time,
+// spiegelt actualTssByDate_/_statusWeekTss_ (geen persistence).
+function getFormScore_() {
+  try {
+    var arr = getWellness(7);            // raw /wellness records
+    if (!arr || !arr.length) return null;
+    arr.sort(function (a, b) { return String(b.id).localeCompare(String(a.id)); }); // newest first
+    for (var i = 0; i < arr.length; i++) {
+      var r = arr[i];
+      var ctl  = (r.ctl  != null) ? r.ctl  : r.icu_ctl;
+      var atl  = (r.atl  != null) ? r.atl  : r.icu_atl;
+      var ramp = (r.rampRate != null) ? r.rampRate : (r.icu_rampRate != null ? r.icu_rampRate : null);
+      if (ctl != null && atl != null) {
+        var form = ctl - atl;
+        return { date: r.id, ctl: ctl, atl: atl, form: form, ramp: ramp, label: formZone_(form) };
+      }
+    }
+    return null;
+  } catch (e) { Logger.log('getFormScore_ error: ' + e); return null; }
+}
+
 function doelKey(doel) {
   if (doel === 'FTP')         return 'ftp';
   if (doel === 'VO2max')      return 'vo2';

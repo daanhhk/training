@@ -128,6 +128,10 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
         ')   slaap ' + (wellness.sleepLastNight != null ? wellness.sleepLastNight + 'u' : 'n/a')
       : 'geen wellness data';
 
+    // Form-score (Vorm = CTL - ATL) uit intervals.icu — append aan diag.
+    var fsB = getFormScore_();
+    if (fsB) diag += ' · Vorm ' + Math.round(fsB.form) + ' (' + fsB.label + ')';
+
     if (wellness.signal === 'recovery') {
       wText = '🛑  Wellness: ' + wellness.reason + ' — ALLE workouts → recovery.   (' + diag + ')';
       wBg = '#fee2e2'; wFg = '#991b1b';
