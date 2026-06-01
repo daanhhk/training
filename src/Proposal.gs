@@ -435,7 +435,9 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     }
     r += 1;
 
-    totalTss += wo.tss || 0;
+    // Prefer werkelijke load als er een rit voor deze datum is (ook vandaag-
+    // voltooid, dat in workout-mode rendert); anders planned wo.tss.
+    totalTss += (tssActual[dISO] != null ? tssActual[dISO] : (wo.tss || 0));
     totalMin += wo.totaalMin || 0;
   });
 
