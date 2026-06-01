@@ -6,6 +6,40 @@ Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
 
+### Sessie 1 juni 2026 — RPE-3 + week-TSS-fixes + Form-score TSB (Vorm) + Garmin-ramp-gate
+
+RPE-loop compleet (capture + reminders + display/flag), MVP — GEEN auto-bijsturen.
+- Algorithm.gs (onder workoutZones): rpeBucket_/expectedRpe_ (bucket-map low 3,5 / high 7 / anaerobic 9; peak-bucket voor combo's), plannedTypeForDate_ (workoutType uit weekplan_<mondayISO>, proposal_<dISO> fallback — NIET col G/voorgesteldType, blanco bij voltooide dagen), rpeWeekData_, rpeMismatchFlag_ (gedeeld), rpeStatusLines_.
+- Mismatch = werkelijke RPE - verwachte RPE; vlag bij gem. >= +2 over laatste 2-3 gegradeerde sessies deze week. /status na wellness-blok; Sheet-banner amber rij (mirror wellness-row). Commit 8adbf68. Live OK (/status toont Recente RPE).
+
+Week-TSS dashboard-fix (Sheet "Totaal TSS" telde alleen planned; bot _statusWeekTss_ telde actuals al):
+- 8a94420: helper actualTssByDate_(weekStart) in Algorithm.gs (model: _statusWeekTss_; {dISO:werkelijke TSS} via icu_training_load, cycling). 'planned'-tak (verleden voltooide dagen) telt actual vóór early-return.
+- a2598a7: vandaag-voltooide dagen renderen in mode==='workout' en telden nog planned; workout-tak prefereert nu ook actual (tssActual[dISO] != null ? actual : wo.tss). Net: elke dag telt ACTUAL als er een activity is, anders planned — ongeacht render-modus. Geen dubbeltelling.
+- Resultaat: "Totaal TSS" = actuals-to-date + planned-remaining; voltooid deel klopt nu met bot Week-TSS.
+
+Form-score TSB (Vorm) — display-only, live-read:
+- 5da75ea: Algorithm.gs formZone_ (Overgang>25 / Fris>5 / Grijze zone>-10 / Optimaal>-30 / Hoog risico) + getFormScore_ (getWellness(7), nieuwste record met ctl+atl, Vorm=ctl-atl, ramp=rampRate; defensief ctl??icu_ctl etc.). getWellnessSignal + syncWellness ONGEWIJZIGD (CTL/ATL niet gepersisteerd — live-read MVP). /status Vorm-regel vóór RPE-sectie; Sheet-banner diag-segment.
+- 2060e20: Garmin-status eerlijk gemaakt — garminHeuristic(totalTss, mesoWeek, macroFase, fs) gate't de 'Productive'-verdicts op de CTL-ramp: ramp < RAMP_BUILD_MIN (=3, Proposal.gs:521, TUNABLE) -> 'Aanhouden — load houdt fitheid vast'. ramp null -> originele TSS-verdict (geen regressie). Bestaande verdict-strings byte-identiek. /status Vorm-regel toont nu ook ramp.
+
+Convention/learnings:
+- Render-modus is GEEN betrouwbare "voltooid"-proxy (vandaag-voltooid rendert 'workout'); gebruik presence van een activity.
+- Garmin noemt het pas "Productief" bij stíjgende CTL; gate TSS-verdict op rampRate (vlak -> Maintaining).
+- Form = live-read nieuwste wellness-record (ctl-atl); CTL/ATL nog niet gepersisteerd.
+- nlNumber (Utils.gs) rondt NIET af -> rond getallen af vóór formatteren (anders lange decimalen).
+- RPE_*_TYPES_-lijsten spiegelen workoutZones maar hergebruiken die NIET (doel-arg); nieuwe types ook hier bijwerken.
+- Voor "wat was gepland" op voltooide dagen: persisterende snapshot (weekplan_/proposal_), nooit col G.
+
+Openstaande stappen (Daan):
+- KALIBRATIE: lees /status ramp-waarde door; tune RAMP_BUILD_MIN zodat de huidige vlakke ramp -> "Aanhouden" matcht met Garmin (nu Aanhouden bij TSS ~224).
+- Bevestig wellness-veldnamen (Object.keys(getWellness(2)[0])) -> ctl/atl/rampRate of icu_-prefix? Daarna defensieve coalescing simplificeren.
+- /status Vorm+ramp-regel + Genereer voorstel ("Verwachte Garmin" -> Aanhouden) + Totaal TSS ~237 verifiëren.
+- (indien nog niet) Setup > Installeer RPE-avondcheck + zondag-reminder.
+- Live cyclus- + tour-taper-validatie.
+
+Volgende code-stap: na kalibratie RAMP_BUILD_MIN -> keuze tussen (a) RPE auto-bijsturen (RPE voedt volgend voorstel — echte adaptieve loop) of (b) CTL/ATL persisteren in Wellness-tab cols I/J voor TSB-trendgrafiek.
+
+Backlog: (1) RPE auto-bijsturen. (2) CTL/ATL persist + TSB-trend. (3) README gap-check. (4) Bot-latency Cloud Functions/Cloudflare (defer). (5) getActivities()/getWellness()-dedup in render (optioneel, minor).
+
 ### Sessie 1 juni 2026 — proposal-engine + RPE-loop (HEAD bij sessie-einde: deze commit)
 - Rollover-bug: Weekplanner +1 start blanco; rollover trekt +1 alleen
   binnen bij echte user-input (plannerHasUserInput_), anders patroon-
