@@ -135,6 +135,7 @@ function generateProposal() {
     weekplan.push({
       datum: dISO,
       workoutType: d.voorgesteldType,
+      naam: wo.naam || '',
       variantId: wo.variantId || null,
       zones: wo.zones || [],
       intent: ensureIntent_(wo),

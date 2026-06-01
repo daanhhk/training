@@ -288,6 +288,16 @@ function routeCommand_(text, chatId) {
     handleStatus_(chatId);
     return 'status';
   }
+  if (cmd === '/voorstel') {
+    Logger.log('routeCommand_ -> handleVoorstel_');
+    handleVoorstel_(chatId);
+    return 'voorstel';
+  }
+  if (cmd === '/sync') {
+    Logger.log('routeCommand_ -> handleSync_');
+    handleSync_(chatId);
+    return 'sync';
+  }
   if (cmd === '/help') {
     Logger.log('routeCommand_ -> handleHelp_');
     handleHelp_(chatId);
@@ -316,8 +326,10 @@ function handleHelp_(chatId) {
     'Beschikbare commands:\n' +
     '/start - welkomstbericht\n' +
     '/status - week samenvatting\n' +
+    '/voorstel - weekvoorstel als bericht\n' +
+    '/sync - haal intervals.icu data op\n' +
     '/help - deze lijst\n\n' +
-    'Meer commands volgen later (voorstel, sync, RPE).';
+    'RPE-loop volgt.';
   var resp = tgSendMessage(chatId, txt);
   Logger.log('handleHelp_ tgSendMessage response: ' + JSON.stringify(resp));
 }
@@ -400,6 +412,51 @@ function handleStatus_(chatId) {
   } catch (err) {
     console.error('handleStatus_ crashed: ' + (err && err.stack ? err.stack : err));
     try { tgSendMessage(chatId, 'Status kon niet worden opgebouwd: ' + (err && err.message ? err.message : err)); } catch (e2) {}
+  }
+}
+
+/**
+ * /voorstel — toont het weekvoorstel uit de weekplan-snapshot als bericht.
+ */
+function handleVoorstel_(chatId) {
+  Logger.log('handleVoorstel_ aangeroepen voor chatId: ' + chatId);
+  try {
+    var monday = weekStartDate(new Date());
+    var raw = getDocProp('weekplan_' + formatDate(monday, 'yyyy-MM-dd'), '');
+    if (!raw) { tgSendMessage(chatId, 'Nog geen voorstel voor deze week. Draai eerst Coach > Genereer voorstel in de Sheet.'); return; }
+    var plan = [];
+    try { plan = JSON.parse(raw); } catch (e) {}
+    if (!plan.length) { tgSendMessage(chatId, 'Voorstel is leeg voor deze week.'); return; }
+    var lines = ['🚴 Voorstel week ' + formatDate(monday, 'dd-MM') + ':'];
+    var totMin = 0, totTss = 0;
+    plan.forEach(function (p) {
+      var dag = p.datum ? formatDate(new Date(p.datum), 'EEE dd-MM') : '?';
+      var naam = p.naam || p.workoutType || '?';
+      lines.push('• ' + dag + ': ' + naam + ' — ' + (p.minuten || 0) + ' min, TSS ' + (p.tss || 0));
+      totMin += p.minuten || 0; totTss += p.tss || 0;
+    });
+    lines.push('');
+    lines.push('Totaal: ' + Math.floor(totMin / 60) + 'u ' + (totMin % 60) + 'm · TSS ' + totTss);
+    tgSendMessage(chatId, lines.join('\n'));
+  } catch (e) {
+    console.error('handleVoorstel_ fout: ' + (e && e.stack ? e.stack : e));
+    tgSendMessage(chatId, '⚠️ Kon voorstel niet ophalen: ' + (e && e.message ? e.message : 'onbekende fout') + '.');
+  }
+}
+
+/**
+ * /sync — draait syncAll() (intervals.icu data ophalen) en bevestigt.
+ */
+function handleSync_(chatId) {
+  Logger.log('handleSync_ aangeroepen voor chatId: ' + chatId);
+  tgSendMessage(chatId, '🔄 Sync met intervals.icu gestart...');
+  try {
+    syncAll();
+    var last = getDocProp('last_sync', '');
+    tgSendMessage(chatId, '✅ Sync klaar.' + (last ? ' Laatste sync: ' + last : ''));
+  } catch (e) {
+    console.error('handleSync_ syncAll fout: ' + (e && e.stack ? e.stack : e));
+    tgSendMessage(chatId, '⚠️ Sync mislukt: ' + (e && e.message ? e.message : 'onbekende fout') + '. Check de Audit-tab.');
   }
 }
 
