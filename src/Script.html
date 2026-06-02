@@ -224,10 +224,14 @@
     // niveau/wkg staan top-level op state (niet op state.vorm).
     var nivGetal = (state.niveau != null) ? nl(state.niveau, 1) : '–';
     var nivWkg = (state.wkg != null) ? nl(state.wkg, 2) + ' W/kg' : '–';
+    // 2b-2 adherence-subtekst, STRIKT binnen .niveau-block na .niveau-wkg.
+    // voortgangPct staat top-level op state. Null → regel weglaten (geen "–% van plan").
+    var voortgang = (state.voortgangPct != null)
+      ? '<div class="niveau-voortgang">' + nl(state.voortgangPct, 0) + '% van plan</div>' : '';
     var card2 = '<div class="status-card"><div class="niveau-block">' +
       '<div class="niveau-getal">' + nivGetal + '</div>' +
       '<div class="niveau-label">Niveau</div>' +
-      '<div class="niveau-wkg">' + nivWkg + '</div></div></div>';
+      '<div class="niveau-wkg">' + nivWkg + '</div>' + voortgang + '</div></div>';
 
     return '<div class="status-wrap" id="swrap-' + sfx + '" onscroll="syncDots(\'' + sfx + '\')">' +
       '<div class="status-card">' + left + right + '</div>' + card2 + '</div>' +
