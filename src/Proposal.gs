@@ -517,7 +517,10 @@ function bcRacesThisWeek_(days) {
 }
 
 // CTL ramp/week onder deze drempel = fitheid vasthouden, niet opbouwen.
-// Tune na live check tegen Garmin's eigen verdict.
+// Gekalibreerd 2026-06-02 tegen live data: ramp 0,78/wk, Garmin meldt
+// "Aanhouden", gate vuurt correct (0,78 < 3). 3 sluit aan op de build-
+// ondergrens (intervals.icu/TP: +3-8/wk = opbouwen, ~0-2 = maintaining).
+// Her-tunen zodra een week met Garmin "Productive" een ramp > drempel geeft.
 var RAMP_BUILD_MIN = 3;
 
 /**

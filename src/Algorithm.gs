@@ -829,8 +829,8 @@ function formZone_(form) {
 }
 
 // Latest CTL/ATL/Form from the most recent wellness record carrying them.
-// Defensive on field names (ctl vs icu_ctl etc.) — live-read at display time,
-// spiegelt actualTssByDate_/_statusWeekTss_ (geen persistence).
+// Field names confirmed 2026-06-02 as plain ctl/atl/rampRate (no icu_ prefix);
+// live-read at display time, spiegelt actualTssByDate_/_statusWeekTss_ (geen persistence).
 function getFormScore_() {
   try {
     var arr = getWellness(7);            // raw /wellness records
@@ -838,9 +838,9 @@ function getFormScore_() {
     arr.sort(function (a, b) { return String(b.id).localeCompare(String(a.id)); }); // newest first
     for (var i = 0; i < arr.length; i++) {
       var r = arr[i];
-      var ctl  = (r.ctl  != null) ? r.ctl  : r.icu_ctl;
-      var atl  = (r.atl  != null) ? r.atl  : r.icu_atl;
-      var ramp = (r.rampRate != null) ? r.rampRate : (r.icu_rampRate != null ? r.icu_rampRate : null);
+      var ctl  = (r.ctl != null) ? r.ctl : null;
+      var atl  = (r.atl != null) ? r.atl : null;
+      var ramp = (r.rampRate != null) ? r.rampRate : null;
       if (ctl != null && atl != null) {
         var form = ctl - atl;
         return { date: r.id, ctl: ctl, atl: atl, form: form, ramp: ramp, label: formZone_(form) };
