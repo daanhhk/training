@@ -1,3 +1,5 @@
+LAATST BIJGEWERKT: 2026-06-02 · COMMIT: 318190b · STAND: web-app dashboard v1+v1.1 live (3 tabs, zone-balk Optie B, /dev-URL). Volgende: Prompt 2 (Vorm status-first + long_z2-fix).
+
 # FTP Trainings Coach — Handoff
 
 Wekelijkse fiets-trainingsvoorstellen (Google Sheets + Apps Script), 
