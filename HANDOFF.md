@@ -1,4 +1,4 @@
-LAATST BIJGEWERKT: 2026-06-02 · COMMIT: f8d7e2d · STAND: web-app dashboard v1.3 — kalender toont zondag (DST-fix), status-graphic ook bovenaan Vandaag, Vorm-trend mensentaal (Fitheid/Vermoeidheid/Vorm + zone-band-strip), eerlijke jaar-stats. Volgende: Prompt 3 (tik-op-voltooide-training detail).
+LAATST BIJGEWERKT: 2026-06-02 · COMMIT: 796c548 · STAND: JOIN-redesign draad (1) af + historie 2jr; draad (2) gescoped, 2a klaar om te bouwen.
 
 OPENER VOLGENDE CHAT — kopieer alles tussen de streepjes als eerste bericht in een nieuwe chat:
 ----------------------------------------------------------------
@@ -26,6 +26,27 @@ gericht op Garmin "Productive" status, met intervals.icu sync en
 Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
+
+### Sessie 2 juni 2026 — JOIN-redesign: draad (1) + historie-venster + draad (2) scoping
+
+Gedaan:
+- Draad (1): Vandaag+Kalender → één scrollbare Schema-tab (tabs Schema+Vorm). Status-graphic boven, horizontale dag-strip (vandaag default+gecentreerd; chips ✓/●/stip/grijs), renderDagDetail-takken vandaag/voltooid/gepland/rust/preview, venster −28d…+7d. renderVandaag/renderKalender → renderSchema. Commit 002d7b0.
+- Historie-venster: Sync.gs const ACT_HISTORY_DAYS 28→400→730. Full-replace → "Sync nu" = backfill. Oudste activity nu 03-06-2024 (=730d, 2jr). Commits 391763a (400 + maandtotalen van Schema incl. Index.html-markup) en 796c548 (730). MaandArchief-snapshot-tier UITGESTELD tot 2026→2027-jaargrens (durabele tab, NIET CacheService).
+- Maandtotalen van Schema af; jaar-stats blijven op Vorm via dashStatsFromActivities_ (nu reëel ipv ≈28d).
+
+Draad (2) — stats-verrijking, volgorde 2a→2b→2c:
+- NIVEAU-MODEL (vastgelegd): niveau = W/kg-anker (FTP-cel ÷ gewicht → 0–50, ankers ~1,0 W/kg=0 / ~6,9 W/kg=50; Daan 275/74=3,72 → ~23 ≈ JOIN 22,9) PLUS een TAPER-BEWUSTE conditie-modifier (CTL-gedreven) die het getal laat leven. W/kg dominant/vergelijkbaar; conditie = wekelijkse beweging. Fysiologie: wekelijkse groei = conditie/CTL (volume); FTP/eFTP reageert op intensiteit/tests; CTL stijgt-en-vlakt-af bij constant volume, hoger plateau bij meer volume (sluit op voortgang% aan). Taper/peak: conditie-modifier houdt vast (geen daling) → geplande de-load leest niet als niveau-verlies. FTP-cel als anker, NIET de decayende eFTP; eFTP hooguit secundair.
+- 2a (NU bouwen): 2e swipe-kaart met het W/kg-ankergetal (bewust stabiel; beweegt op FTP-verandering). .status-wrap (nu statische flex-rij) → scroll-snap-track + dot-row. Gewicht toevoegen aan getDashboardState (getGewicht()). Niveau uit readSettings.ftp/gewicht. Headline-stats (Fitheid/ATL/Vorm/ramp) naar kaart 2.
+- 2b: niveau tot leven wekken — taper-bewuste conditie-modifier op het anker + beginniveau→huidig-delta + voortgang% (cum. werkelijke TSS ÷ verwachte cum. TSS; meer uren → % klimt sneller dan kalender). Progressie op NIET-decayende FTP-basis (peak-hold eFTP of test-FTP).
+- 2c: maand-trend op Vorm — mini-bars laatste ~12 complete maanden, TSS + totale uren + YoY-regel; lopende halve maand eruit.
+
+2a recon-uitkomst:
+- Status-paneel = statische flex-rij (.status-wrap, .status-left/.status-right), GEEN swipe-container → moet eerst scroll-snap-track + dot-row worden.
+- Ring codeert al fractie 1 − dagenTot/90 (ringSvg); midden toont dagen.
+- FTP via readSettings(ss).ftp; getGewicht() bestaat; gewicht NIET in dashboard-payload. eFTP-bron sportSettings[Ride].mmp_model.ftp alleen in syncAthleteFromIcu (autocast), niet live.
+
+Openstaande 2b-recon: decayt de autocast-FTP-cel mee met eFTP of houdt 'ie vast (autocast-cadans)? · eFTP-historie via intervals.icu voor beginniveau-backfill? · programma-start uit macrocyclus (event − Base-lengte)? · accessor voor verwachte week-TSS uit volume-targets.
+Nog open daarna: draad (3) status-toon fase-bewust (taper/peak = "vorm vasthouden = doel" positief, build = zachte nudge; koppelen aan macroFase — sluit aan op de taper-bewuste conditie-modifier). Draad (4) polish (o.a. gekleurde voorstel-stip op chips zichtbaarder).
 
 ### Sessie 2 juni 2026 — Kalender-zondag-fix + status-graphic op Vandaag + Vorm-trend tastbaar + eerlijke jaar-stats
 
