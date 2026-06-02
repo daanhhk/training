@@ -310,11 +310,26 @@ function getDashboardState() {
   // ── Vorm ──
   var reeks = dashVormReeks_();
   var statsBundle = dashStatsFromActivities_();
+  // Event-countdown uit bepaalFaseVoorDatum_ (al berekend in `macro`).
+  var evDatum = macro.eventDate || (macro.hoofdEvent && macro.hoofdEvent.datum) || null;
+  var dagenTot = null;
+  if (evDatum) {
+    var dt = Math.round((stripTime_(new Date(evDatum)).getTime() - today.getTime()) / 86400000);
+    dagenTot = dt >= 0 ? dt : null;
+  }
   var vorm = {
     reeks: reeks,
     huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null,
     stats: statsBundle.stats,
-    ftp: settings.ftp || null
+    ftp: settings.ftp || null,
+    macroFase: macro.fase || null,
+    rampBuildMin: (typeof RAMP_BUILD_MIN !== 'undefined') ? RAMP_BUILD_MIN : 3,
+    garminVerdict: garminVerdict,
+    event: {
+      naam: macro.eventName || (macro.hoofdEvent && macro.hoofdEvent.naam) || null,
+      datum: evDatum ? formatDate(new Date(evDatum), 'yyyy-MM-dd') : null,
+      dagenTot: dagenTot
+    }
   };
 
   return {
