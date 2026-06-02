@@ -1,4 +1,4 @@
-LAATST BIJGEWERKT: 2026-06-02 · COMMIT: ce3b2d4 · STAND: web-app dashboard v1.2 — Vorm-tab status-first (countdown-ring + status-badge + uitleg), CTL/ATL/Vorm gedegradeerd tot Trend & details; long_z2 gele-staart gefixt. Volgende: Prompt 3 (tik-op-voltooide-training detail).
+LAATST BIJGEWERKT: 2026-06-02 · COMMIT: f8d7e2d · STAND: web-app dashboard v1.3 — kalender toont zondag (DST-fix), status-graphic ook bovenaan Vandaag, Vorm-trend mensentaal (Fitheid/Vermoeidheid/Vorm + zone-band-strip), eerlijke jaar-stats. Volgende: Prompt 3 (tik-op-voltooide-training detail).
 
 OPENER VOLGENDE CHAT — kopieer alles tussen de streepjes als eerste bericht in een nieuwe chat:
 ----------------------------------------------------------------
@@ -12,7 +12,7 @@ WERKWIJZE (staande regels):
 - HANDOFF.md committen gaat via git commit + push, GEEN clasp push (staat niet in src/).
 - Deployment: dev/test loopt ALTIJD via de /dev (HEAD) URL — elke clasp push -f is daar direct live, NOOIT redeployen. /exec is een vastgepinde versie; die bump je alleen indien nodig via clasp update-deployment <id> door Claude Code in de close-out, NOOIT handmatig in de editor (Implementaties beheren). Negeer oudere "redeploy via Implementaties beheren"-lessen in het archief — die golden voor de inmiddels dode webhook-bot, niet voor deze web-app.
 
-STAND (leidend, commit ce3b2d4): read-only HtmlService web-app, 3 tabs Vandaag/Kalender/Vorm. Vorm-tab is status-first: countdown-ring (dagen tot Girona + macro-fase) + status-badge (Bouwt op/Onderhoudt/Te veel/Achteruit/Fris uit formZone+ramp) + inline "i"-uitleg; CTL/ATL/Vorm-grafiek + stats staan eronder als "Trend & details". v1.1 Optie B: renderVariant_ én nu ook genericLongZ2 emitten geordende blokken {minuten,zone} (5-bucket pctZoneBucket_); zone-balk segmentsFromBlokken_ + intent-fallback. Palet CSS-vars, accent indigo #5B5BD6. getDashboardState() triggert NOOIT generateProposal; voorstellen uit weekplan_<maandag>, RPE uit rpe_<dISO>, week+1 uit Weekplanner+1; vorm-blok heeft nu macroFase + event{naam,datum,dagenTot}. /dev-URL: https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev · /exec-deployment-ID: AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug. Known gaps: combo/pendel geen blokken (long_z2 nu wél); blokken verschijnen pas na volgende Genereer voorstel.
+STAND (leidend, commit f8d7e2d): read-only HtmlService web-app, 3 tabs Vandaag/Kalender/Vorm. Gedeelde status-graphic (countdown-ring tot Girona + macro-fase-pill + status-badge Bouwt op/Onderhoudt/Te veel/Achteruit/Fris uit formZone+ramp + inline "i"-uitleg) staat zowel bovenaan Vorm ALS bovenaan Vandaag (statusGraphicHtml(sfx), één bron). Kalender toont nu een aaneengesloten reeks incl. zondag (DST-fix: setDate-stepping i.p.v. +86400000-ms). Vorm-trend in mensentaal: Fitheid(CTL)/Vermoeidheid(ATL)/Vorm + caption + aparte Vorm-zone-band-strip (Google Charts kan geen y-range-banden). Eerlijke periode-stats: vorm.spanDagen/eersteDatum → bij <venster historie een dekkings-sublabel i.p.v. stil 28d=jaar. v1.1 Optie B: renderVariant_ én genericLongZ2 emitten blokken {minuten,zone} (5-bucket pctZoneBucket_); zone-balk segmentsFromBlokken_ + intent-fallback. Palet CSS-vars, accent indigo #5B5BD6. getDashboardState() triggert NOOIT generateProposal; voorstellen uit weekplan_<maandag>, RPE uit rpe_<dISO>, week+1 uit Weekplanner+1; vorm-blok: huidig/reeks/stats/macroFase/event/spanDagen/garminVerdict/rampBuildMin. /dev-URL: https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev · /exec-deployment-ID: AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug. Known gaps: combo/pendel geen blokken (long_z2 nu wél); Activiteiten-tab = 28d sync-window → jaar-stats degraderen (backfill via grotere getActivities-window is mogelijk, nog niet gedaan); blokken pas na volgende Genereer voorstel.
 
 VOLGENDE STAP — Prompt 3: tik op een voltooide training → uitklap met rit-detail (gem. vermogen/NP, gem. HR, IF, afstand, hm, time-in-zone); vergt uitbreiding van het actual-object in getDashboardState (nu: naam/duurMin/tss/rpe/rpeVerwacht/mismatch).
 
@@ -26,6 +26,14 @@ gericht op Garmin "Productive" status, met intervals.icu sync en
 Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
+
+### Sessie 2 juni 2026 — Kalender-zondag-fix + status-graphic op Vandaag + Vorm-trend tastbaar + eerlijke jaar-stats
+
+- STAP 0: (0a) kalender root-cause = DST-drift: de dag-loop stapte met +86400000ms; ná de maart-DST-grens stond d op 01:00, terwijl curWeekEnd (zondag) op 00:00 lag → `d <= curWeekEnd` viel false → zondag weg. Fix = date-only setDate-stepping + stripTime curWeekEnd. (0b) status-graphic bront op state.vorm (al in payload) → geen Vandaag-payload-uitbreiding nodig. (0c) chart = Google Charts LineChart; geen native horizontale y-range-banden → aparte Vorm-strip gekozen. (0d) vorm.stats uit Activiteiten-tab, die door syncActivities met getActivities(28) ~28 dagen bevat → jaar==d28 (data-span-clamp, geen window-bug).
+- Kalender: zondag rendert weer; "opent op vandaag" behouden. Commit 1c42bc5 (samen met payload-velden).
+- Status-graphic geëxtraheerd naar statusGraphicHtml(sfx) (unieke uitleg-id per mount), gemount bovenaan Vandaag boven de gereedheid-banner. Garmin-verwachting-regel bewust NIET samengevoegd met de badge (Daan beslist later). Commit f8d7e2d.
+- Vorm-trend: series Fitheid(CTL)/Vermoeidheid(ATL)/Vorm, micro-caption, aparte SVG Vorm-zone-band-strip (Overgang/Fris/Grijs/Optimaal/Risico). Eerlijke jaar-stats: dekkings-sublabel bij beperkte historie. Commit f8d7e2d.
+- Vorige Vorm-tab-sessie (ontbraken in vorig rapport): status-first redesign e5345da + ea5a653; long_z2 gele-staart-fix ce3b2d4.
 
 ### Sessie 2 juni 2026 — Vorm-tab status-first + long_z2 gele-staart-fix
 
