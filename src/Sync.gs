@@ -11,7 +11,7 @@
 
 // Rollend historie-venster voor de Activiteiten-tab (~13 maanden). Full-
 // replace bij elke sync, dus veilig idempotent (geen append/dedupe nodig).
-var ACT_HISTORY_DAYS = 400;
+var ACT_HISTORY_DAYS = 730;
 
 function syncAll(e) {
   var fromTrigger = !!(e && e.triggerUid);
