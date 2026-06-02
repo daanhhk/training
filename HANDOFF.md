@@ -1,4 +1,4 @@
-LAATST BIJGEWERKT: 2026-06-02 · COMMIT: 796c548 · STAND: JOIN-redesign draad (1) af + historie 2jr; draad (2) gescoped, 2a klaar om te bouwen.
+LAATST BIJGEWERKT: 2026-06-02 · COMMIT: 73f261b · STAND: niveau-kaart 2a + 2b-1 af; 2b-2-backend (voortgangPct) af, frontend volgende. Schema+Vorm tabs werkend (var-collisie gefixt).
 
 OPENER VOLGENDE CHAT — kopieer alles tussen de streepjes als eerste bericht in een nieuwe chat:
 ----------------------------------------------------------------
@@ -12,11 +12,27 @@ WERKWIJZE (staande regels):
 - HANDOFF.md committen gaat via git commit + push, GEEN clasp push (staat niet in src/).
 - Deployment: dev/test loopt ALTIJD via de /dev (HEAD) URL — elke clasp push -f is daar direct live, NOOIT redeployen. /exec is een vastgepinde versie; die bump je alleen indien nodig via clasp update-deployment <id> door Claude Code in de close-out, NOOIT handmatig in de editor (Implementaties beheren). Negeer oudere "redeploy via Implementaties beheren"-lessen in het archief — die golden voor de inmiddels dode webhook-bot, niet voor deze web-app.
 
-STAND (leidend, commit f8d7e2d): read-only HtmlService web-app, 3 tabs Vandaag/Kalender/Vorm. Gedeelde status-graphic (countdown-ring tot Girona + macro-fase-pill + status-badge Bouwt op/Onderhoudt/Te veel/Achteruit/Fris uit formZone+ramp + inline "i"-uitleg) staat zowel bovenaan Vorm ALS bovenaan Vandaag (statusGraphicHtml(sfx), één bron). Kalender toont nu een aaneengesloten reeks incl. zondag (DST-fix: setDate-stepping i.p.v. +86400000-ms). Vorm-trend in mensentaal: Fitheid(CTL)/Vermoeidheid(ATL)/Vorm + caption + aparte Vorm-zone-band-strip (Google Charts kan geen y-range-banden). Eerlijke periode-stats: vorm.spanDagen/eersteDatum → bij <venster historie een dekkings-sublabel i.p.v. stil 28d=jaar. v1.1 Optie B: renderVariant_ én genericLongZ2 emitten blokken {minuten,zone} (5-bucket pctZoneBucket_); zone-balk segmentsFromBlokken_ + intent-fallback. Palet CSS-vars, accent indigo #5B5BD6. getDashboardState() triggert NOOIT generateProposal; voorstellen uit weekplan_<maandag>, RPE uit rpe_<dISO>, week+1 uit Weekplanner+1; vorm-blok: huidig/reeks/stats/macroFase/event/spanDagen/garminVerdict/rampBuildMin. /dev-URL: https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev · /exec-deployment-ID: AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug. Known gaps: combo/pendel geen blokken (long_z2 nu wél); Activiteiten-tab = 28d sync-window → jaar-stats degraderen (backfill via grotere getActivities-window is mogelijk, nog niet gedaan); blokken pas na volgende Genereer voorstel.
+STAND (leidend, commit 73f261b): read-only HtmlService web-app, tabs Schema + Vorm, /dev-URL https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev · /exec-deployment-ID AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug. Bezig met DRAAD (2): niveau-kaart op de status-deck.
 
-VOLGENDE STAP — Prompt 3: tik op een voltooide training → uitklap met rit-detail (gem. vermogen/NP, gem. HR, IF, afstand, hm, time-in-zone); vergt uitbreiding van het actual-object in getDashboardState (nu: naam/duurMin/tss/rpe/rpeVerwacht/mismatch).
+2a AF (dfb2a79 + f1253d5): swipe-deck in statusGraphicHtml(sfx), per-mount ids swrap-/sdots-{sfx}, geïnjecteerd in #schema-status/#vorm-status, genest in renderSchema/renderVorm. Kaart 1 = ring + verdict (.status-left + .status-right); kaart 2 = niveau-blok (.niveau-block: .niveau-getal/.niveau-label/.niveau-wkg). FRAGIEL: .status-card MOET houden display:flex; gap:12px; flex:0 0 100% (kaart 1 gebruikt interne flex om ring+verdict naast elkaar te zetten). Deck-CSS NIET aanraken.
 
-Bevestig kort de stand, vraag wat je nog nodig hebt (welke vorm-velden getDashboardState nu levert), schrijf dan Prompt 2.
+2b-1 AF (4a28f89): niveau = clamp(niveauBasis + conditieMod, 0, 50). niveauBasis = computeNiveau_(ftp, gewicht) (W/kg-anker; ankers 1,0 W/kg=0 / 6,9=50, geclampd; FTP = handmatige cel, ftp_auto_update bevestigd UIT). conditieMod = computeConditieMod_(ctlNow, ctlRef): CTL_SPAN=10, BAND=2,0, cap ±2, dalen toegestaan (GEEN taper-freeze — overschrijft de eerdere "houdt vast"). ctlNow = vorm.huidig.ctl; ctlRef = gem. CTL oudste min(7,span) van vorm.reeks. Payload top-level: niveau/niveauBasis/conditieMod/wkg/gewicht/ftp/ctlRef.
+
+2b-2 BACKEND AF (HEAD): voortgangPct = ADHERENCE = werkelijkTssCum / verwachtTssCum ×100. verwachtTssCum = Σ(fase-uren-midden per week doelStart→nu, lopende week pro-rata) × tssPerUur. tssPerUur = jaarTSS/jaarUren (dashStatsFromActivities_ jaar-bucket {tss,tijdMin,ritten}), fallback 54. werkelijkTssCum = sumTssVanafDatum_(ss, doelStart) (Activiteiten kol A datum, kol I idx8 TSS). Fase = bepaalFaseVoorDatum_(maandag).fase; getVolumeTargets()[fase]=[min,max], guard vt[fase]||vt.Build||[4,7]. Payload top-level: voortgangPct/werkelijkTssCum/verwachtTssCum/tssPerUur. NB: voortgangPct toonde 55% — laag (mik ~85-115%); tunen NA de frontend (knoppen: tssPerUur jaar-vs-vast; uren-range midden-vs-min).
+
+2b-2 FRONTEND NIET AF (teruggedraaid wegens regressie) = VOLGENDE STAP.
+
+REGRESSIE-LES: variabele-collisie in getDashboardState — een lokale `dagen` (2b-2 pro-rata) overschreef de payload dag-array `dagen` (var = function-scoped) → renderSchema crashte (state.dagen geen array) → alle content na de deck weg, beide tabs. Gefixt door hernoeming → dagOffset (73f261b). LES 1: payload-uitbreidingen NOOIT lokale namen die payload-keys schaduwen (dagen/vorm/athlete/reeks/event). LES 2: bij content-verlies eerst console + incognito (cache uitsluiten), DAN diagnose — niet CSS/HTML gokken.
+
+VOLGENDE STAP — 2b-2-frontend schoon herintroduceren (verse chat):
+- "<pct>% van plan" via nl(voortgangPct,0), STRIKT binnen .niveau-block na .niveau-wkg, in statusGraphicHtml. Mount-suffix-safe (interpoleren, geen vaste id over 2 mounts).
+- Één geïsoleerde + syntactisch sluitende CSS-regel .niveau-voortgang (klein/gedempt). Deck-CSS ONAANGEROERD.
+- Verifieer DIRECT visueel op /dev (incognito/hard refresh) + console schoon — niet op diag vertrouwen.
+- Backend (voortgangPct) staat al klaar. Daarna: tuning 55%, dan 2b-3 (beginniveau→huidig; CTL herberekenbaar uit activiteiten-TSS tot 2024 — geen API/tab-uitbreiding), 2c (maand-trend Vorm), draad (3) fase-toon, (4) polish.
+
+ARCHITECTUUR: nl(n,dec)=NL-format. computeNiveau_/computeConditieMod_/sumTssVanafDatum_ in WebApp.gs. _Diag.gs opgeruimd (gitignored patroon). Idee later (bot-kant): na FTP-test via Telegram om FTP-update vragen (web-app is read-only).
+
+Bevestig kort de stand, vraag wat je nog nodig hebt, schrijf dan de 2b-2-frontend-prompt.
 ----------------------------------------------------------------
 
 # FTP Trainings Coach — Handoff
@@ -26,6 +42,14 @@ gericht op Garmin "Productive" status, met intervals.icu sync en
 Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
+
+### Sessie 2 juni 2026 — draad (2) niveau-kaart: 2a + 2b-1 + 2b-2-backend + regressie-fix
+
+- 2a (dfb2a79 + f1253d5): swipe-deck in statusGraphicHtml(sfx) — kaart 1 ring+verdict, kaart 2 niveau-blok (W/kg-anker), per-mount ids, dots. .status-card FRAGIEL (display:flex; gap:12px; flex:0 0 100% — niet aanraken).
+- 2b-1 (4a28f89): niveau = clamp(niveauBasis + conditieMod, 0, 50). computeNiveau_(ftp,gewicht) W/kg-anker (FTP-cel, ftp_auto_update UIT); computeConditieMod_(ctlNow,ctlRef) CTL_SPAN=10/BAND=2,0/cap±2, dalen toegestaan (GEEN taper-freeze). ctlRef = gem. CTL oudste min(7,span) van vorm.reeks.
+- 2b-2 BACKEND (HEAD): voortgangPct = adherence (werkelijkTssCum/verwachtTssCum). sumTssVanafDatum_ (Activiteiten kol I), fase-uren×tssPerUur (jaarTSS/jaarUren, fallback 54). Toonde 55% — tunen ná frontend.
+- REGRESSIE + fix (73f261b): lokale `var dagen` (2b-2 pro-rata) schaduwde de payload dag-array `dagen` → state.dagen geen array → renderSchema crash → alle content na deck weg (beide tabs). Hernoemd → dagOffset. 2b-2-frontend teruggedraaid; herintroductie = volgende stap.
+- LES: payload-uitbreidingen nooit lokale namen die payload-keys schaduwen; bij content-verlies eerst console+incognito, dan pas diagnose (niet CSS gokken).
 
 ### Sessie 2 juni 2026 — JOIN-redesign: draad (1) + historie-venster + draad (2) scoping
 
