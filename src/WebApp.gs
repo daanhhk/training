@@ -227,6 +227,18 @@ function computeNiveau_(ftp, gewicht) {
   return { wkg: wkg, niveau: niveau };
 }
 
+/**
+ * CTL-gedreven conditie-modifier op het W/kg-anker (2b-1). Band-capped op
+ * ±BAND niveau-punten; dalen toegestaan (geen taper-freeze). ctlRef = CTL
+ * aan het begin van het zichtbare venster. Geen data → 0.
+ */
+function computeConditieMod_(ctlNow, ctlRef) {
+  if (ctlNow == null || ctlRef == null) return 0;
+  var CTL_SPAN = 10, BAND = 2.0;   // ±10 CTL-verandering = ±2,0 niveau-punten; tunable
+  var raw = (ctlNow - ctlRef) / CTL_SPAN * BAND;
+  return Math.max(-BAND, Math.min(BAND, raw));
+}
+
 // ── Hoofdgetter ──────────────────────────────────────────────────
 function getDashboardState() {
   var ss = SpreadsheetApp.getActive();
@@ -368,12 +380,31 @@ function getDashboardState() {
   var gewicht = getGewicht();
   var niv = computeNiveau_(settings.ftp, gewicht);
 
+  // 2b-1: conditie-modifier op het anker. ctlNow = actuele CTL; ctlRef =
+  // gemiddelde CTL over de oudste min(7, span) punten van vorm.reeks
+  // (= waar dit venster begon). Reeks leeg → ctlRef = ctlNow → mod 0.
+  var ctlNow = (vorm.huidig && vorm.huidig.ctl != null) ? vorm.huidig.ctl : null;
+  var ctlRef = ctlNow;
+  if (reeks && reeks.length) {
+    var head = reeks.slice(0, Math.min(7, reeks.length));
+    var sum = 0, cnt = 0;
+    head.forEach(function (r) { if (r.ctl != null) { sum += r.ctl; cnt++; } });
+    if (cnt) ctlRef = sum / cnt;
+  }
+  var niveauBasis = niv.niveau;
+  var conditieMod = computeConditieMod_(ctlNow, ctlRef);
+  var niveauLevend = (niveauBasis == null) ? null
+    : Math.max(0, Math.min(50, niveauBasis + conditieMod));
+
   return {
     athlete: { ftp: settings.ftp || null, naam: '' },
     ftp: settings.ftp || null,
     gewicht: gewicht || null,
     wkg: niv.wkg,
-    niveau: niv.niveau,
+    niveau: niveauLevend,
+    niveauBasis: niveauBasis,
+    conditieMod: conditieMod,
+    ctlRef: ctlRef != null ? Math.round(ctlRef * 10) / 10 : null,
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,
