@@ -220,9 +220,31 @@
     } else {
       right = '<div class="status-right"><div class="status-verdict">Geen vorm-data.</div></div>';
     }
-    return '<div class="status-wrap">' + left + right + '</div>' +
+    // KAART 2 — W/kg-ankerniveau (2a; conditie-modifier volgt in 2b).
+    // niveau/wkg staan top-level op state (niet op state.vorm).
+    var nivGetal = (state.niveau != null) ? nl(state.niveau, 1) : '–';
+    var nivWkg = (state.wkg != null) ? nl(state.wkg, 2) + ' W/kg' : '–';
+    var card2 = '<div class="status-card"><div class="niveau-block">' +
+      '<div class="niveau-getal">' + nivGetal + '</div>' +
+      '<div class="niveau-label">Niveau</div>' +
+      '<div class="niveau-wkg">' + nivWkg + '</div></div></div>';
+
+    return '<div class="status-wrap" id="swrap-' + sfx + '" onscroll="syncDots(\'' + sfx + '\')">' +
+      '<div class="status-card">' + left + right + '</div>' + card2 + '</div>' +
+      '<div class="status-dots" id="sdots-' + sfx + '"><span class="dot active"></span><span class="dot"></span></div>' +
       '<div class="explainer" id="vorm-uitleg-' + sfx + '" style="display:none">' +
       (def ? esc(def.uitleg) : '') + '</div>';
+  }
+
+  // Dot-indicator synct met de swipe-positie van de status-deck.
+  function syncDots(sfx) {
+    var track = document.getElementById('swrap-' + sfx);
+    var dots = document.getElementById('sdots-' + sfx);
+    if (!track || !dots) return;
+    var idx = Math.round(track.scrollLeft / track.clientWidth);
+    for (var i = 0; i < dots.children.length; i++) {
+      dots.children[i].classList.toggle('active', i === idx);
+    }
   }
   function renderVormStatus() {
     document.getElementById('vorm-status').innerHTML = statusGraphicHtml('vorm');
