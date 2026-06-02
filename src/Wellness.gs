@@ -13,7 +13,8 @@
 var WELLNESS_SHEET = 'Wellness';
 
 var WELL_HEADERS = [
-  'Datum', 'RHR', 'HRV', 'Slaap (u)', 'Slaap-score', 'Readiness', 'Mood', 'Weight (kg)'
+  'Datum', 'RHR', 'HRV', 'Slaap (u)', 'Slaap-score', 'Readiness', 'Mood', 'Weight (kg)',
+  'CTL', 'ATL', 'Vorm', 'Ramp'
 ];
 
 var WELL_STATS_ROW = 35;
@@ -64,7 +65,31 @@ function buildWellness(ss) {
   sh.getRange(WELL_STATS_ROW + 4, 1).setValue('Gem Readiness:').setFontWeight('bold');
   sh.getRange(WELL_STATS_ROW + 4, 2).setFormula('=IFERROR(ROUND(AVERAGE(F2:F8);1);"")');
 
+  // Vorm/Ramp van de nieuwste rij (rij 2 = nieuwste, data staat nieuwste-eerst).
+  sh.getRange(WELL_STATS_ROW + 5, 1).setValue('Huidige Vorm:').setFontWeight('bold');
+  sh.getRange(WELL_STATS_ROW + 5, 2).setFormula('=IFERROR(K2;"")');
+
+  sh.getRange(WELL_STATS_ROW + 6, 1).setValue('CTL-ramp/wk:').setFontWeight('bold');
+  sh.getRange(WELL_STATS_ROW + 6, 2).setFormula('=IFERROR(L2;"")');
+
+  // TSB-trend (Fitness & Freshness). Idempotent: bestaande charts eerst weg
+  // zodat rebuild niet dupliceert. Data is nieuwste-eerst → hAxis omdraaien
+  // zodat de tijdas oudste-links loopt (zoals intervals.icu).
+  sh.getCharts().forEach(function (c) { sh.removeChart(c); });
+  var nRows = WELL_STATS_ROW - 2;   // header (rij 1) + datarijen 2..33
+  var chart = sh.newChart()
+    .setChartType(Charts.ChartType.LINE)
+    .addRange(sh.getRange(1, 1, nRows, 1))   // Datum (A) — domein
+    .addRange(sh.getRange(1, 9, nRows, 3))   // CTL, ATL, Vorm (I, J, K)
+    .setNumHeaders(1)
+    .setOption('title', 'Fitness (CTL) · Vermoeidheid (ATL) · Vorm (TSB)')
+    .setOption('hAxis.direction', -1)
+    .setOption('legend', { position: 'top' })
+    .setPosition(WELL_STATS_ROW + 8, 1, 0, 0)
+    .build();
+  sh.insertChart(chart);
+
   SpreadsheetApp.flush();
-  var widths = [100, 80, 80, 100, 110, 110, 80, 110];
+  var widths = [100, 80, 80, 100, 110, 110, 80, 110, 70, 70, 70, 70];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 }

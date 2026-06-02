@@ -193,7 +193,11 @@ function syncWellness() {
       blankIfNull_(w.sleepScore != null ? w.sleepScore : w.sleep_score),
       blankIfNull_(w.readiness),
       blankIfNull_(w.mood),
-      blankIfNull_(w.weight)
+      blankIfNull_(w.weight),
+      blankIfNull_(w.ctl != null ? Math.round(w.ctl * 10) / 10 : null),
+      blankIfNull_(w.atl != null ? Math.round(w.atl * 10) / 10 : null),
+      blankIfNull_((w.ctl != null && w.atl != null) ? Math.round((w.ctl - w.atl) * 10) / 10 : null),
+      blankIfNull_(w.rampRate != null ? Math.round(w.rampRate * 100) / 100 : null)
     ];
   });
 
@@ -204,6 +208,8 @@ function syncWellness() {
   if (rows.length) {
     sh.getRange(2, 1, rows.length, WELL_HEADERS.length).setValues(rows);
     sh.getRange(2, 1, rows.length, 1).setNumberFormat('dd-MM-yyyy');
+    sh.getRange(2, 9, rows.length, 3).setNumberFormat('0.0');    // CTL/ATL/Vorm
+    sh.getRange(2, 12, rows.length, 1).setNumberFormat('0.00');  // Ramp
   }
 }
 
