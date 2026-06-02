@@ -1745,6 +1745,18 @@ function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
     ? { low: 10 + baseMin + Math.max(0, klimReps - 1) * 5 + 5, high: klimReps * 8, anaerobic: 0 }  // warmup + base + intra-rest + cooldown
     : { low: totaalMin, high: 0, anaerobic: 0 };
 
+  // Geordende blokken voor de dashboard zone-balk (sluit de long_z2-gap +
+  // fixt de onterechte gele staart: zonder blokken viel de balk terug op
+  // de intent en kleurde klim-sim (high) geel i.p.v. groen/drempel).
+  var blokken = [{ minuten: 10, zone: 'rust' }, { minuten: baseMin, zone: 'z2' }];
+  if (hilly) {
+    for (var kr = 0; kr < klimReps; kr++) {
+      blokken.push({ minuten: 8, zone: pctZoneBucket_(91) });          // 88-95% → drempel (groen)
+      if (kr < klimReps - 1) blokken.push({ minuten: 5, zone: 'z2' });  // intra-rust @ 60%
+    }
+  }
+  blokken.push({ minuten: 5, zone: 'rust' });
+
   return {
     naam: 'Lange Z2 (' + totaalMin + ' min)',
     focus: 'aerobic base',
@@ -1752,6 +1764,7 @@ function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
     totaalMin: totaalMin,
     structuur: structuur,
     intent: intent,
+    blokken: blokken,
     tss: Math.round(totaalMin * (hilly ? 0.8 : 0.7)),
     eindopmerking: eind,
     tooLong: tooLong
