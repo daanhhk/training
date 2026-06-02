@@ -144,6 +144,7 @@ function generateProposal() {
       variantId: wo.variantId || null,
       zones: wo.zones || [],
       intent: ensureIntent_(wo),
+      blokken: wo.blokken || null,
       tss: wo.tss || 0,
       minuten: wo.totaalMin || 0
     });
@@ -1496,11 +1497,28 @@ function scaleBlocksToFit_(blocks, mins, warm, cool) {
 }
 
 /**
+ * %FTP → zone-bucket voor de dashboard zone-balk (5-bucket resolutie).
+ * rust < 56 / z2 56-75 / tempo 76-90 / drempel 91-105 / anaeroob > 105.
+ */
+function pctZoneBucket_(pct) {
+  pct = Number(pct) || 0;
+  if (pct < 56)  return 'rust';
+  if (pct <= 75) return 'z2';
+  if (pct <= 90) return 'tempo';
+  if (pct <= 105) return 'drempel';
+  return 'anaeroob';
+}
+
+/**
  * Rendert een variant-spec naar een workout-object met intent.
  * adj(basePct) = round(basePct * mesoFactor) + fase-offset.
  * intent = target tijd-in-zone (min) per load-focus bucket.
  * mins (optioneel) = beschikbare minuten — als gegeven, krimpen blocks
  * via scaleBlocksToFit_ zodat totaalMin onder mins blijft waar mogelijk.
+ *
+ * ADDITIEF: emit ook `blokken` = geordende [{minuten, zone}] (zone uit
+ * %FTP via pctZoneBucket_) voor de dashboard zone-balk. structuur/intent/
+ * generatie ongewijzigd.
  */
 function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
   var ftp = settings.ftp, lthr = settings.lthr;
@@ -1516,6 +1534,7 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
   var structuur = [['Warmup', warm + ' min', wattsRange(ftp, 50, 68), bpmBelow(lthr, 85), 'Inrijden, opbouwend']];
   var intent = { low: warm + cool, high: 0, anaerobic: 0 };
   var mainMin = 0;
+  var blokken = [{ minuten: warm, zone: 'rust' }];   // warmup laag-intensief
 
   var rawBlocks = variant.blocks(adj);
   var blocks = scaleBlocksToFit_(rawBlocks, mins, warm, cool);
@@ -1536,6 +1555,12 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
       intent[variant.zone] += b.reps * onMin;
       intent.low += b.reps * offMin;
       mainMin += b.reps * (onMin + offMin);
+      // per rep: werk-blok + rust-blok → interval-vorm in de balk
+      var onZone = pctZoneBucket_(b.onPct), offZone = pctZoneBucket_(b.offPct);
+      for (var rr = 0; rr < b.reps; rr++) {
+        if (onMin > 0)  blokken.push({ minuten: Math.round(onMin * 10) / 10, zone: onZone });
+        if (offMin > 0) blokken.push({ minuten: Math.round(offMin * 10) / 10, zone: offZone });
+      }
     } else { // steady
       var z = b.zone || variant.zone;
       structuur.push([
@@ -1545,10 +1570,12 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
       ]);
       intent[z] += b.durMin;
       mainMin += b.durMin;
+      blokken.push({ minuten: b.durMin, zone: pctZoneBucket_(b.pct) });
     }
   });
 
   structuur.push(['Cooldown', cool + ' min', wattsRange(ftp, 45, 55), '—', 'Easy uit']);
+  blokken.push({ minuten: cool, zone: 'rust' });
 
   var totaalMin = warm + cool + mainMin;
   var rate = variant.zone === 'anaerobic' ? 1.05 : (variant.zone === 'high' ? 0.95 : 0.7);
@@ -1564,6 +1591,7 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
     totaalMin: totaalMin,
     structuur: structuur,
     intent: intent,
+    blokken: blokken,
     tss: Math.round(totaalMin * rate),
     eindopmerking: variant.tip || (variant.naam + ' — variant van deze week (roteert wekelijks).'),
     tooLong: tooLong
