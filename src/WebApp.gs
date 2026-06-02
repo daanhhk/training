@@ -272,53 +272,58 @@ function getDashboardState() {
     actual: todayCard.actual
   };
 
-  // ── Dagen (~90d terug t/m einde huidige week + week+1 preview) ──
-  var dagen = [];
-  var windowStart = new Date(today.getTime() - 90 * 86400000);
-  // Date-only grenzen + setDate-stepping: ms-arithmetiek (+86400000) drift
-  // 1u over de maart-DST-grens, waardoor d ná de grens op 01:00 staat en de
-  // laatste dag (zondag, curWeekEnd op 00:00) uit de <=-vergelijking viel.
-  var curWeekEnd = stripTime_(new Date(weekStart.getTime() + 6 * 86400000));
-  var d = stripTime_(windowStart);
-  while (d.getTime() <= curWeekEnd.getTime()) {
-    var dISO = formatDate(d, 'yyyy-MM-dd');
-    var card = dashDayCard_(dISO, wpByDate[dISO], actuals[dISO], rpeFor(dISO));
-    var isToday = dISO === todayISO;
-    var status, kleur = null;
-    if (actuals[dISO]) { status = isToday ? 'vandaag' : 'voltooid'; }
-    else if (isToday)  { status = 'vandaag'; }
-    else if (d.getTime() > today.getTime() && card.voorstel) { status = 'gepland'; }
-    else if (card.voorstel) { status = 'gepland'; }
-    else { status = 'rust'; }
-    if (card.voorstel) {
-      var seg0 = card.voorstel.segmenten[card.voorstel.segmenten.length - 1];
-      kleur = seg0 ? seg0.kleur : '#90a4ae';
-    }
-    dagen.push({
-      dateISO: dISO, weekdag: dashWeekdag_(d), kort: dashKort_(d),
-      status: status, kleur: kleur,
-      voorstel: card.voorstel, actual: card.actual, previewMin: null
-    });
-    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);  // DST-immuun
-  }
-  // Week+1 preview-chips uit de Weekplanner +1-tab (alleen beschikbaarheid).
+  // ── Dagen: venster [vandaag−28d (geklemd op vroegste data) … vandaag+7d] ──
+  // Continu per kalenderdag (rustdagen inbegrepen), date-only setDate-stepping
+  // (DST-immuun). Week+1-beschikbaarheid (Weekplanner+1) wordt als previewMin
+  // in de loop meegenomen voor toekomstige dagen zonder uitgewerkt voorstel.
+  var plus1Avail = {};   // dISO → minuten beschikbaarheid (volgende week)
   try {
     var plus1 = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
     if (plus1 && plannerHasData_(plus1)) {
       var p1 = plus1.getRange(3, 1, 7, 8).getValues();
-      for (var i = 0; i < 7; i++) {
-        if (!(p1[i][2] instanceof Date)) continue;
-        var pISO = formatDate(p1[i][2], 'yyyy-MM-dd');
-        var pdate = stripTime_(p1[i][2]);
-        dagen.push({
-          dateISO: pISO, weekdag: dashWeekdag_(pdate), kort: dashKort_(pdate),
-          status: 'preview', kleur: '#b0bec5',
-          voorstel: null, actual: null,
-          previewMin: (p1[i][0] === true ? (Number(p1[i][3]) || 0) : null)
-        });
+      for (var pi = 0; pi < 7; pi++) {
+        if (!(p1[pi][2] instanceof Date)) continue;
+        plus1Avail[formatDate(p1[pi][2], 'yyyy-MM-dd')] =
+          (p1[pi][0] === true ? (Number(p1[pi][3]) || 0) : null);
       }
     }
   } catch (e) {}
+
+  var dagen = [];
+  var lowerBound = stripTime_(new Date(today.getTime() - 28 * 86400000));
+  // Klem ondergrens op de vroegste datum in actuals/weekplan (geen lege voorloop).
+  var earliest = null;
+  [actuals, wpByDate].forEach(function (m) {
+    Object.keys(m).forEach(function (k) {
+      var kt = stripTime_(new Date(k)).getTime();
+      if (kt <= today.getTime() && (earliest === null || kt < earliest)) earliest = kt;
+    });
+  });
+  if (earliest !== null && earliest > lowerBound.getTime()) lowerBound = new Date(earliest);
+  var upperBound = stripTime_(new Date(today.getTime() + 7 * 86400000));
+  var d = new Date(lowerBound.getFullYear(), lowerBound.getMonth(), lowerBound.getDate());
+  while (d.getTime() <= upperBound.getTime()) {
+    var dISO = formatDate(d, 'yyyy-MM-dd');
+    var card = dashDayCard_(dISO, wpByDate[dISO], actuals[dISO], rpeFor(dISO));
+    var isToday = dISO === todayISO;
+    var isFuture = d.getTime() > today.getTime();
+    var status, kleur = null, previewMin = null;
+    if (isToday)                      { status = 'vandaag'; }
+    else if (actuals[dISO])           { status = 'voltooid'; }
+    else if (card.voorstel)           { status = 'gepland'; }
+    else if (isFuture && plus1Avail[dISO] != null) { status = 'preview'; previewMin = plus1Avail[dISO]; }
+    else                              { status = 'rust'; }
+    if (card.voorstel) {
+      var seg0 = card.voorstel.segmenten[card.voorstel.segmenten.length - 1];
+      kleur = seg0 ? seg0.kleur : '#90a4ae';
+    } else if (status === 'preview') { kleur = '#b0bec5'; }
+    dagen.push({
+      dateISO: dISO, weekdag: dashWeekdag_(d), kort: dashKort_(d),
+      status: status, kleur: kleur,
+      voorstel: card.voorstel, actual: card.actual, previewMin: previewMin
+    });
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);  // DST-immuun
+  }
 
   // ── Vorm ──
   var reeks = dashVormReeks_();

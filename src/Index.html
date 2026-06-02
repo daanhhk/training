@@ -10,23 +10,21 @@
       <div id="loading" class="loading">Laden…</div>
       <div id="error" class="error" style="display:none"></div>
 
-      <!-- VANDAAG -->
-      <section id="tab-vandaag" class="tab" style="display:none">
+      <!-- SCHEMA (Vandaag + Kalender samengevoegd) -->
+      <section id="tab-schema" class="tab" style="display:none">
         <header class="hdr">
-          <div class="hdr-title">Vandaag</div>
-          <div id="vandaag-datum" class="hdr-sub"></div>
+          <div class="hdr-title">Schema</div>
+          <div id="schema-datum" class="hdr-sub"></div>
         </header>
-        <div id="vandaag-body" class="body"></div>
-      </section>
-
-      <!-- KALENDER -->
-      <section id="tab-kalender" class="tab" style="display:none">
-        <header class="hdr">
-          <div class="hdr-title">Kalender</div>
-        </header>
-        <div id="maand-totalen" class="month-totals"></div>
+        <div class="body">
+          <div id="schema-status"></div>
+        </div>
         <div id="dag-strip" class="day-strip"></div>
         <div id="dag-detail" class="body"></div>
+        <div class="body">
+          <div class="section-kop">Maandtotalen</div>
+          <div id="maand-totalen" class="month-totals" style="padding:0"></div>
+        </div>
       </section>
 
       <!-- VORM -->
@@ -51,8 +49,7 @@
       </section>
 
       <nav id="bottomnav" class="bottomnav" style="display:none">
-        <button data-tab="vandaag" class="active"><span>🚴</span>Vandaag</button>
-        <button data-tab="kalender"><span>📅</span>Kalender</button>
+        <button data-tab="schema" class="active"><span>📅</span>Schema</button>
         <button data-tab="vorm"><span>📈</span>Vorm</button>
       </nav>
     </div>

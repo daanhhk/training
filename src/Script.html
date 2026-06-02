@@ -31,10 +31,9 @@
     selectedDate = s.vandaag ? s.vandaag.dateISO : null;
     document.getElementById('loading').style.display = 'none';
     document.getElementById('bottomnav').style.display = 'flex';
-    renderVandaag();
-    renderKalender();
+    renderSchema();
     renderVorm();
-    switchTab('vandaag');
+    switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
     google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); });
   }
@@ -92,33 +91,13 @@
     return h;
   }
 
-  // ── Vandaag ──
-  function renderVandaag() {
-    var v = state.vandaag;
-    document.getElementById('vandaag-datum').textContent = v ? (v.weekdag + ' · ' + v.dateISO) : '';
-    if (!v) { document.getElementById('vandaag-body').innerHTML = '<div class="muted body">Geen data.</div>'; return; }
-    var g = v.gereedheid, cls = 'b-' + (g.signaal === 'normal' ? 'normaal' : g.signaal);
-    // Gedeelde status-graphic bovenaan (zelfde als Vorm-tab).
-    var h = (state.vorm ? statusGraphicHtml('vandaag') : '');
-    h += '<div class="banner ' + cls + '">' +
-      (g.signaal === 'normal' ? '✅ Gereedheid normaal' : '⚠️ ' + esc(g.label || g.signaal)) +
-      (g.vorm != null ? ' · Vorm ' + g.vorm + ' (' + esc(g.vormZone) + ')' : '') + '</div>';
-    h += '<div class="card"><div class="muted">Garmin-verwachting</div><div class="accent" style="font-weight:700">' +
-      esc(v.garminStatus.verdict) + '</div></div>';
-    if (v.status === 'rust') {
-      h += '<div class="card"><h3>Rustdag</h3><div class="muted">Geen training gepland vandaag. Herstel is training.</div></div>';
-    } else if (v.status === 'voltooid' && v.actual) {
-      h += actualKaart(v.actual);
-    } else if (v.voorstel) {
-      h += voorstelKaart(v.voorstel);
-    } else {
-      h += '<div class="card"><div class="muted">Nog geen voorstel — draai Genereer voorstel in de Sheet.</div></div>';
-    }
-    document.getElementById('vandaag-body').innerHTML = h;
-  }
+  // ── Schema (Vandaag + Kalender samengevoegd) ──
+  function renderSchema() {
+    var vd = state.vandaag;
+    document.getElementById('schema-datum').textContent = vd ? (vd.weekdag + ' · ' + vd.dateISO) : '';
+    // Status-graphic bovenaan.
+    document.getElementById('schema-status').innerHTML = state.vorm ? statusGraphicHtml('schema') : '';
 
-  // ── Kalender ──
-  function renderKalender() {
     var mt = (state.maandTotalen || []).map(function (m) {
       return '<div class="mt"><div class="mlabel">' + esc(m.maand) + '</div>' +
         '<div class="mval">' + m.ritten + ' rit · ' + uMin(m.tijdMin) + '</div>' +
@@ -143,11 +122,7 @@
     });
     document.getElementById('dag-strip').innerHTML = strip;
     renderDagDetail();
-    // scroll geselecteerde chip in beeld
-    setTimeout(function () {
-      var el = document.querySelector('.chip.sel');
-      if (el) el.scrollIntoView({ inline: 'center', block: 'nearest' });
-    }, 30);
+    setTimeout(scrollSelectedChip, 30);  // vandaag in beeld
   }
 
   function selectDay(dISO) {
@@ -163,15 +138,33 @@
     var el = document.getElementById('dag-detail');
     if (!d) { el.innerHTML = ''; return; }
     var h = '<div class="muted" style="text-transform:capitalize;margin-bottom:6px">' + esc(d.weekdag) + ' ' + esc(d.kort) + '</div>';
-    if (d.status === 'preview') {
-      h += '<div class="card"><div class="muted">' + (d.previewMin ? '~' + d.previewMin + ' min gepland, type volgt' : 'Nog niet ingepland') + '</div></div>';
-    } else if (d.actual) {
+
+    if (d.status === 'vandaag') {
+      // Rijke vandaag-inhoud uit state.vandaag (status-graphic staat al bovenaan).
+      var v = state.vandaag;
+      var g = v.gereedheid, cls = 'b-' + (g.signaal === 'normal' ? 'normaal' : g.signaal);
+      h += '<div class="banner ' + cls + '">' +
+        (g.signaal === 'normal' ? '✅ Gereedheid normaal' : '⚠️ ' + esc(g.label || g.signaal)) +
+        (g.vorm != null ? ' · Vorm ' + g.vorm + ' (' + esc(g.vormZone) + ')' : '') + '</div>';
+      h += '<div class="card"><div class="muted">Garmin-verwachting</div><div class="accent" style="font-weight:700">' +
+        esc(v.garminStatus.verdict) + '</div></div>';
+      if (v.status === 'rust') {
+        h += '<div class="card"><h3>Rustdag</h3><div class="muted">Geen training gepland vandaag. Herstel is training.</div></div>';
+      } else {
+        if (v.voorstel) h += voorstelKaart(v.voorstel);
+        if (v.actual)   h += actualKaart(v.actual);
+        if (!v.voorstel && !v.actual) h += '<div class="card"><div class="muted">Nog geen voorstel — draai Genereer voorstel in de Sheet.</div></div>';
+      }
+    } else if (d.status === 'preview') {
+      h += '<div class="card"><div class="muted">Volgende week — ' +
+        (d.previewMin ? '~' + d.previewMin + ' min gepland (nog niet uitgewerkt)' : 'nog niet ingepland') + '</div></div>';
+    } else if (d.status === 'voltooid' && d.actual) {
       h += actualKaart(d.actual);
       if (d.voorstel) h += voorstelKaart(d.voorstel);
     } else if (d.voorstel) {
       h += voorstelKaart(d.voorstel);
     } else {
-      h += '<div class="card"><div class="muted">Rustdag.</div></div>';
+      h += '<div class="card"><div class="muted">Geen training deze dag.</div></div>';
     }
     el.innerHTML = h;
   }
@@ -350,16 +343,16 @@
   }
 
   function switchTab(name) {
-    ['vandaag', 'kalender', 'vorm'].forEach(function (t) {
+    ['schema', 'vorm'].forEach(function (t) {
       document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
     });
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === name);
     });
     if (name === 'vorm') drawVormChart();
-    // Kalender opent op vandaag: scroll de geselecteerde chip in beeld zodra
+    // Schema opent op vandaag: scroll de geselecteerde chip in beeld zodra
     // de container zichtbaar is (scrollIntoView werkt niet op display:none).
-    if (name === 'kalender') setTimeout(scrollSelectedChip, 30);
+    if (name === 'schema') setTimeout(scrollSelectedChip, 30);
   }
 
   document.addEventListener('DOMContentLoaded', function () {
