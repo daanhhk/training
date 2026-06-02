@@ -92,15 +92,11 @@
 
   /* Vorm status-graphic — swipeable deck */
   .status-wrap {
-    display: flex; gap: 12px; overflow-x: auto; max-width: 100%;
-    scroll-snap-type: x mandatory; scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+    scroll-behavior: smooth; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
   .status-wrap::-webkit-scrollbar { display: none; }
-  /* Elke kaart = exact één volle pagina. flex-basis:100% collapst in een
-     overflow-x flex-track → expliciet width+min-width forceert full-width. */
-  .status-card { flex: 0 0 100%; width: 100%; min-width: 100%; scroll-snap-align: start; }
-  .status-row { display: flex; gap: 12px; }
+  .status-card { flex: 0 0 100%; scroll-snap-align: center; display: flex; gap: 12px; }
   .status-dots { display: flex; justify-content: center; gap: 6px; margin-top: 8px; margin-bottom: 14px; }
   .status-dots .dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; }
   .status-dots .dot.active { background: var(--accent); }
@@ -108,7 +104,6 @@
   .niveau-getal { font-size: 44px; font-weight: 800; color: var(--accent); line-height: 1; }
   .niveau-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 6px; }
   .niveau-wkg { font-size: 14px; color: var(--muted); margin-top: 6px; }
-  .niveau-voortgang { font-size: 13px; color: var(--muted); margin-top: 4px; font-weight: 600; }
   .status-left, .status-right {
     flex: 1; background: var(--card); border-radius: 16px; padding: 14px;
     box-shadow: 0 2px 10px rgba(15,23,42,0.08); display: flex; flex-direction: column;
