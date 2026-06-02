@@ -95,6 +95,15 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     .setFontStyle('italic').setFontColor('#374151');
   r += 1;
 
+  // b2: week-op-week load-demping (display only; mesoFactor hierboven toont al de gedempte waarde).
+  var carryB = loadCarryFactor_(mesoWeek);
+  if (carryB.reason) {
+    sh.getRange(r, 1, 1, COLS).merge()
+      .setValue('📉  ' + carryB.reason)
+      .setBackground('#fef3c7').setFontColor('#92400e').setFontStyle('italic').setWrap(true);
+    r += 1;
+  }
+
   // Dekking banner
   var icon = function (ok) { return ok ? '✅' : '⬜'; };
   var dekText = 'Load focus dekking deze week:   ' +

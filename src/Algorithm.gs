@@ -42,7 +42,9 @@ function getVolumeTargets() {
 var CYCLING_TYPES = ['Ride', 'VirtualRide', 'GravelRide', 'MountainBikeRide'];
 
 function mesoFactor(week) {
-  return MESO_MOD[week] || 1.00;
+  // b2: week-op-week demping (loadCarry, gezet door generateProposal) bovenop
+  // de meso-ramp. Default 1 → geen demping als de prop niet gezet is.
+  return (MESO_MOD[week] || 1.00) * (parseFloat(getDocProp('loadCarry', '1')) || 1);
 }
 
 /**
@@ -61,6 +63,8 @@ function generateProposal() {
   var weekStart = weekStartDate(new Date());
   var macro     = bepaalFaseVoorDatum_(weekStart);  // event-driven, valt terug op vaste meso
   var mesoWeek  = getMesoWeek();
+  var loadCarry = loadCarryFactor_(mesoWeek);       // b2: week-op-week ramp-demping uit vorige-week-RPE
+  setDocProp('loadCarry', loadCarry.factor);        // mesoFactor() leest dit DocProp
   var days      = readPlanner(ss);                  // nu met gereconcileerde Gedaan-vinkjes
   var wellness  = getWellnessSignal(ss);
   wellness      = combineSignals_(wellness, rpeSignal_());  // RPE-bijsturing → zelfde demote-pad
@@ -1298,6 +1302,58 @@ function rpeSignal_() {
   return {
     signal: 'demote',
     reason: 'RPE +' + m.avg.toFixed(1).replace('.', ',') + ' deze week (laatste ' + m.n + ' sessies zwaarder dan gepland)'
+  };
+}
+
+/**
+ * Gemiddelde RPE-mismatch (werkelijk − verwacht) over VORIGE week (ma t/m zo).
+ * Durabele keys: rpe_<datum> (nooit gewist) + weekplan_<vorige-maandag> (per
+ * maandag, niet gewist door cleanupOldProposals_). Null bij < 2 gegradeerde
+ * sessies. Hele-week-gemiddelde (niet laatste-3) — dit is een week-trend.
+ */
+function rpeLastWeekMismatch_() {
+  var thisMonday = weekStartDate(new Date());
+  var lastMonday = new Date(thisMonday.getTime() - 7 * 24 * 60 * 60 * 1000);
+  var lastMondayISO = formatDate(lastMonday, 'yyyy-MM-dd');
+  var diffs = [];
+  var d = new Date(lastMonday);
+  for (var i = 0; i < 7; i++) {
+    var dISO = formatDate(d, 'yyyy-MM-dd');
+    var raw = getDocProp('rpe_' + dISO, '');
+    if (raw !== '') {
+      var exp = expectedRpe_(plannedTypeForDate_(dISO, lastMondayISO));
+      if (exp != null) diffs.push(parseInt(raw, 10) - exp);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  if (diffs.length < 2) return null;
+  var sum = 0; for (var j = 0; j < diffs.length; j++) sum += diffs[j];
+  return { avg: sum / diffs.length, n: diffs.length };
+}
+
+/**
+ * Pure mapping mismatch-gemiddelde → demp-factor. < 2 = geen demping (1);
+ * ≥ 2 = ×0,93 (cancelt ~één build-step); ≥ 3,5 = ×0,88 (vloer).
+ */
+function carryFactorForAvg_(avg) {
+  if (avg == null || avg < 2) return 1;
+  return (avg >= 3.5) ? 0.88 : 0.93;
+}
+
+/**
+ * Week-op-week load-demping (b2). Recovery-week overgeslagen (niet dubbel
+ * snijden bovenop MESO_MOD[4]=0,60). Geeft { factor, reason }.
+ */
+function loadCarryFactor_(mesoWeek) {
+  if (mesoWeek === 4) return { factor: 1, reason: '' };
+  var m = rpeLastWeekMismatch_();
+  var factor = m ? carryFactorForAvg_(m.avg) : 1;
+  if (factor === 1) return { factor: 1, reason: '' };
+  return {
+    factor: factor,
+    reason: 'Vorige week +' + m.avg.toFixed(1).replace('.', ',') + ' RPE zwaarder (' +
+            m.n + ' sessies) → load gedempt (×' + factor.toFixed(2).replace('.', ',') +
+            ', ramp aangehouden)'
   };
 }
 
