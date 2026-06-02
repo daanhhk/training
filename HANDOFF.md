@@ -1,5 +1,16 @@
 LAATST BIJGEWERKT: 2026-06-02 · COMMIT: 318190b · STAND: web-app dashboard v1+v1.1 live (3 tabs, zone-balk Optie B, /dev-URL). Volgende: Prompt 2 (Vorm status-first + long_z2-fix).
 
+OPENER VOLGENDE CHAT — kopieer alles tussen de streepjes als eerste bericht in een nieuwe chat:
+----------------------------------------------------------------
+Lees HANDOFF.md via web_fetch: https://github.com/daanhhk/training/blob/main/HANDOFF.md — diep archief (FTP Trainings Coach). LET OP: die fetch kan gecached/oud zijn; de stand hieronder is leidend. Lijkt de gefetchte HANDOFF ouder dan commit 318190b → dat is de cache, NIET "niet gepusht". Je leest mijn lokale repo niet; voor code schrijf jij Claude Code-prompts, jij draait geen clasp/git in de chat.
+
+STAND (leidend, commit 318190b): read-only HtmlService web-app, 3 tabs Vandaag/Kalender/Vorm. v1.1 Optie B: renderVariant_ emit geordende blokken {minuten,zone} (5-bucket pctZoneBucket_); zone-balk segmentsFromBlokken_ + intent-fallback (segmentsFromIntent_), past op scherm. Palet CSS-vars, accent indigo #5B5BD6; zone-kleuren ongewijzigd. Kalender opent op vandaag. getDashboardState() triggert NOOIT generateProposal; voorstellen uit weekplan_<maandag>, RPE uit rpe_<dISO>, week+1 uit Weekplanner+1. /dev-URL: https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev · /exec-deployment-ID: AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug. Known gaps: genericLongZ2/combo/pendel geen blokken; long_z2 onterechte gele staart.
+
+VOLGENDE STAP — Prompt 2: Vorm-tab status-first (JOIN-geïnspireerd): status-graphic (ring Girona-countdown + macro-fase links, status-badge uit ramp/garminHeuristic/formZone_ rechts) + "i"-uitleg in mensentaal (bouwt-op/onderhoudt/te-veel/achteruit/fris, eigen logica, NIET JOIN's niveau-%) + CTL/ATL/Vorm-grafiek degraderen tot trend/details, herstyled + losse fix long_z2 gele-staart. Ik stuur de Vorm-tab-screenshots erbij.
+
+Bevestig kort de stand, vraag wat je nog nodig hebt (welke vorm-velden getDashboardState nu levert), schrijf dan Prompt 2.
+----------------------------------------------------------------
+
 # FTP Trainings Coach — Handoff
 
 Wekelijkse fiets-trainingsvoorstellen (Google Sheets + Apps Script), 
