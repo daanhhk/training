@@ -1,4 +1,4 @@
-LAATST BIJGEWERKT: 2026-06-02 · COMMIT: 318190b · STAND: web-app dashboard v1+v1.1 live (3 tabs, zone-balk Optie B, /dev-URL). Volgende: Prompt 2 (Vorm status-first + long_z2-fix).
+LAATST BIJGEWERKT: 2026-06-02 · COMMIT: ce3b2d4 · STAND: web-app dashboard v1.2 — Vorm-tab status-first (countdown-ring + status-badge + uitleg), CTL/ATL/Vorm gedegradeerd tot Trend & details; long_z2 gele-staart gefixt. Volgende: Prompt 3 (tik-op-voltooide-training detail).
 
 OPENER VOLGENDE CHAT — kopieer alles tussen de streepjes als eerste bericht in een nieuwe chat:
 ----------------------------------------------------------------
@@ -12,9 +12,9 @@ WERKWIJZE (staande regels):
 - HANDOFF.md committen gaat via git commit + push, GEEN clasp push (staat niet in src/).
 - Deployment: dev/test loopt ALTIJD via de /dev (HEAD) URL — elke clasp push -f is daar direct live, NOOIT redeployen. /exec is een vastgepinde versie; die bump je alleen indien nodig via clasp update-deployment <id> door Claude Code in de close-out, NOOIT handmatig in de editor (Implementaties beheren). Negeer oudere "redeploy via Implementaties beheren"-lessen in het archief — die golden voor de inmiddels dode webhook-bot, niet voor deze web-app.
 
-STAND (leidend, commit 318190b): read-only HtmlService web-app, 3 tabs Vandaag/Kalender/Vorm. v1.1 Optie B: renderVariant_ emit geordende blokken {minuten,zone} (5-bucket pctZoneBucket_); zone-balk segmentsFromBlokken_ + intent-fallback (segmentsFromIntent_), past op scherm. Palet CSS-vars, accent indigo #5B5BD6; zone-kleuren ongewijzigd. Kalender opent op vandaag. getDashboardState() triggert NOOIT generateProposal; voorstellen uit weekplan_<maandag>, RPE uit rpe_<dISO>, week+1 uit Weekplanner+1. /dev-URL: https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev · /exec-deployment-ID: AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug. Known gaps: genericLongZ2/combo/pendel geen blokken; long_z2 onterechte gele staart.
+STAND (leidend, commit ce3b2d4): read-only HtmlService web-app, 3 tabs Vandaag/Kalender/Vorm. Vorm-tab is status-first: countdown-ring (dagen tot Girona + macro-fase) + status-badge (Bouwt op/Onderhoudt/Te veel/Achteruit/Fris uit formZone+ramp) + inline "i"-uitleg; CTL/ATL/Vorm-grafiek + stats staan eronder als "Trend & details". v1.1 Optie B: renderVariant_ én nu ook genericLongZ2 emitten geordende blokken {minuten,zone} (5-bucket pctZoneBucket_); zone-balk segmentsFromBlokken_ + intent-fallback. Palet CSS-vars, accent indigo #5B5BD6. getDashboardState() triggert NOOIT generateProposal; voorstellen uit weekplan_<maandag>, RPE uit rpe_<dISO>, week+1 uit Weekplanner+1; vorm-blok heeft nu macroFase + event{naam,datum,dagenTot}. /dev-URL: https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev · /exec-deployment-ID: AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug. Known gaps: combo/pendel geen blokken (long_z2 nu wél); blokken verschijnen pas na volgende Genereer voorstel.
 
-VOLGENDE STAP — Prompt 2: Vorm-tab status-first (JOIN-geïnspireerd): status-graphic (ring Girona-countdown + macro-fase links, status-badge uit ramp/garminHeuristic/formZone_ rechts) + "i"-uitleg in mensentaal (bouwt-op/onderhoudt/te-veel/achteruit/fris, eigen logica, NIET JOIN's niveau-%) + CTL/ATL/Vorm-grafiek degraderen tot trend/details, herstyled + losse fix long_z2 gele-staart. Ik stuur de Vorm-tab-screenshots erbij.
+VOLGENDE STAP — Prompt 3: tik op een voltooide training → uitklap met rit-detail (gem. vermogen/NP, gem. HR, IF, afstand, hm, time-in-zone); vergt uitbreiding van het actual-object in getDashboardState (nu: naam/duurMin/tss/rpe/rpeVerwacht/mismatch).
 
 Bevestig kort de stand, vraag wat je nog nodig hebt (welke vorm-velden getDashboardState nu levert), schrijf dan Prompt 2.
 ----------------------------------------------------------------
@@ -26,6 +26,13 @@ gericht op Garmin "Productive" status, met intervals.icu sync en
 Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
+
+### Sessie 2 juni 2026 — Vorm-tab status-first + long_z2 gele-staart-fix
+
+- STAP 0 contract-bevestiging: (0a) vorm-blok was NIET vlak zoals aangenomen — werkelijk vorm.huidig.{vorm,vormZone,ctl,atl,ramp}, vorm.stats.{d7,d28,jaar}.{tss,tijdMin,ritten}, vorm.reeks[], vorm.ftp (geen periods.7d/28d). (0b) formZone_ bevestigd: Overgang>25 / Fris>5 / Grijze zone>-10 / Optimaal>-30 / Hoog risico (else). (0c) garminHeuristic(totalTss,mesoWeek,macroFase,fs), RAMP_BUILD_MIN=3; web-app riep het al aan. (0d) bepaalFaseVoorDatum_(weekStart) is web-app-callable (al in gebruik) en levert fase+eventDate+eventName+wekenTotEvent — geen refactor nodig. (0e) event-datum komt uit macro.eventDate/eventName (geen aparte Events-lookup). (0f) root-cause gele staart bevestigd: long_z2 mét eventCtx (Girona actief) gaat via genericLongZ2 (NIET renderVariant_), die géén blokken emit → intent-fallback kleurde klim-sim (intent.high) geel.
+- getDashboardState vorm-blok uitgebreid: macroFase, rampBuildMin, garminVerdict, event{naam,datum,dagenTot}. Geen bestaande velden hernoemd. Read-only behouden.
+- Vorm-tab status-first: countdown-ring (arc = 1−dagenTot/90), macro-fase-pill, status-badge (5 statussen uit formZone+ramp), inline "i"-uitleg in mensentaal (client-only). Bestaande grafiek+stats+toggle gedegradeerd onder "Trend & details", herstyled met CSS-vars. Commits e5345da + ea5a653.
+- long_z2-fix (ce3b2d4): genericLongZ2 emit nu geordende blokken (warmup rust, Z2-base blauw, klim-sim → drempel/groen via pctZoneBucket_(91), cooldown rust). Gekozen boven de "single Z2-blok"-suggestie omdat dat de klim-detail zou wissen; dit kleurt klim correct groen i.p.v. geel. Verschijnt na volgende Genereer voorstel (read-only dashboard genereert niet).
 
 ### Sessie 2 juni 2026 — web-app dashboard v1 + v1.1 (Optie B zone-balk)
 
