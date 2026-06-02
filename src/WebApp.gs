@@ -214,6 +214,19 @@ function dashDayCard_(dISO, wpEntry, actual, rpe) {
   return { voorstel: voorstel, actual: act };
 }
 
+/**
+ * W/kg-anker → niveau (0–50). Bewust stabiel: beweegt alleen op FTP/gewicht.
+ * De taper-bewuste conditie-modifier komt pas in 2b. Pure helper.
+ */
+function computeNiveau_(ftp, gewicht) {
+  if (!ftp || !gewicht) return { wkg: null, niveau: null };
+  var wkg = ftp / gewicht;
+  var WKG_LOW = 1.0, WKG_HIGH = 6.9, LVL_MAX = 50;  // ankers: 1,0 W/kg=0 / 6,9 W/kg=50
+  var niveau = (wkg - WKG_LOW) / (WKG_HIGH - WKG_LOW) * LVL_MAX;
+  niveau = Math.max(0, Math.min(LVL_MAX, niveau));
+  return { wkg: wkg, niveau: niveau };
+}
+
 // ── Hoofdgetter ──────────────────────────────────────────────────
 function getDashboardState() {
   var ss = SpreadsheetApp.getActive();
@@ -352,8 +365,15 @@ function getDashboardState() {
     }
   };
 
+  var gewicht = getGewicht();
+  var niv = computeNiveau_(settings.ftp, gewicht);
+
   return {
     athlete: { ftp: settings.ftp || null, naam: '' },
+    ftp: settings.ftp || null,
+    gewicht: gewicht || null,
+    wkg: niv.wkg,
+    niveau: niv.niveau,
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,
