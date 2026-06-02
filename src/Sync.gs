@@ -9,6 +9,10 @@
  * voor 06:00 Europe/Amsterdam.
  */
 
+// Rollend historie-venster voor de Activiteiten-tab (~13 maanden). Full-
+// replace bij elke sync, dus veilig idempotent (geen append/dedupe nodig).
+var ACT_HISTORY_DAYS = 400;
+
 function syncAll(e) {
   var fromTrigger = !!(e && e.triggerUid);
   var errors = [];
@@ -111,7 +115,7 @@ function syncAthleteZones() {
 }
 
 function syncActivities() {
-  var data = getActivities(28);
+  var data = getActivities(ACT_HISTORY_DAYS);
   var ss = SpreadsheetApp.getActive();
   var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
   if (!sh) return;

@@ -98,13 +98,6 @@
     // Status-graphic bovenaan.
     document.getElementById('schema-status').innerHTML = state.vorm ? statusGraphicHtml('schema') : '';
 
-    var mt = (state.maandTotalen || []).map(function (m) {
-      return '<div class="mt"><div class="mlabel">' + esc(m.maand) + '</div>' +
-        '<div class="mval">' + m.ritten + ' rit · ' + uMin(m.tijdMin) + '</div>' +
-        '<div class="mlabel">TSS ' + m.tss + '</div></div>';
-    }).join('');
-    document.getElementById('maand-totalen').innerHTML = mt;
-
     var strip = '';
     (state.dagen || []).forEach(function (d) {
       var mark = '';
