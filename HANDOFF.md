@@ -6,6 +6,32 @@ Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
 
+### Sessie 2 juni 2026 — RAMP_BUILD_MIN-kalibratie + RPE auto-bijsturen (a) + CTL/ATL-persist & TSB-trend (b1) + RPE-carry (b2)
+
+KALIBRATIE (a175f8c): RAMP_BUILD_MIN=3 vastgezet. Live: ramp 0,78/wk, Garmin "Aanhouden", gate vuurt correct (0,78<3). Veldnamen bevestigd als platte ctl/atl/rampRate (geen icu_-prefix) → dode icu_-coalescing in getFormScore_ verwijderd.
+
+(a) RPE auto-bijsturen (3022b0f): rpeRecentMismatch_ (gedeelde helper, ≤3 sessies deze week), rpeSignal_ (eenrichting, capped op demote, +2 drempel = identiek aan rpeMismatchFlag_). SIGNAL_RANK_ + combineSignals_ (max-severity merge wellness+RPE; RPE nooit recovery; geen stacking). Gewired generateProposal:66 → voedt zelfde demote-pad als wellness; assignWorkouts krijgt alleen tePlannen → within-week/future-only structureel. Banner "Wellness:" → "Bijsturing:". rpeMismatchFlag_-tekst → "resterende harde sessies automatisch lichter gemaakt". _Diag-validatie 6 merge-cases ✓.
+
+b1 (2930e1d): Wellness-tab +4 kolommen CTL/ATL/Vorm/Ramp (I–L). syncWellness vult ze (ctl/atl/vorm 0,1; ramp 0,01). Ingebedde LINE-chart (CTL/ATL/Vorm vs Datum, hAxis.direction -1 → oudste-links), idempotent (removeChart vóór insert). Stat-regels Huidige Vorm (=K2) + CTL-ramp/wk (=L2). getWellnessSignal (leest A–D) + getFormScore_ (live-read API) ONGEWIJZIGD — kolommen zijn puur historie/visualisatie.
+
+b2 (42d578e): mesoFactor × loadCarry-DocProp (gezet door generateProposal vóór alle mesoFactor-calls). loadCarryFactor_: vorige-week hele-week RPE-gem via durabele keys (rpe_<datum> + weekplan_<vorige-maandag>; proposal_* wordt elke generatie gewist, NIET gebruikt). carryFactorForAvg_: <2→1, ≥2→×0,93, ≥3,5→×0,88-vloer. Recovery-week (mesoWeek 4) skip, eenrichting, niet-cumulatief (verse herberekening per week). 📉-display-regel onder meso-rij. _Diag-validatie grenzen + mesoFactor-prop-wiring ✓.
+
+Convention/learnings:
+- intervals.icu /wellness: platte ctl/atl/rampRate (geen icu_-prefix), live bevestigd.
+- Kalibratie is 1-punt-match (Garmin "Aanhouden" ↔ ramp 0,78 < 3). Verfijn RAMP_BUILD_MIN zodra een week met Garmin "Productive" een ramp > drempel oplevert (klem dan tussen beide).
+- Twee bijstuur-assen, bewust gescheiden: (a) demoot losse sessies acuut binnen-de-week (demote-pad); (b2) dempt de week-load-ramp o.b.v. vorige week (mesoFactor). Beide eenrichting + begrensd; verschillende mechanismen, geen dubbeltelling.
+- cleanupOldProposals_ wist proposal_* elke generatie; alleen weekplan_<maandag> + rpe_<datum> zijn durabel → enige betrouwbare bron voor "wat was gepland/gevoeld" over weekgrenzen.
+- Live-bevestiging (screenshots): Voorstel toont Aanhouden(ramp 0,8/Peak), Bijsturing-banner, Vorm -8, load factor 1.00× (carry=1, vorige week null), Totaal TSS 237.
+
+Openstaande stappen (Daan):
+- Live validatie (a) + (b2): treden pas in werking bij een week met ≥2 gegradeerde hot-RPE sessies (nu beide inactief bij normale RPE — correct).
+- (indien nog niet) Setup → RPE-avondcheck + zondag-reminder geïnstalleerd.
+
+Volgende code-stap (keuze):
+(1) getFormScore_ optioneel van de gepersisteerde Wellness-kolommen lezen i.p.v. live-API (minder API-calls; alleen als gewenst).
+(2) RPE-carry verfijnen met objectieve gate (Vorm/ramp uit b1-kolommen) bovenop de subjectieve RPE.
+(3) Resterende backlog: README gap-check, bot-latency (defer), getActivities/getWellness-dedup (minor).
+
 ### Sessie 1 juni 2026 — RPE-3 + week-TSS-fixes + Form-score TSB (Vorm) + Garmin-ramp-gate
 
 RPE-loop compleet (capture + reminders + display/flag), MVP — GEEN auto-bijsturen.
