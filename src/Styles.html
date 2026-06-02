@@ -1,16 +1,30 @@
 <style>
+  :root {
+    --bg: #EDF1F5;
+    --header: #0E1726;
+    --card: #FFFFFF;
+    --ink: #11203A;
+    --muted: #6B7A90;
+    --accent: #5B5BD6;
+    --accent-soft: #E8E8FB;
+    /* semantische statuskleuren (blijven semantisch) */
+    --ok-bg: #d1fae5;   --ok-ink: #065f46;
+    --warn-bg: #fef9c3; --warn-ink: #854d0e;
+    --dem-bg: #fef3c7;  --dem-ink: #92400e;
+    --rec-bg: #fee2e2;  --rec-ink: #991b1b;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #0f172a; color: #1f2937;
+    background: var(--header); color: var(--ink);
   }
-  #app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #f1f5f9; padding-bottom: 70px; }
+  #app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--bg); padding-bottom: 70px; }
   .loading, .error { padding: 40px 20px; text-align: center; color: #e2e8f0; }
   .error { color: #fca5a5; }
 
   .hdr {
-    background: #0f172a; color: #fff;
+    background: var(--header); color: #fff;
     padding: 18px 18px 14px; position: sticky; top: 0; z-index: 5;
   }
   .hdr-title { font-size: 22px; font-weight: 700; }
@@ -18,37 +32,34 @@
   .body { padding: 14px; }
 
   .card {
-    background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 14px;
+    background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px;
     box-shadow: 0 2px 10px rgba(15,23,42,0.08);
   }
-  .card h3 { margin: 0 0 8px; font-size: 16px; }
-  .muted { color: #64748b; font-size: 13px; }
-  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .card h3 { margin: 0 0 8px; font-size: 16px; color: var(--ink); }
+  .muted { color: var(--muted); font-size: 13px; }
+  .accent { color: var(--accent); }
 
-  /* gereedheid-banner kleuren */
   .banner { border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-weight: 600; font-size: 14px; }
-  .b-normaal  { background: #d1fae5; color: #065f46; }
-  .b-warning  { background: #fef9c3; color: #854d0e; }
-  .b-demote   { background: #fef3c7; color: #92400e; }
-  .b-recovery { background: #fee2e2; color: #991b1b; }
+  .b-normaal  { background: var(--ok-bg);  color: var(--ok-ink); }
+  .b-warning  { background: var(--warn-bg); color: var(--warn-ink); }
+  .b-demote   { background: var(--dem-bg);  color: var(--dem-ink); }
+  .b-recovery { background: var(--rec-bg);  color: var(--rec-ink); }
 
   .metrics { display: flex; gap: 10px; margin: 10px 0; }
-  .metric { flex: 1; background: #f8fafc; border-radius: 12px; padding: 10px; text-align: center; }
-  .metric .v { font-size: 20px; font-weight: 700; color: #0f766e; }
-  .metric .l { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .metric { flex: 1; background: var(--accent-soft); border-radius: 12px; padding: 10px; text-align: center; }
+  .metric .v { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .metric .l { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
-  .zonebar { width: 100%; height: 90px; margin: 10px 0; }
-  .accent { color: #00bfa5; }
+  .zonebar { display: block; width: 100%; height: 90px; margin: 10px 0; }
 
   details { margin-top: 8px; }
-  summary { cursor: pointer; font-weight: 600; color: #0f766e; font-size: 14px; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent); font-size: 14px; }
   details ul { margin: 8px 0 0; padding-left: 18px; }
   details li { font-size: 13px; color: #334155; margin-bottom: 4px; }
 
-  /* kalender */
   .month-totals { display: flex; gap: 8px; overflow-x: auto; padding: 12px 14px 0; }
-  .mt { background: #fff; border-radius: 12px; padding: 8px 12px; min-width: 96px; box-shadow: 0 1px 5px rgba(0,0,0,.06); }
-  .mt .mlabel { font-size: 11px; color: #64748b; }
+  .mt { background: var(--card); border-radius: 12px; padding: 8px 12px; min-width: 96px; box-shadow: 0 1px 5px rgba(0,0,0,.06); }
+  .mt .mlabel { font-size: 11px; color: var(--muted); }
   .mt .mval { font-size: 13px; font-weight: 700; }
 
   .day-strip {
@@ -57,33 +68,33 @@
   }
   .chip {
     scroll-snap-align: center; flex: 0 0 auto; width: 60px; padding: 8px 4px;
-    background: #fff; border-radius: 12px; text-align: center; cursor: pointer;
+    background: var(--card); border-radius: 12px; text-align: center; cursor: pointer;
     box-shadow: 0 1px 5px rgba(0,0,0,.06); border: 2px solid transparent;
   }
-  .chip.sel { border-color: #00bfa5; }
-  .chip .cd { font-size: 11px; color: #64748b; }
-  .chip .cw { font-size: 13px; font-weight: 700; text-transform: capitalize; }
+  .chip.sel { border-color: var(--accent); }
+  .chip .cd { font-size: 11px; color: var(--muted); }
+  .chip .cw { font-size: 13px; font-weight: 700; text-transform: capitalize; color: var(--ink); }
   .chip .dot { width: 9px; height: 9px; border-radius: 50%; margin: 5px auto 0; }
   .chip .mark { font-size: 13px; height: 14px; }
 
   .bottomnav {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-    width: 100%; max-width: 480px; display: flex; background: #0f172a;
+    width: 100%; max-width: 480px; display: flex; background: var(--header);
     border-top: 1px solid #1e293b;
   }
   .bottomnav button {
-    flex: 1; background: none; border: none; color: #64748b;
+    flex: 1; background: none; border: none; color: var(--muted);
     padding: 8px 0 10px; font-size: 11px; display: flex; flex-direction: column;
     align-items: center; gap: 3px; cursor: pointer;
   }
   .bottomnav button span { font-size: 19px; }
-  .bottomnav button.active { color: #1de9b6; }
+  .bottomnav button.active { color: var(--accent); }
 
   .chart { width: 100%; height: 240px; }
   .period-toggle { display: flex; gap: 6px; margin: 8px 0; }
   .period-toggle button {
     flex: 1; padding: 8px; border: none; border-radius: 10px; background: #e2e8f0;
-    color: #475569; font-weight: 600; cursor: pointer;
+    color: var(--muted); font-weight: 600; cursor: pointer;
   }
-  .period-toggle button.active { background: #00bfa5; color: #fff; }
+  .period-toggle button.active { background: var(--accent); color: #fff; }
 </style>

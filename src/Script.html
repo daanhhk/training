@@ -39,16 +39,20 @@
     google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); });
   }
 
-  // ── Zone-bar SVG ──
+  // ── Zone-bar SVG — schaalt ALTIJD naar 100% breedte (viewBox 0..100,
+  //    preserveAspectRatio none). Korte blokken krijgen een min-breedte,
+  //    daarna renormaliseren we zodat de som exact 100 blijft (geen overflow).
   function zoneBar(segmenten) {
     if (!segmenten || !segmenten.length) return '<div class="muted">Geen structuur beschikbaar.</div>';
+    var W = 100, H = 100, MINW = 1.4;
     var totMin = segmenten.reduce(function (a, b) { return a + b.minuten; }, 0) || 1;
-    var W = 100, H = 100, x = 0, parts = '';
-    segmenten.forEach(function (sg) {
-      var w = (sg.minuten / totMin) * W;
-      var h = sg.hoogtePct;
-      var y = H - h;
-      parts += '<rect x="' + x.toFixed(2) + '" y="' + y + '" width="' + w.toFixed(2) + '" height="' + h + '" fill="' + sg.kleur + '" rx="1"></rect>';
+    var raw = segmenten.map(function (sg) { return Math.max(MINW, (sg.minuten / totMin) * W); });
+    var sum = raw.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var x = 0, parts = '';
+    segmenten.forEach(function (sg, i) {
+      var w = (raw[i] / sum) * W;           // renormaliseer naar exact 100
+      var h = sg.hoogtePct, y = H - h;
+      parts += '<rect x="' + x.toFixed(2) + '" y="' + y + '" width="' + w.toFixed(2) + '" height="' + h + '" fill="' + sg.kleur + '" rx="0.6"></rect>';
       x += w;
     });
     return '<svg class="zonebar" viewBox="0 0 100 100" preserveAspectRatio="none">' + parts + '</svg>';
@@ -220,6 +224,11 @@
   }
 
   // ── Navigatie ──
+  function scrollSelectedChip() {
+    var el = document.querySelector('.chip.sel');
+    if (el) el.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
+
   function switchTab(name) {
     ['vandaag', 'kalender', 'vorm'].forEach(function (t) {
       document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
@@ -228,6 +237,9 @@
       b.classList.toggle('active', b.getAttribute('data-tab') === name);
     });
     if (name === 'vorm') drawVormChart();
+    // Kalender opent op vandaag: scroll de geselecteerde chip in beeld zodra
+    // de container zichtbaar is (scrollIntoView werkt niet op display:none).
+    if (name === 'kalender') setTimeout(scrollSelectedChip, 30);
   }
 
   document.addEventListener('DOMContentLoaded', function () {

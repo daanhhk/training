@@ -29,17 +29,39 @@ function getWebAppUrl() {
 }
 
 // ── Bucket → kleur/hoogte (zone-balk) ────────────────────────────
+// Fijne 5-bucket schaal voor blokken (Optie B); de intent-fallback gebruikt
+// alleen low/high/anaerobic.
 var DASH_BUCKET_STYLE_ = {
+  rust:      { kleur: '#cfd8dc', hoogtePct: 25 },
+  z2:        { kleur: '#4fc3f7', hoogtePct: 45 },
+  tempo:     { kleur: '#ffd54f', hoogtePct: 65 },
+  drempel:   { kleur: '#66bb6a', hoogtePct: 85 },
+  anaeroob:  { kleur: '#ef6c00', hoogtePct: 100 },
+  // intent-fallback buckets
   low:       { kleur: '#4fc3f7', hoogtePct: 45 },
   high:      { kleur: '#ffd54f', hoogtePct: 65 },
   anaerobic: { kleur: '#ef6c00', hoogtePct: 100 }
 };
-var DASH_BUCKET_ORDER_ = ['low', 'high', 'anaerobic'];
+var DASH_INTENT_ORDER_ = ['low', 'high', 'anaerobic'];
 
+/** Optie B: geordende blokken [{minuten, zone}] → zone-balk segmenten. */
+function segmentsFromBlokken_(blokken) {
+  if (!blokken || !blokken.length) return null;
+  var segs = [];
+  blokken.forEach(function (b) {
+    var min = Number(b.minuten) || 0;
+    if (min <= 0) return;
+    var st = DASH_BUCKET_STYLE_[b.zone] || DASH_BUCKET_STYLE_.z2;
+    segs.push({ minuten: min, bucket: b.zone, kleur: st.kleur, hoogtePct: st.hoogtePct });
+  });
+  return segs.length ? segs : null;
+}
+
+/** Fallback: intent {low,high,anaerobic} → één segment per bucket. */
 function segmentsFromIntent_(intent) {
   if (!intent) return [];
   var segs = [];
-  DASH_BUCKET_ORDER_.forEach(function (b) {
+  DASH_INTENT_ORDER_.forEach(function (b) {
     var min = Math.round(Number(intent[b]) || 0);
     if (min <= 0) return;
     var st = DASH_BUCKET_STYLE_[b];
@@ -158,12 +180,15 @@ function dashStatsFromActivities_() {
 function dashDayCard_(dISO, wpEntry, actual, rpe) {
   var voorstel = null;
   if (wpEntry) {
+    // Optie B: blokken indien aanwezig (huidige week na generatie), anders
+    // intent-fallback (oudere snapshots zonder blokken).
+    var segs = segmentsFromBlokken_(wpEntry.blokken) || segmentsFromIntent_(wpEntry.intent);
     voorstel = {
       type: wpEntry.workoutType || null,
       titel: wpEntry.naam || wpEntry.workoutType || 'Training',
       duurMin: wpEntry.minuten || 0,
       tss: wpEntry.tss || 0,
-      segmenten: segmentsFromIntent_(wpEntry.intent)
+      segmenten: segs
     };
   }
   var act = null;
