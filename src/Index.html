@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <?!= include('Styles'); ?>
+  </head>
+  <body>
+    <div id="app">
+      <div id="loading" class="loading">Laden…</div>
+      <div id="error" class="error" style="display:none"></div>
+
+      <!-- VANDAAG -->
+      <section id="tab-vandaag" class="tab" style="display:none">
+        <header class="hdr">
+          <div class="hdr-title">Vandaag</div>
+          <div id="vandaag-datum" class="hdr-sub"></div>
+        </header>
+        <div id="vandaag-body" class="body"></div>
+      </section>
+
+      <!-- KALENDER -->
+      <section id="tab-kalender" class="tab" style="display:none">
+        <header class="hdr">
+          <div class="hdr-title">Kalender</div>
+        </header>
+        <div id="maand-totalen" class="month-totals"></div>
+        <div id="dag-strip" class="day-strip"></div>
+        <div id="dag-detail" class="body"></div>
+      </section>
+
+      <!-- VORM -->
+      <section id="tab-vorm" class="tab" style="display:none">
+        <header class="hdr">
+          <div class="hdr-title">Vorm</div>
+        </header>
+        <div class="body">
+          <div id="vorm-chart" class="chart"></div>
+          <div id="vorm-huidig"></div>
+          <div class="period-toggle" id="period-toggle">
+            <button data-p="d7">7d</button>
+            <button data-p="d28" class="active">28d</button>
+            <button data-p="jaar">jaar</button>
+          </div>
+          <div id="vorm-stats"></div>
+        </div>
+      </section>
+
+      <nav id="bottomnav" class="bottomnav" style="display:none">
+        <button data-tab="vandaag" class="active"><span>🚴</span>Vandaag</button>
+        <button data-tab="kalender"><span>📅</span>Kalender</button>
+        <button data-tab="vorm"><span>📈</span>Vorm</button>
+      </nav>
+    </div>
+    <?!= include('Script'); ?>
+  </body>
+</html>

@@ -1,0 +1,248 @@
+<script>
+  var state = null;
+  var selectedDate = null;
+  var statPeriod = 'd28';
+  var chartsReady = false;
+
+  // NL-decimaal helper.
+  function nl(n, dec) {
+    if (n == null || n === '') return '–';
+    var x = (dec != null) ? Number(n).toFixed(dec) : String(n);
+    return x.replace('.', ',');
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;' }[c]; }); }
+  function uMin(m) { m = Math.round(m || 0); return Math.floor(m / 60) + 'u ' + (m % 60) + 'm'; }
+
+  // ── Boot ──
+  function boot() {
+    google.script.run
+      .withSuccessHandler(onState)
+      .withFailureHandler(showError)
+      .getDashboardState();
+  }
+  function showError(err) {
+    document.getElementById('loading').style.display = 'none';
+    var e = document.getElementById('error');
+    e.style.display = 'block';
+    e.textContent = '⚠️ Kon dashboard niet laden: ' + (err && err.message ? err.message : err);
+  }
+  function onState(s) {
+    state = s;
+    selectedDate = s.vandaag ? s.vandaag.dateISO : null;
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('bottomnav').style.display = 'flex';
+    renderVandaag();
+    renderKalender();
+    renderVorm();
+    switchTab('vandaag');
+    google.charts.load('current', { packages: ['corechart'] });
+    google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); });
+  }
+
+  // ── Zone-bar SVG ──
+  function zoneBar(segmenten) {
+    if (!segmenten || !segmenten.length) return '<div class="muted">Geen structuur beschikbaar.</div>';
+    var totMin = segmenten.reduce(function (a, b) { return a + b.minuten; }, 0) || 1;
+    var W = 100, H = 100, x = 0, parts = '';
+    segmenten.forEach(function (sg) {
+      var w = (sg.minuten / totMin) * W;
+      var h = sg.hoogtePct;
+      var y = H - h;
+      parts += '<rect x="' + x.toFixed(2) + '" y="' + y + '" width="' + w.toFixed(2) + '" height="' + h + '" fill="' + sg.kleur + '" rx="1"></rect>';
+      x += w;
+    });
+    return '<svg class="zonebar" viewBox="0 0 100 100" preserveAspectRatio="none">' + parts + '</svg>';
+  }
+
+  function voorstelKaart(v) {
+    if (!v) return '';
+    var h = '<div class="card"><h3>' + esc(v.titel) + '</h3>';
+    h += zoneBar(v.segmenten);
+    h += '<div class="metrics">';
+    h += '<div class="metric"><div class="v">' + uMin(v.duurMin) + '</div><div class="l">duur</div></div>';
+    h += '<div class="metric"><div class="v">' + Math.round(v.tss || 0) + '</div><div class="l">TSS</div></div>';
+    h += '<div class="metric"><div class="v">' + esc(v.type || '–') + '</div><div class="l">type</div></div>';
+    h += '</div>';
+    if (v.waarom && v.waarom.length) {
+      h += '<details><summary>Waarom deze training?</summary><ul>';
+      v.waarom.forEach(function (w) { h += '<li>' + esc(w) + '</li>'; });
+      h += '</ul></details>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function actualKaart(a) {
+    if (!a) return '';
+    var h = '<div class="card"><h3>✅ ' + esc(a.naam) + '</h3><div class="metrics">';
+    h += '<div class="metric"><div class="v">' + uMin(a.duurMin) + '</div><div class="l">duur</div></div>';
+    h += '<div class="metric"><div class="v">' + (a.tss != null ? Math.round(a.tss) : '–') + '</div><div class="l">TSS</div></div>';
+    h += '<div class="metric"><div class="v">' + (a.rpe != null ? a.rpe : '–') + '</div><div class="l">RPE</div></div>';
+    h += '</div>';
+    if (a.mismatch != null && a.rpeVerwacht != null) {
+      var t = a.mismatch > 0 ? ('+' + nl(a.mismatch, 1) + ' zwaarder dan verwacht (~' + a.rpeVerwacht + ')')
+            : (a.mismatch < 0 ? (nl(a.mismatch, 1) + ' lichter dan verwacht') : 'precies op verwachting');
+      h += '<div class="muted">RPE-mismatch: ' + t + '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  // ── Vandaag ──
+  function renderVandaag() {
+    var v = state.vandaag;
+    document.getElementById('vandaag-datum').textContent = v ? (v.weekdag + ' · ' + v.dateISO) : '';
+    if (!v) { document.getElementById('vandaag-body').innerHTML = '<div class="muted body">Geen data.</div>'; return; }
+    var g = v.gereedheid, cls = 'b-' + (g.signaal === 'normal' ? 'normaal' : g.signaal);
+    var h = '<div class="banner ' + cls + '">' +
+      (g.signaal === 'normal' ? '✅ Gereedheid normaal' : '⚠️ ' + esc(g.label || g.signaal)) +
+      (g.vorm != null ? ' · Vorm ' + g.vorm + ' (' + esc(g.vormZone) + ')' : '') + '</div>';
+    h += '<div class="card"><div class="muted">Garmin-verwachting</div><div class="accent" style="font-weight:700">' +
+      esc(v.garminStatus.verdict) + '</div></div>';
+    if (v.status === 'rust') {
+      h += '<div class="card"><h3>Rustdag</h3><div class="muted">Geen training gepland vandaag. Herstel is training.</div></div>';
+    } else if (v.status === 'voltooid' && v.actual) {
+      h += actualKaart(v.actual);
+    } else if (v.voorstel) {
+      h += voorstelKaart(v.voorstel);
+    } else {
+      h += '<div class="card"><div class="muted">Nog geen voorstel — draai Genereer voorstel in de Sheet.</div></div>';
+    }
+    document.getElementById('vandaag-body').innerHTML = h;
+  }
+
+  // ── Kalender ──
+  function renderKalender() {
+    var mt = (state.maandTotalen || []).map(function (m) {
+      return '<div class="mt"><div class="mlabel">' + esc(m.maand) + '</div>' +
+        '<div class="mval">' + m.ritten + ' rit · ' + uMin(m.tijdMin) + '</div>' +
+        '<div class="mlabel">TSS ' + m.tss + '</div></div>';
+    }).join('');
+    document.getElementById('maand-totalen').innerHTML = mt;
+
+    var strip = '';
+    (state.dagen || []).forEach(function (d) {
+      var mark = '';
+      if (d.status === 'voltooid') mark = '✓';
+      else if (d.status === 'vandaag') mark = '●';
+      else if (d.status === 'rust') mark = '·';
+      else if (d.status === 'preview') mark = '~';
+      var dot = d.kleur ? '<div class="dot" style="background:' + d.kleur + '"></div>' : '<div class="dot" style="background:transparent"></div>';
+      var sel = (d.dateISO === selectedDate) ? ' sel' : '';
+      var wd = d.weekdag.slice(0, 2);
+      strip += '<div class="chip' + sel + '" data-date="' + d.dateISO + '" onclick="selectDay(\'' + d.dateISO + '\')">' +
+        '<div class="cw">' + wd + '</div>' +
+        '<div class="cd">' + d.kort.replace(/^.. /, '') + '</div>' +
+        dot + '<div class="mark">' + mark + '</div></div>';
+    });
+    document.getElementById('dag-strip').innerHTML = strip;
+    renderDagDetail();
+    // scroll geselecteerde chip in beeld
+    setTimeout(function () {
+      var el = document.querySelector('.chip.sel');
+      if (el) el.scrollIntoView({ inline: 'center', block: 'nearest' });
+    }, 30);
+  }
+
+  function selectDay(dISO) {
+    selectedDate = dISO;
+    document.querySelectorAll('.chip').forEach(function (c) {
+      c.classList.toggle('sel', c.getAttribute('data-date') === dISO);
+    });
+    renderDagDetail();
+  }
+
+  function renderDagDetail() {
+    var d = (state.dagen || []).filter(function (x) { return x.dateISO === selectedDate; })[0];
+    var el = document.getElementById('dag-detail');
+    if (!d) { el.innerHTML = ''; return; }
+    var h = '<div class="muted" style="text-transform:capitalize;margin-bottom:6px">' + esc(d.weekdag) + ' ' + esc(d.kort) + '</div>';
+    if (d.status === 'preview') {
+      h += '<div class="card"><div class="muted">' + (d.previewMin ? '~' + d.previewMin + ' min gepland, type volgt' : 'Nog niet ingepland') + '</div></div>';
+    } else if (d.actual) {
+      h += actualKaart(d.actual);
+      if (d.voorstel) h += voorstelKaart(d.voorstel);
+    } else if (d.voorstel) {
+      h += voorstelKaart(d.voorstel);
+    } else {
+      h += '<div class="card"><div class="muted">Rustdag.</div></div>';
+    }
+    el.innerHTML = h;
+  }
+
+  // ── Vorm ──
+  function renderVorm() {
+    var v = state.vorm;
+    var hu = '';
+    if (v.huidig) {
+      hu = '<div class="card"><div class="metrics">' +
+        '<div class="metric"><div class="v">' + v.huidig.vorm + '</div><div class="l">Vorm</div></div>' +
+        '<div class="metric"><div class="v">' + v.huidig.ctl + '</div><div class="l">CTL</div></div>' +
+        '<div class="metric"><div class="v">' + v.huidig.atl + '</div><div class="l">ATL</div></div>' +
+        '</div><div class="muted">' + esc(v.huidig.vormZone) +
+        (v.huidig.ramp != null ? ' · ramp ' + nl(v.huidig.ramp, 1) + '/wk' : '') +
+        (v.ftp ? ' · FTP ' + v.ftp + 'W' : '') + '</div></div>';
+    } else {
+      hu = '<div class="card muted">Geen vorm-data.</div>';
+    }
+    document.getElementById('vorm-huidig').innerHTML = hu;
+    renderVormStats();
+  }
+
+  function renderVormStats() {
+    var s = state.vorm.stats[statPeriod] || { tss: 0, tijdMin: 0, ritten: 0 };
+    document.getElementById('vorm-stats').innerHTML =
+      '<div class="card"><div class="metrics">' +
+      '<div class="metric"><div class="v">' + s.ritten + '</div><div class="l">ritten</div></div>' +
+      '<div class="metric"><div class="v">' + uMin(s.tijdMin) + '</div><div class="l">tijd</div></div>' +
+      '<div class="metric"><div class="v">' + Math.round(s.tss) + '</div><div class="l">TSS</div></div>' +
+      '</div></div>';
+  }
+
+  function drawVormChart() {
+    if (!chartsReady || !state || !state.vorm) return;
+    var reeks = state.vorm.reeks || [];
+    if (!reeks.length) { document.getElementById('vorm-chart').innerHTML = '<div class="muted">Geen reeks-data.</div>'; return; }
+    var dt = new google.visualization.DataTable();
+    dt.addColumn('string', 'Datum');
+    dt.addColumn('number', 'CTL'); dt.addColumn('number', 'ATL'); dt.addColumn('number', 'Vorm');
+    reeks.forEach(function (r) {
+      dt.addRow([r.dateISO.slice(5), r.ctl, r.atl, r.vorm]);
+    });
+    var chart = new google.visualization.LineChart(document.getElementById('vorm-chart'));
+    chart.draw(dt, {
+      legend: { position: 'top' },
+      chartArea: { width: '85%', height: '70%' },
+      colors: ['#00bfa5', '#ef6c00', '#64748b'],
+      hAxis: { textStyle: { fontSize: 9 } },
+      backgroundColor: 'transparent'
+    });
+  }
+
+  // ── Navigatie ──
+  function switchTab(name) {
+    ['vandaag', 'kalender', 'vorm'].forEach(function (t) {
+      document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
+    });
+    document.querySelectorAll('#bottomnav button').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-tab') === name);
+    });
+    if (name === 'vorm') drawVormChart();
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('#bottomnav button').forEach(function (b) {
+      b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); });
+    });
+    document.querySelectorAll('#period-toggle button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        statPeriod = b.getAttribute('data-p');
+        document.querySelectorAll('#period-toggle button').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        renderVormStats();
+      });
+    });
+    boot();
+  });
+</script>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
