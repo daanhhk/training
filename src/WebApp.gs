@@ -424,8 +424,8 @@ function getDashboardState() {
     var band = vt[wkFase] || vt.Build || [4, 7];   // Test/onbekend → Build-fallback
     var urenWeek = (band[0] + band[1]) / 2;
     if (wkMon.getTime() === nuMon.getTime()) {
-      var dagen = Math.floor((today.getTime() - nuMon.getTime()) / 86400000);  // ma=0
-      urenWeek *= (dagen + 1) / 7;   // lopende week pro-rata
+      var dagOffset = Math.floor((today.getTime() - nuMon.getTime()) / 86400000);  // ma=0
+      urenWeek *= (dagOffset + 1) / 7;   // lopende week pro-rata
     }
     verwachtUrenCum += urenWeek;
     wkMon = new Date(wkMon.getFullYear(), wkMon.getMonth(), wkMon.getDate() + 7);
