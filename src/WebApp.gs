@@ -156,9 +156,11 @@ function dashStatsFromActivities_() {
   if (last < 2) return { stats: res, maandTotalen: [] };
   var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
   var now = stripTime_(new Date()).getTime();
+  var oudste = null;
   data.forEach(function (r) {
     if (!(r[0] instanceof Date)) return;
     var t = stripTime_(r[0]).getTime();
+    if (oudste === null || t < oudste) oudste = t;
     var ageDays = (now - t) / 86400000;
     var min = Number(r[3]) || 0;
     var tss = (r[8] !== '' && r[8] != null) ? Number(r[8]) : 0;
@@ -173,7 +175,15 @@ function dashStatsFromActivities_() {
   var maandArr = Object.keys(maand).sort().reverse().slice(0, 12).map(function (k) {
     var m = maand[k]; m.tss = Math.round(m.tss); return m;
   });
-  return { stats: res, maandTotalen: maandArr };
+  // Werkelijke historie-span: de Activiteiten-tab wordt door syncActivities
+  // met getActivities(28) gevoed → ~28 dagen, dus "jaar" == d28. Geef de span
+  // mee zodat de client het jaar-label eerlijk kan degraderen.
+  var spanDagen = oudste !== null ? Math.round((now - oudste) / 86400000) : 0;
+  return {
+    stats: res, maandTotalen: maandArr,
+    spanDagen: spanDagen,
+    eersteDatum: oudste !== null ? formatDate(new Date(oudste), 'yyyy-MM-dd') : null
+  };
 }
 
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
@@ -265,7 +275,10 @@ function getDashboardState() {
   // ── Dagen (~90d terug t/m einde huidige week + week+1 preview) ──
   var dagen = [];
   var windowStart = new Date(today.getTime() - 90 * 86400000);
-  var curWeekEnd = new Date(weekStart.getTime() + 6 * 86400000);
+  // Date-only grenzen + setDate-stepping: ms-arithmetiek (+86400000) drift
+  // 1u over de maart-DST-grens, waardoor d ná de grens op 01:00 staat en de
+  // laatste dag (zondag, curWeekEnd op 00:00) uit de <=-vergelijking viel.
+  var curWeekEnd = stripTime_(new Date(weekStart.getTime() + 6 * 86400000));
   var d = stripTime_(windowStart);
   while (d.getTime() <= curWeekEnd.getTime()) {
     var dISO = formatDate(d, 'yyyy-MM-dd');
@@ -286,7 +299,7 @@ function getDashboardState() {
       status: status, kleur: kleur,
       voorstel: card.voorstel, actual: card.actual, previewMin: null
     });
-    d = new Date(d.getTime() + 86400000);
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);  // DST-immuun
   }
   // Week+1 preview-chips uit de Weekplanner +1-tab (alleen beschikbaarheid).
   try {
@@ -321,6 +334,8 @@ function getDashboardState() {
     reeks: reeks,
     huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null,
     stats: statsBundle.stats,
+    spanDagen: statsBundle.spanDagen,
+    eersteDatum: statsBundle.eersteDatum,
     ftp: settings.ftp || null,
     macroFase: macro.fase || null,
     rampBuildMin: (typeof RAMP_BUILD_MIN !== 'undefined') ? RAMP_BUILD_MIN : 3,
