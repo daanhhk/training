@@ -98,19 +98,28 @@ Volgende code-stap (keuze):
 ## Volgende richting
 
 Frontend/app-laag bovenop de bestaande data, geïnspireerd op JOIN
-(commerciële adaptieve wielren-coach).
-- [DONE] Web-app v1 + v1.1: read-only HtmlService-dashboard (Vandaag/
-  Kalender/Vorm) + Optie B geordende zone-balk. Apps Script web-app via
-  HtmlService die dezelfde Sheet leest — platform-keuze bevestigd.
-- [VOLGENDE — Prompt 2] Vorm-tab herontwerp naar status-first: JOIN-stijl
-  "hoe sta je ervoor"-graphic (Girona-ring + macro-fase, status-badge uit
-  ramp/garminHeuristic/formZone_), inline uitleg-paneel (statusUitleg),
-  CTL/ATL/Vorm-grafiek gedegradeerd tot herstylede trend eronder. Plus de
-  long_z2 gele-staart-bug fixen.
+(commerciële adaptieve wielren-coach). Huidige stand: commit 350391e —
+3 tabs (Vandaag/Kalender/Vorm), Vorm status-first, status-graphic óók
+bovenaan Vandaag, kalender-zondag-fix, long_z2-fix, eerlijke stats (~28d).
+- [DONE] Web-app v1 t/m v1.3: read-only HtmlService-dashboard + Optie B
+  geordende zone-balk + Vorm status-first + Vandaag-graphic + kalender-fix.
+  Platform-keuze (Apps Script HtmlService op dezelfde Sheet) bevestigd.
 - [Prompt 3] Tik-op-voltooide-training → uitklap met rit-detail (NP/HR/IF/
   afstand/hm/time-in-zone); vergt uitbreiding actual-object.
 - [Daarna] Write-back-roadmap: settings/onboarding-tab → beschikbaarheid
   terugschrijven → regenerate-knop.
+
+### Design-scoping (JOIN-geïnspireerd) — open beslissingen
+1. Nav: Vandaag + Kalender → één scrollbare "Schema"-tab (Kalender toont
+   nu dubbel). Tabs worden Schema + Vorm. Open: horizontale dag-chips vs
+   verticale dag-lijst.
+2. Status-panel rijker: voortgang-%, vriendelijke verdict-zin, evt.
+   "niveau"-equivalent uit FTP/CTL, evt. 2e swipe-kaart.
+3. Status-toon FASE-BEWUST: "Onderhoudt" in taper/peak = positief
+   ("vorm vasthouden = doel"), in build = zachte nudge. Koppelen aan
+   macroFase, niet alleen formZone+ramp. (Bug nu: badge negatief tijdens
+   taper.)
+4. Volgorde: nav-structuur eerst.
 
 ### Sessie 1 juni 2026 — RPE-3 + week-TSS-fixes + Form-score TSB (Vorm) + Garmin-ramp-gate
 
