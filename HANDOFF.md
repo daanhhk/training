@@ -6,6 +6,33 @@ Garmin-push. Uitrolbaar voor vrienden.
 
 ## Recent gedaan
 
+### Sessie 2 juni 2026 — web-app dashboard v1 + v1.1 (Optie B zone-balk)
+
+- Nieuw: read-only HtmlService web-app op dezelfde Sheet. 3 tabs onderin: Vandaag / Kalender / Vorm. Bestanden src/WebApp.gs, src/Index.html, src/Styles.html, src/Script.html; appsscript.json kreeg een webapp-blok (executeAs USER_DEPLOYING, access MYSELF).
+- Architectuur: één getDashboardState()-getter levert alles in één call; client rendert puur uit state; tab- en dag-selectie zijn client-only; gearchitectureerd voor latere write-back (één loadState, render-uit-state). READ-ONLY: triggert NOOIT generateProposal; hergebruikt readSettings, weekStartDate, getMesoWeek, bepaalFaseVoorDatum_, getWellnessSignal+combineSignals_+rpeSignal_, getFormScore_, _statusWeekTss_, garminHeuristic, computeZoneDebt_, readPlanner, expectedRpe_/plannedTypeForDate_. Actuals/Vorm/stats uit Activiteiten- + Wellness-tab; voorstellen uit weekplan_<maandag>; RPE uit rpe_<dISO>; week+1-preview uit de Weekplanner+1-tab.
+- Deployment: dev-iteratie via de /dev (HEAD) URL — altijd laatste code, GEEN redeploy (lost de webhook-tijdperk redeploy-pijn op); prod-bump via clasp update-deployment <id>. getWebAppUrl()-helper geeft de URL.
+  - /exec-deployment-ID: AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug (huidig @12)
+  - /exec-URL: https://script.google.com/macros/s/AKfycbxE4ycR3nkOJHIS28GcYnlSFMmoXr42q9gpXK6-MWT1ET4OB9hWPaZobwkklxS4cag1Ug/exec
+  - /dev-URL (HEAD, altijd laatste code): https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev
+- v1.1 (Optie B — geordende blokken): renderVariant_ (variant/pool-pad: sweet_spot, threshold, vo2max, tempo, klim, conditie, long_z2) emit een parallelle geordende lijst blokken {minuten, zone}, 5-bucket via pctZoneBucket_ (rust<56 / z2 56-75 / tempo 76-90 / drempel 91-105 / anaeroob>105). Interval-blokken per rep gesplitst in werk+rust → de balk toont de echte interval-comb. Warmup/cooldown → rust. PUUR ADDITIEF: structuur, intent en generatie-logica ongemoeid; weekplan-snapshot key blokken: wo.blokken||null. getDashboardState bouwt zone-balk-segmenten uit blokken (segmentsFromBlokken_) als aanwezig, anders intent-fallback (segmentsFromIntent_). Zone-balk: SVG viewBox 0 0 100 100, preserveAspectRatio none, width 100%, genormaliseerde breedtes + min-breedte 1,4 met herormalisatie → past altijd op scherm, recoveries zichtbaar. Eigen palet via CSS-variabelen (accent indigo #5B5BD6); zone-/blok-kleuren ongewijzigd (grijs/blauw/geel/groen/oranje). Kalender scrollt standaard naar vandaag. Commits 89f491a (engine) + 505eb53 (frontend).
+
+Known gaps:
+- genericLongZ2, combo_long_with_efforts en pendel emitten geen blokken → intent-fallback (vlak). blokken verschijnen pas na een volgende "Genereer voorstel" (read-only dashboard genereert niet); oude snapshots draaien op de fallback.
+- Live waargenomen bug: de long_z2 zone-balk toont via de intent-fallback een onterechte gele staart; pure Z2 hoort vrijwel volledig blauw. Te fixen in Prompt 2.
+
+Convention/learnings:
+- Het workout-object had origineel geen geordende numerieke blokken (structuur = display-strings); Optie B voegde numerieke blokken toe op het variant-pad.
+- De /dev (HEAD) URL geeft altijd de laatste code zonder redeploy.
+- access MYSELF is veilig want de bot draait op long-polling (geen actieve webhook).
+
+Volgende code-stap (Prompt 2) — Vorm-tab herontwerp naar status-first (JOIN-geïnspireerd):
+- Bovenaan een "hoe sta je ervoor"-graphic in JOIN-layout: links een ring met Girona-countdown (dagen resterend) + huidige macro-fase (bepaalFaseVoorDatum_); rechts een status-badge (icoon + semantische kleur + 1-regel verdict) afgeleid van ramp + garminHeuristic + formZone_.
+- Een "i"/uitleg-paneel (inline uitklap) dat in mensentaal zegt wat de status betekent én wat te doen: bouwt-op / onderhoudt / doet-te-veel / gaat-achteruit / fris. Copy server-side (statusUitleg: titel, tekst, icon, kleur) uit formZone_ + ramp + garminHeuristic + fase. JOIN-explainers als toon-referentie — NIET JOIN's niveau/voortgang-%-model (event-driven i.p.v.).
+- CTL/ATL/Vorm-grafiek behouden maar degraderen tot "trend/details" eronder, herstyled (smooth lijnen, zachte gridlines, palet-kleuren, spaarzame datum-labels), evt inklapbaar.
+- Losse fix: de long_z2 gele-staart-bug (genericLongZ2 intent-fallback) uitzoeken en corrigeren.
+Vervolgstap (Prompt 3): tikken op een voltooide training → uitklap met relevante data (gem. vermogen/NP, gem. HR, IF, afstand, hm, time-in-zone) — vergt uitbreiding van het actual-object.
+Write-back-roadmap (na visuele afronding): settings/onboarding-tab (PropertiesService-secrets) als eerste write-back-stap, dan beschikbaarheid terugschrijven, dan regenerate-knop.
+
 ### Sessie 2 juni 2026 — RAMP_BUILD_MIN-kalibratie + RPE auto-bijsturen (a) + CTL/ATL-persist & TSB-trend (b1) + RPE-carry (b2)
 
 KALIBRATIE (a175f8c): RAMP_BUILD_MIN=3 vastgezet. Live: ramp 0,78/wk, Garmin "Aanhouden", gate vuurt correct (0,78<3). Veldnamen bevestigd als platte ctl/atl/rampRate (geen icu_-prefix) → dode icu_-coalescing in getFormScore_ verwijderd.
@@ -32,19 +59,22 @@ Volgende code-stap (keuze):
 (2) RPE-carry verfijnen met objectieve gate (Vorm/ramp uit b1-kolommen) bovenop de subjectieve RPE.
 (3) Resterende backlog: README gap-check, bot-latency (defer), getActivities/getWellness-dedup (minor).
 
-## Volgende richting (exploratie — nog niet gescoped)
+## Volgende richting
 
 Frontend/app-laag bovenop de bestaande data, geïnspireerd op JOIN
-(commerciële adaptieve wielren-coach). Te doen in een verse scoping-sessie:
-1. JOIN als UI/UX-referentie (screenshots Daan) — welke onderdelen willen we overnemen.
-2. Roadmap-review: wat is af (kalibratie/(a)/b1/b2), wat ontbreekt nog, missen we iets.
-3. Hergebruik huidige data voor een vergelijkbare weergave: Voorstel-tab,
-   Wellness-tab (incl. nieuwe CTL/ATL/Vorm/Ramp + TSB-chart), Activiteiten,
-   de DocProp-snapshots (proposal_<datum>, weekplan_<maandag>, rpe_<datum>)
-   en de intervals.icu-API.
-4. Platform-keuze open, binnen de conventie (geen server waar Sheets/Apps
-   Script volstaat): Apps Script web-app via HtmlService die dezelfde Sheet
-   leest is de meest waarschijnlijke kandidaat. Beslissen in de sessie.
+(commerciële adaptieve wielren-coach).
+- [DONE] Web-app v1 + v1.1: read-only HtmlService-dashboard (Vandaag/
+  Kalender/Vorm) + Optie B geordende zone-balk. Apps Script web-app via
+  HtmlService die dezelfde Sheet leest — platform-keuze bevestigd.
+- [VOLGENDE — Prompt 2] Vorm-tab herontwerp naar status-first: JOIN-stijl
+  "hoe sta je ervoor"-graphic (Girona-ring + macro-fase, status-badge uit
+  ramp/garminHeuristic/formZone_), inline uitleg-paneel (statusUitleg),
+  CTL/ATL/Vorm-grafiek gedegradeerd tot herstylede trend eronder. Plus de
+  long_z2 gele-staart-bug fixen.
+- [Prompt 3] Tik-op-voltooide-training → uitklap met rit-detail (NP/HR/IF/
+  afstand/hm/time-in-zone); vergt uitbreiding actual-object.
+- [Daarna] Write-back-roadmap: settings/onboarding-tab → beschikbaarheid
+  terugschrijven → regenerate-knop.
 
 ### Sessie 1 juni 2026 — RPE-3 + week-TSS-fixes + Form-score TSB (Vorm) + Garmin-ramp-gate
 
