@@ -32,6 +32,20 @@ Volgende code-stap (keuze):
 (2) RPE-carry verfijnen met objectieve gate (Vorm/ramp uit b1-kolommen) bovenop de subjectieve RPE.
 (3) Resterende backlog: README gap-check, bot-latency (defer), getActivities/getWellness-dedup (minor).
 
+## Volgende richting (exploratie — nog niet gescoped)
+
+Frontend/app-laag bovenop de bestaande data, geïnspireerd op JOIN
+(commerciële adaptieve wielren-coach). Te doen in een verse scoping-sessie:
+1. JOIN als UI/UX-referentie (screenshots Daan) — welke onderdelen willen we overnemen.
+2. Roadmap-review: wat is af (kalibratie/(a)/b1/b2), wat ontbreekt nog, missen we iets.
+3. Hergebruik huidige data voor een vergelijkbare weergave: Voorstel-tab,
+   Wellness-tab (incl. nieuwe CTL/ATL/Vorm/Ramp + TSB-chart), Activiteiten,
+   de DocProp-snapshots (proposal_<datum>, weekplan_<maandag>, rpe_<datum>)
+   en de intervals.icu-API.
+4. Platform-keuze open, binnen de conventie (geen server waar Sheets/Apps
+   Script volstaat): Apps Script web-app via HtmlService die dezelfde Sheet
+   leest is de meest waarschijnlijke kandidaat. Beslissen in de sessie.
+
 ### Sessie 1 juni 2026 — RPE-3 + week-TSS-fixes + Form-score TSB (Vorm) + Garmin-ramp-gate
 
 RPE-loop compleet (capture + reminders + display/flag), MVP — GEEN auto-bijsturen.
