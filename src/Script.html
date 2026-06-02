@@ -174,8 +174,75 @@
     el.innerHTML = h;
   }
 
-  // ── Vorm ──
+  // ── Vorm: status-first ──
+  var STATUS_DEF = {
+    'Bouwt op':   { cls: 'st-bouwt',  bg: 'st-bouwt-bg',  verdict: 'Je bouwt fitheid op.',
+      uitleg: 'Je trainingslast stijgt sneller dan je fitheid is ingehaald. In een opbouwblok precies goed: je vraagt meer dan je lijf gewend is, zo groeit vorm. Houd herstel in de gaten.' },
+    'Onderhoudt': { cls: 'st-onderh', bg: 'st-onderh-bg', verdict: 'Je houdt je fitheid vast.',
+      uitleg: 'Je traint genoeg om fitheid vast te houden, niet genoeg om te groeien. Prima in onderhoud of taper; suboptimaal als je wilt opbouwen.' },
+    'Te veel':    { cls: 'st-teveel', bg: 'st-teveel-bg', verdict: 'Je vermoeidheid loopt voor.',
+      uitleg: 'Je vermoeidheid loopt flink voor op je fitheid. Een paar dagen kan, langer is blessure-/overtraining-risico. Plan herstel in.' },
+    'Achteruit':  { cls: 'st-achter', bg: 'st-achter-bg', verdict: 'Fitheid zakt langzaam weg.',
+      uitleg: 'Je bent erg uitgerust — te lang weinig prikkel en fitheid zakt langzaam weg. Bouw de last weer op, tenzij dit een bewuste rustweek is.' },
+    'Fris':       { cls: 'st-fris',   bg: 'st-fris-bg',   verdict: 'Uitgerust, fitheid intact.',
+      uitleg: 'Je bent uitgerust met fitheid grotendeels intact. Ideaal vlak voor een belangrijke rit of event.' }
+  };
+
+  function statusVoor(v) {
+    if (!v.huidig) return null;
+    var z = v.huidig.vormZone, ramp = v.huidig.ramp, rb = v.rampBuildMin != null ? v.rampBuildMin : 3;
+    if (z === 'Hoog risico') return 'Te veel';
+    if (z === 'Overgang')    return 'Achteruit';
+    if (z === 'Fris')        return 'Fris';
+    // Optimaal / Grijze zone
+    return (ramp != null && ramp >= rb) ? 'Bouwt op' : 'Onderhoudt';
+  }
+
+  function ringSvg(dagenTot) {
+    var r = 42, C = 2 * Math.PI * r;
+    var frac = (dagenTot == null) ? 0 : Math.max(0, Math.min(1, 1 - dagenTot / 90));
+    var fill = frac * C;
+    return '<svg width="110" height="110" viewBox="0 0 100 100">' +
+      '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="#e2e8f0" stroke-width="9"></circle>' +
+      '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="#5B5BD6" stroke-width="9" stroke-linecap="round" ' +
+      'stroke-dasharray="' + fill.toFixed(1) + ' ' + (C - fill).toFixed(1) + '"></circle></svg>';
+  }
+
+  function renderVormStatus() {
+    var v = state.vorm, ev = v.event || {};
+    var st = statusVoor(v);
+    var def = st ? STATUS_DEF[st] : null;
+    var dagen = ev.dagenTot;
+    var ringMid = (dagen != null)
+      ? '<div class="big">' + dagen + '</div><div class="lbl">dagen</div>'
+      : '<div class="big">–</div><div class="lbl">geen event</div>';
+    var sub = (dagen != null && ev.naam) ? 'tot ' + esc(ev.naam) : 'geen event gepland';
+    var left = '<div class="status-left"><div class="ring-wrap">' + ringSvg(dagen) +
+      '<div class="ring-mid">' + ringMid + '</div></div>' +
+      '<div class="ring-sub">' + sub + '</div>' +
+      (v.macroFase ? '<div class="fase-pill">' + esc(v.macroFase) + '</div>' : '') + '</div>';
+    var right;
+    if (def) {
+      right = '<div class="status-right ' + def.bg + '">' +
+        '<div class="status-i" onclick="toggleUitleg()">i</div>' +
+        '<div class="status-word ' + def.cls + '">' + st + '</div>' +
+        '<div class="status-verdict">' + esc(def.verdict) + '</div></div>';
+    } else {
+      right = '<div class="status-right"><div class="status-verdict">Geen vorm-data.</div></div>';
+    }
+    var html = '<div class="status-wrap">' + left + right + '</div>' +
+      '<div class="explainer" id="vorm-uitleg" style="display:none">' +
+      (def ? esc(def.uitleg) : '') + '</div>';
+    document.getElementById('vorm-status').innerHTML = html;
+  }
+  function toggleUitleg() {
+    var el = document.getElementById('vorm-uitleg');
+    if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+  }
+
+  // ── Vorm: trend & details ──
   function renderVorm() {
+    renderVormStatus();
     var v = state.vorm;
     var hu = '';
     if (v.huidig) {
