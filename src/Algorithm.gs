@@ -63,6 +63,7 @@ function generateProposal() {
   var mesoWeek  = getMesoWeek();
   var days      = readPlanner(ss);                  // nu met gereconcileerde Gedaan-vinkjes
   var wellness  = getWellnessSignal(ss);
+  wellness      = combineSignals_(wellness, rpeSignal_());  // RPE-bijsturing → zelfde demote-pad
   var today     = stripTime_(new Date());
 
   // Split: voltooid / gemist / te plannen
@@ -738,6 +739,34 @@ function demoteType_(type) {
 }
 
 /**
+ * Severity-rang voor signaal-merge. recovery > demote > warning > normal.
+ */
+var SIGNAL_RANK_ = { normal: 0, warning: 1, demote: 2, recovery: 3 };
+
+/**
+ * Combineert wellness- en RPE-signaal tot één bijstuur-object via max
+ * severity. RPE is al gecapt op 'demote', dus 'recovery' blijft objectief
+ * (slaap/HRV). Behoudt de overige wellness-velden (sleepLastNight, …). Bij
+ * gelijke/zwakkere RPE maar beide actief → reasons samenvoegen voor de banner.
+ * Geen stacking: de demote-pass draait één keer op het eindsignaal.
+ */
+function combineSignals_(wellness, rpe) {
+  wellness = wellness || { signal: 'normal', reason: '' };
+  if (!rpe || rpe.signal === 'normal') return wellness;
+
+  var wRank = SIGNAL_RANK_[wellness.signal] || 0;
+  var rRank = SIGNAL_RANK_[rpe.signal] || 0;
+
+  if (rRank > wRank) {
+    wellness.signal = rpe.signal;
+    wellness.reason = rpe.reason;
+  } else if (wellness.reason && rpe.reason) {
+    wellness.reason = wellness.reason + ' + ' + rpe.reason;
+  }
+  return wellness;
+}
+
+/**
  * Leest Wellness tab + berekent HRV/slaap-signaal voor het algoritme.
  *
  * Returnt object met diagnostiek + signal ∈ {normal, warning, demote, recovery}.
@@ -1236,14 +1265,40 @@ function rpeWeekData_() {
   return out;
 }
 
-function rpeMismatchFlag_() {
+/**
+ * Gemiddelde RPE-mismatch (werkelijk − verwacht) over de laatste ≤3
+ * gegradeerde sessies van deze week. Null bij < 2 sessies. Gedeeld door
+ * rpeMismatchFlag_ (display) en rpeSignal_ (bijsturing) zodat ze nooit
+ * uit elkaar lopen.
+ */
+function rpeRecentMismatch_() {
   var data = rpeWeekData_().filter(function (x) { return x.expected != null; });
-  if (data.length < 2) return '';
-  var recent = data.slice(-3);  // most recent up to 3
-  var sum = 0; for (var i = 0; i < recent.length; i++) sum += (recent[i].actual - recent[i].expected);
-  var avg = sum / recent.length;
-  if (avg >= 2) return '⚠️ Laatste ' + recent.length + ' sessies voelden zwaarder dan gepland (gem. +' + avg.toFixed(1).replace('.', ',') + ' RPE) — overweeg een rustdag.';
-  return '';
+  if (data.length < 2) return null;
+  var recent = data.slice(-3);
+  var sum = 0;
+  for (var i = 0; i < recent.length; i++) sum += (recent[i].actual - recent[i].expected);
+  return { avg: sum / recent.length, n: recent.length };
+}
+
+function rpeMismatchFlag_() {
+  var m = rpeRecentMismatch_();
+  if (!m || m.avg < 2) return '';
+  return '⚠️ Laatste ' + m.n + ' sessies voelden zwaarder dan gepland (gem. +' +
+         m.avg.toFixed(1).replace('.', ',') + ' RPE) — resterende harde sessies automatisch lichter gemaakt.';
+}
+
+/**
+ * RPE-gedreven bijstuur-signaal voor assignWorkouts. Eénrichting (alleen
+ * demote bij zwaarder-dan-gepland), gecapt op 'demote' — nooit 'recovery'.
+ * Drempel +2 = identiek aan rpeMismatchFlag_ zodat banner en actie samenvallen.
+ */
+function rpeSignal_() {
+  var m = rpeRecentMismatch_();
+  if (!m || m.avg < 2) return { signal: 'normal', reason: '' };
+  return {
+    signal: 'demote',
+    reason: 'RPE +' + m.avg.toFixed(1).replace('.', ',') + ' deze week (laatste ' + m.n + ' sessies zwaarder dan gepland)'
+  };
 }
 
 function rpeStatusLines_() {

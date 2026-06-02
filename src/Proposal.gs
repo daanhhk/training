@@ -133,16 +133,16 @@ function renderProposal(ss, days, voltooid, missed, settings, mesoWeek, macro, d
     if (fsB) diag += ' · Vorm ' + Math.round(fsB.form) + ' (' + fsB.label + ')';
 
     if (wellness.signal === 'recovery') {
-      wText = '🛑  Wellness: ' + wellness.reason + ' — ALLE workouts → recovery.   (' + diag + ')';
+      wText = '🛑  Bijsturing: ' + wellness.reason + ' — ALLE workouts → recovery.   (' + diag + ')';
       wBg = '#fee2e2'; wFg = '#991b1b';
     } else if (wellness.signal === 'demote') {
-      wText = '⚠️  Wellness: ' + wellness.reason + ' — intensiteit gedemoot.   (' + diag + ')';
+      wText = '⚠️  Bijsturing: ' + wellness.reason + ' — intensiteit gedemoot.   (' + diag + ')';
       wBg = '#fef3c7'; wFg = '#92400e';
     } else if (wellness.signal === 'warning') {
-      wText = '🟡  Wellness: ' + wellness.reason + ' — geen demotie maar let op herstel.   (' + diag + ')';
+      wText = '🟡  Bijsturing: ' + wellness.reason + ' — geen demotie maar let op herstel.   (' + diag + ')';
       wBg = '#fefce8'; wFg = '#854d0e';
     } else {
-      wText = '✅  Wellness: ' + wellness.reason + ' — geen aanpassingen.   (' + diag + ')';
+      wText = '✅  Bijsturing: ' + wellness.reason + ' — geen aanpassingen.   (' + diag + ')';
       wBg = '#dcfce7'; wFg = '#166534';
     }
     sh.getRange(r, 1, 1, COLS).merge()
