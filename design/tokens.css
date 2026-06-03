@@ -1,0 +1,180 @@
+/* ============================================================================
+   FTP COACH — Design Tokens
+   Dark, data-dichte performance-tool. Telefoon-first (~390px).
+   Implementeer deze als hand-CSS; de mock consumeert exact dezelfde namen.
+   ============================================================================ */
+
+:root {
+
+  /* ─────────────────────────────────────────────────────────────
+     ACHTERGROND-LAGEN
+     Donkere, koel-neutrale stack. Hoger = lichter = "dichterbij".
+     ───────────────────────────────────────────────────────────── */
+  --bg-app:        #0A0D12;   /* app-canvas, diepste laag                   */
+  --bg-sunken:     #070A0E;   /* ingedrukte velden, grafiek-plot, lege rij  */
+  --bg-surface:    #12161D;   /* standaard kaart / paneel                   */
+  --bg-elevated:   #1A212B;   /* chips, tooltips, actieve tegel             */
+  --border-subtle: #232B36;   /* hairline-scheiding binnen surfaces         */
+  --border-strong: #313B49;   /* rand van interactieve / verhoogde objecten */
+
+  /* ─────────────────────────────────────────────────────────────
+     TEKST  (op donkere lagen)
+     ───────────────────────────────────────────────────────────── */
+  --text-primary:   #EDF1F5;  /* koppen, key-getallen                       */
+  --text-secondary: #9BA7B4;  /* labels, ondersteunende tekst               */
+  --text-muted:     #5C6775;  /* as-tekst, captions, inactief               */
+
+  /* ─────────────────────────────────────────────────────────────
+     ACCENT  (oranje → rood)  — energie, spaarzaam inzetten
+       WEL:  actieve ring-voortgang · primaire CTA · actieve tab/dot ·
+             de niveau-grafieklijn · één key-getal-highlight per scherm.
+       NIET: gewone tekst · borders · semantische status (zie hieronder) ·
+             grote gevulde vlakken. Spaarzaam = krachtig.
+     ───────────────────────────────────────────────────────────── */
+  --accent:        #FF5A1F;                               /* primair accent          */
+  --accent-strong: #FF3526;                               /* dieper rood (piek/eind) */
+  --accent-soft:   rgba(255, 90, 31, 0.14);               /* tint-fill, hover         */
+  --accent-grad:   linear-gradient(135deg, #FF7A2F 0%, #FF3526 100%);
+
+  /* ─────────────────────────────────────────────────────────────
+     SEMANTISCH  — status & vorm. Nooit verwarren met het accent.
+       bad  = oververmoeid (rood)   ·  good = productief / opbouwend,
+       de zone waar je wilt zitten (groen)   ·  warn = let op (amber)
+       fresh = fris / getaperd, uitgerust (blauw)
+     ───────────────────────────────────────────────────────────── */
+  --good:      #34D17F;
+  --warn:      #F5B83D;
+  --bad:       #FF5267;
+  --fresh:     #3DA5F0;
+  --good-soft: rgba(52, 209, 127, 0.15);
+  --warn-soft: rgba(245, 184, 61, 0.15);
+  --bad-soft:  rgba(255, 82, 103, 0.15);
+  --fresh-soft: rgba(61, 165, 240, 0.16);
+
+  /* ─────────────────────────────────────────────────────────────
+     GRAFIEK-PALET
+     ───────────────────────────────────────────────────────────── */
+  --chart-line:  var(--accent);
+  --chart-fill:  rgba(255, 90, 31, 0.12);   /* area-gradient bovenkant */
+  --chart-grid:  rgba(255, 255, 255, 0.05); /* gridlines               */
+  --chart-axis:  #5C6775;                    /* as-tekst                */
+  --chart-point: #FFFFFF;                    /* actieve datapunt-marker */
+
+  /* ─────────────────────────────────────────────────────────────
+     TRAININGSZONES (vermogen)  — rustig → fel, accent voor de hoogste.
+     Gebruikt in de zone-balk van een workout. Z5/Z6 erven het accent,
+     dus ze verschuiven mee als de accentkleur verandert.
+     ───────────────────────────────────────────────────────────── */
+  --zone-1: #5C84A6;              /* Herstel   (rustig, koel)        */
+  --zone-2: #3E9BC9;              /* Duur      (blauw)               */
+  --zone-3: #36B0A4;              /* Tempo     (teal)                */
+  --zone-4: #E0A93C;             /* Drempel   (amber)               */
+  --zone-5: var(--accent);        /* VO2max    (accent oranje)       */
+  --zone-6: var(--accent-strong); /* Anaeroob  (fel rood)            */
+
+  /* ─────────────────────────────────────────────────────────────
+     TYPOGRAFIE
+       sans → UI, labels, koppen      num → alle getallen (tabular, mono)
+     ───────────────────────────────────────────────────────────── */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-num:  'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* type-scale  (px / line-height / weight) */
+  --fs-display:  56px;  --lh-display:  1.0;   --fw-display: 600;  /* hero-getal      */
+  --fs-h1:       22px;  --lh-h1:       1.2;   --fw-h1:      600;  /* sectiekop       */
+  --fs-h2:       16px;  --lh-h2:       1.3;   --fw-h2:      600;  /* kaartkop        */
+  --fs-body:     15px;  --lh-body:     1.45;  --fw-body:    400;  /* lopende tekst   */
+  --fs-caption:  11px;  --lh-caption:  1.3;   --fw-caption: 600;  /* label / overline*/
+
+  /* getal-scale (mono, tabular) */
+  --fs-num-lg:   44px;  --fw-num-lg:   600;  /* niveau, ring-waarde   */
+  --fs-num-md:   26px;  --fw-num-md:   600;  /* metric-waarde         */
+  --fs-num-sm:   17px;  --fw-num-sm:   500;  /* inline getal          */
+
+  --tracking-overline: 0.14em;  /* letterspacing voor CAPS-overlines */
+
+  /* ─────────────────────────────────────────────────────────────
+     BORDER-RADIUS-SCHAAL
+     ───────────────────────────────────────────────────────────── */
+  --r-xs:   6px;
+  --r-sm:   9px;
+  --r-md:   12px;
+  --r-lg:   16px;
+  --r-xl:   20px;
+  --r-pill: 999px;
+
+  /* ─────────────────────────────────────────────────────────────
+     SPACING-SCHAAL  (4-punts grid)
+     ───────────────────────────────────────────────────────────── */
+  --s-1:   4px;
+  --s-2:   8px;
+  --s-3:  12px;
+  --s-4:  16px;
+  --s-5:  20px;
+  --s-6:  24px;
+  --s-7:  32px;
+  --s-8:  40px;
+
+  /* schaduw — donker, subtiel */
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.02) inset, 0 2px 8px rgba(0,0,0,0.35);
+
+  /* ─────────────────────────────────────────────────────────────
+     FORM-COMPONENTEN  (instellingen / invoer)
+     Consistente bouwstenen voor velden, toggles, keuzes en knoppen.
+     ───────────────────────────────────────────────────────────── */
+
+  /* tekst- / getalveld */
+  --field-bg:            var(--bg-sunken);
+  --field-bg-focus:      #0C1117;
+  --field-border:        var(--border-strong);
+  --field-border-focus:  var(--accent);
+  --field-text:          var(--text-primary);
+  --field-placeholder:   var(--text-muted);
+  --field-height:        38px;
+  --field-pad-x:         12px;
+  --field-radius:        var(--r-sm);
+
+  /* toggle / switch  (uit = neutraal, aan = accent) */
+  --toggle-w:            44px;
+  --toggle-h:            26px;
+  --toggle-track-off:    #2A323D;
+  --toggle-track-on:     var(--accent);
+  --toggle-thumb:        #EDF1F5;
+  --toggle-thumb-shadow: 0 1px 3px rgba(0,0,0,0.5);
+
+  /* segmented control */
+  --segment-track-bg:    var(--bg-sunken);
+  --segment-text:        var(--text-muted);
+  --segment-active-bg:   var(--bg-elevated);
+  --segment-active-text: var(--text-primary);
+  --segment-active-shadow: 0 1px 3px rgba(0,0,0,0.45);
+
+  /* dropdown / select */
+  --select-bg:           var(--bg-sunken);
+  --select-border:       var(--border-strong);
+  --select-text:         var(--text-primary);
+  --select-menu-bg:      var(--bg-elevated);
+  --select-menu-border:  var(--border-strong);
+  --select-option-active: var(--accent-soft);
+
+  /* datum-picker (erft veld-stijl) */
+  --date-bg:             var(--field-bg);
+  --date-border:         var(--field-border);
+  --date-text:           var(--field-text);
+
+  /* knop-varianten */
+  --btn-primary-bg:      var(--accent-grad);
+  --btn-primary-text:    #FFFFFF;
+  --btn-secondary-bg:    var(--bg-elevated);
+  --btn-secondary-border: var(--border-strong);
+  --btn-secondary-text:  var(--text-primary);
+  --btn-destructive-bg:  var(--bad-soft);
+  --btn-destructive-text: var(--bad);
+  --btn-height:          44px;
+  --btn-radius:          var(--r-md);
+
+  /* status-badge (bv. "Gekoppeld") */
+  --badge-good-bg:       var(--good-soft);
+  --badge-good-text:     var(--good);
+}
+
