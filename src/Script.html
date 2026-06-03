@@ -61,6 +61,10 @@
 
   function voorstelKaart(v) {
     if (!v) return '';
+    // v2c-pendel: multi-session → losse kaart per sessie (elk eigen zonebar).
+    if (v.sessies && v.sessies.length > 1) {
+      return v.sessies.map(sessieKaart_).join('');
+    }
     var h = '<div class="card"><h3>' + esc(v.titel) + '</h3>';
     h += zoneBar(v.segmenten);
     h += '<div class="metrics">';
@@ -76,6 +80,20 @@
       v.waarom.forEach(function (w) { h += '<li>' + esc(w) + '</li>'; });
       h += '</ul></details>';
     }
+    h += '</div>';
+    return h;
+  }
+
+  // v2c-pendel: één losse sessie-kaart (titel + eigen zonebar + duur/TSS + note).
+  function sessieKaart_(s) {
+    if (!s) return '';
+    var h = '<div class="card"><h3>' + esc(s.titel || 'Sessie') + '</h3>';
+    h += zoneBar(s.segmenten);
+    h += '<div class="metrics">';
+    h += '<div class="metric"><div class="v">' + uMin(s.duurMin) + '</div><div class="l">duur</div></div>';
+    h += '<div class="metric"><div class="v">' + Math.round(s.tss || 0) + '</div><div class="l">TSS</div></div>';
+    h += '</div>';
+    if (s.eindopmerking) h += '<div class="muted">' + esc(s.eindopmerking) + '</div>';
     h += '</div>';
     return h;
   }
