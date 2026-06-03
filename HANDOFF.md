@@ -56,39 +56,27 @@ TRIP-INVARIANTEN:
 ## VOLGENDE — [C] Variant/duur-schaling (KRITISCH, fundament)
 Engine-correctheid: harde reps mogen NIET meeschalen met duur; begrensde key-set + endurance-vulling; per-type harde-dosis-cap; IF DAALT bij langere duur. Geldt OOK voor de kern-engine (assignWorkouts duur-schaling) — raakt ook de net-gebouwde long_z2. GEEN bouw voor recon: eerst read-only STAP 0 — schaalt de generator nu reps of endurance naar de doel-duur? Waar zit de duur→workout-mapping (assignWorkouts + genericLongZ2/genericPendelIntervals/conditiePools_)? Bestaat er een harde-dosis-cap of schaalt alles lineair? Pas na bevestiging een bouwprompt.
 
-## BACKLOG
-Gefaseerd op afhankelijkheid (kritisch pad: C → (F, #3 parallel) → A/G → B → D → E; displays + randstaten waar hun bron klaar is). Elk item: read-only recon VÓÓR bouw.
-FUNDAMENT:
-- [C] Variant/duur-schaling = VOLGENDE (zie boven). Fundament voor B + variant-correctheid.
-- [F] Beschikbaarheid-UI (v2b-C): per-dag knop, scope "deze dag"/"hele week"; Train?+minuten+pendel-toggle (geen dagtype-dropdown, weekend auto, recovery engine-gestuurd). Rustdag niet doodlopend: "toch trainen" = beschikbaarheid aan; onderscheid onbeschikbaar vs engine-recovery. Write-pad voor D/G/J. Recon: saveAvailability dag- vs week-scope.
-VOORTZETTING:
-- [#3] Events/doel-modus (resterend deel — key-type IS opgelost, zie DECISIE). Modus-overname-UX: bij nabij A-event neemt event-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide.
-WRITE-/GEREEDHEID:
-- [A] RPE post-ride (write-feature, write-pad v2a-stijl): 1-10 selector + gepland-vs-gevoeld-feedback. Trend-ratio zwaarte(IF/TSS) vs RPE ~14d; RPE→plan direct, RPE→niveau INDIRECT (W/kg-anker, niet opblazen; "voelt licht"-trend → FTP-cel achter → FTP-test/-ophoging voorstellen; ftp_auto_update blijft UIT). Recon: mismatch-engine + patches #16-17.
-- [G] Ochtend-check-in (write-feature): slaap/benen/stress → bijstelling gereedheid + mogelijke afschaling vandaag. Recon: hoe het wellness/gereedheid + dag-voorstel beïnvloedt.
-CONTENT + INTERACTIE:
-- [B] Trainingen-tab (bibliotheek): categorie → VARIANT-keuze, on-demand uit engine (GEEN statisch archief). Ná C. Recon: variant-pool als opsombare data? sprint/anaerobe key-type aanwezig?
-- [D] "Doe iets anders"-override (per dag): kies variant/categorie of vrije rit/groepsrit. Pin/lock-vlag zodat regenerate de dag niet overschrijft; stroomt in debt/dekking. Ná B+F. Recon: pin-mechanisme.
-- [E] Per-dag "Stuur naar Garmin": smalle ingang op bestaande push (zelfde uitzonderings-laag als pushWeb). Swap+re-push via upsert (external_id). Ná D (deelt upsert/ORPHAN-laag). Recon: per-dag scope + ORPHAN-delete van weggevallen sessies bij een override die het sessie-aantal verlaagt.
-DISPLAYS (waar bron klaar):
-- [I] Event-/periodisering-tijdlijn: fase-boog naar A-event + weken + verwachte uren + actieve MODUS. Ná #3. Display.
-- [H] Gereedheid-"waarom"-uitklap: factoren achter het cijfer (Vorm/HRV/belasting/slaap) = geparkeerde draad (3). Ná A/G. Display.
-- [J] Week-belasting + "werk week bij"-regenerate (verouderd-hint bij gewijzigde beschikbaarheid) = bestaande v2b-A. Ná F.
-DOORLOPEND + LAATSTE:
-- [K] Rand-/lege staten: intervals niet verbonden, sync mislukt, geen voorstel, geen historie, push-fout. Kritische foutpaden (intervals/sync) niet te lang uitstellen.
-- [DESIGN-TRACK] visuele polish-pass — LAATSTE, zie DESIGN-TRACK-sectie.
+## DESIGN-TRACK (spec-bron voor de visuele polish-pass = draad 4)
+Volledig ontwerp vastgelegd in /design (commit 4b7e1e6): tokens.css (canoniek), FTP-Coach-export.md (React + inline-styles bron), DESIGN.md (spec + harde regels), screenshots/ (1-9.png).
+Stijl: dark, data-dicht pro-tool, accent oranje→rood. Zones 1-6 (Z5=accent, Z6=anaeroob); semantisch good/warn/bad/fresh; IBM Plex Sans + Mono.
+Harde regels (ook in DESIGN.md): deck-CSS .status-card/.status-wrap niet aanraken; vermogen afronden op 5 W; variant/duur-schaling = begrensde key-set + endurance-vulling, GEEN reps-meeschaling, IF daalt bij langere duur.
+Polish-pass: tokens.css als hand-CSS toepassen op Index.html/Script.html; JSX plakt NIET 1:1.
 
-## DESIGN-TRACK
-(spec-bron voor latere visuele polish-pass; LAATSTE pass, niet nu bouwen)
-- Stijl: dark mode, data-dicht performance-pro-tool, accent oranje/rood. Volledige tokens.css incl. form-componenten + zone-kleur-subpalet.
-- Schermen: status-deck (ring+verdict / niveau-blok), Vorm, Schema (dag-strip + dag-detail voorstel/voltooid/rustdag), Trainingen, Instellingen.
-- Spec-decisie: vermogen afronden op 5 W.
-- Bij implementatie: fragiele deck-CSS (.status-card/.status-wrap) respecteren.
-- ARTEFACT-TODO (Daan, nu al, los van CC): tokens.css + screenshots uit de Claude Design-sessie exporteren naar /design — anders leeft de spec alleen in een vluchtige sessie.
+## BACKLOG — ontworpen, nog te bouwen (elk: recon VOOR bouw)
+- RPE post-ride (write-feature, write-pad v2a-stijl): 1-10 selector + gepland-vs-gevoeld-feedback. Logica: trend-ratio zwaarte(IF/TSS) vs RPE ~14d; RPE->plan direct, RPE->niveau INDIRECT (W/kg-anker, niet opblazen; "voelt licht"-trend -> FTP-cel achter -> FTP-test/-ophoging voorstellen; ftp_auto_update blijft UIT). Recon: mismatch-engine + patches #16-17.
+- Trainingen-tab (bibliotheek): categorie -> VARIANT-keuze, on-demand uit engine (GEEN statisch archief). Recon: variant-pool als opsombare data? sprint/anaerobe key-type aanwezig?
+- Variant/duur-schaling (KRITISCH): geen reps-meeschaling; begrensde key-set + endurance-vulling; per-type harde-dosis-cap; IF daalt bij langere duur. Geldt OOK voor de kern-engine (assignWorkouts). Recon: schaalt de generator nu reps of endurance?
+- "Doe iets anders"-override (per dag): kies variant/categorie of vrije rit/groepsrit. Pin/lock-vlag zodat regenerate de dag niet overschrijft; stroomt in debt/dekking. Recon: pin-mechanisme.
+- Per-dag "Stuur naar Garmin": smalle ingang op bestaande push (zelfde uitzonderings-laag als pushWeb). Swap+re-push overschrijft via upsert (external_id). Recon: per-dag scope + ORPHAN-delete bij override die sessie-aantal verlaagt.
+- Beschikbaarheid-UI = v2b-C: per-dag knop, scope "deze dag"/"hele week"; Train?+minuten+pendel-toggle (geen dagtype-dropdown, weekend auto, recovery engine-gestuurd). Rustdag niet doodlopend ("toch trainen"); onderscheid onbeschikbaar vs engine-recovery. Recon: saveAvailability dag- vs week-scope.
+- Ochtend-check-in (write-feature): slaap/benen/stress -> bijstelling gereedheid + mogelijke afschaling. Recon: invloed op wellness/gereedheid + dag-voorstel.
+- Gereedheid-"waarom"-uitklap (= geparkeerde draad 3). Display.
+- Event-/periodisering-tijdlijn: fase-boog + weken + verwachte uren + actieve MODUS. Display.
+- Week-belasting + "werk week bij"-regenerate (verouderd-hint bij gewijzigde beschikbaarheid) = bestaande v2b-A.
+- Rand-/lege staten: intervals niet verbonden, sync mislukt, geen voorstel, geen historie, push-fout.
 
-## DECISIE
-events/doel = wederzijds uitsluitende MODUS: ~2 events/jr (Amstel Gold Race, Girona) + standaard trainingsdoel; bij nabij A-event neemt event-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide.
-KEY-TYPE-STURING OPGELOST (trip-feature, HEAD 1e72d6d): event-karakter (type==='trip') stuurt het key-type via long_z2 (free-day) / pendel_trip_intervals (pendel), naast klimType voor klim-routing; doel blijft baseline buiten event-modus. RESTEREND OPEN (= backlog #3): de modus-overname-UX (pauzeren/aankondigen/lead-time).
+## DECISIE — events/doel = wederzijds uitsluitende MODUS
+~2 events/jr (Amstel Gold Race, Girona) + standaard trainingsdoel; bij nabij A-event neemt evenement-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide. Open: hoe event vs `doel` het key-type sturen = de lopende Girona/key-type-recon.
 
 ## Durabele lessen
 Zie CLAUDE.md. Kort: visueel verifieren op /dev (incognito + hard refresh); write-pad-patroon = google.script.run -> serverfn returnt vers getDashboardState -> onState (behalve pushWeb); NL-locale-formules bij setFormula (komma decimaal + puntkomma separator) - nu n.v.t. (writes zijn waarden/JSON), relevant zodra een write formules raakt; STAP 0-recon + 200-woorden rapport-cap.
