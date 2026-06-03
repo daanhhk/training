@@ -1306,6 +1306,7 @@ function workoutZones(type, doel) {
       type === 'ss_lang' || type === 'low_cad' || type === 'big_gear' || type === 'bergsim') return ['high'];
   if (type === 'vo2max' || type === 'vo2_short' || type === 'vo2_medium' || type === 'vo2_long' ||
       type === 'vo2_3015' || type === 'microbursts') return ['anaerobic'];
+  if (type === 'pendel_trip_intervals') return ['low', 'high'];  // tocht-pendel: vast low+high (heen Z2 + terug sweet-spot), doel-onafhankelijk
   if (type.indexOf('pendel_') === 0) {
     // pendel met intervallen — afhankelijk van doel
     if (doel === 'VO2max') return ['low', 'anaerobic'];
