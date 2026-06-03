@@ -213,3 +213,15 @@ Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
 - `doPost` (Telegram) moet ALTIJD HTTP 200 returnen (anders Telegram
   retry-loop); secret als `?s=` query-param want Apps Script geeft custom
   headers niet door aan doPost.
+- **Trip-event key-type volgorde** (`keyIntensity`): Taper → Recovery →
+  `climbTypeWorkout_` (Build/Peak) → trip (`long_z2`) → doel-tak. De trip-tak
+  staat NOOIT vóór Recovery of climb.
+- **Pendel-recovery via `DEMOTE_MAP`**, niet via if-volgorde in de generator. Een
+  nieuw trip/pendel-key-type MOET een `DEMOTE_MAP`-entry (→ `pendel_z2`) krijgen,
+  anders breekt recovery.
+- **`workoutZones` pendel-pinning**: `pendel_trip_intervals` gepind `['low','high']`
+  vóór de `pendel_`-prefix-tak; `pendel_z2` gepind `['low']`; overige
+  `pendel_*_intervals` blijven doel-afhankelijk — niet samenvoegen.
+- **Twee dag-smaken**: pendel-dag → token-pad (`assignWorkouts` pendel-branch),
+  normale dag → `keyIntensity`. `d.voorgesteldType` op een pendel-dag komt uit de
+  pendel-branch, niet uit `keyIntensity`.

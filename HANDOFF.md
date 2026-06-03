@@ -13,6 +13,12 @@ Multi-session is nu ONDERSTEUND — de oude invariant "multi-session NIET onders
 - v2b-B multi-session (2f5a645 feat, 7f6c9a6 docs): per-sessie proposal-keys — base = proposal_<dISO> (s1), extra = proposal_<dISO>_s<n> voor n>=2. external_id: s1 = coach_<dateISO>_ride, n>=2 = coach_<dateISO>_ride_s<n>. Distinct start_date_local (s1 07:00, last 17:00; n>=3 12/19/06h). Single-session events ook verschoven 00:00->07:00 (idempotent via ongewijzigd external_id). Settings PENDEL_DUUR (rij 52, default 80) + PENDEL_AANTAL (rij 53, default 2), sectie-header rij 51, alle zes maps gewired. Key-format leeft UITSLUITEND in readDaySessions_/writeDaySessions_/deleteDaySessions_ (Algorithm.gs). computeWeekVolumeMin_ sommeert sessies. Snapshot draagt sessies[] + aggregaat. Geraakt: Algorithm.gs + IntervalsApi.gs + Sync.gs + Settings.gs.
 - Asymmetrische pendel-intensiteit (9af34fc): sessies 0..N-2 van een pendeldag geforceerd type pendel_z2; laatste sessie houdt d.voorgesteldType (engine-keuze — al pendel_z2 op recovery-weken via DEMOTE_MAP, anders pendel_<doel>_intervals). genericPendelZ2-signatuur nu (mins, settings, mesoWeek, macroFase), dispatch Algorithm.gs:1762; recovery-predikaat mesoWeek===4 || macroFase==='Recovery' maakt de "recovery week"-tekst conditioneel (gewone ochtendpendel -> "Pendel + Z2 (<m> min)" + "Rustige pendel — fris op werk aankomen."). Aggregaat-naam "Pendel Z2 + <doel> intervallen" bij gemengd.
 - Per-sessie kaarten (eab1591 Algorithm, 7f076dc WebApp, 7ee851f Script.html): sessies[]-entries dragen {naam, totaalMin, tss, intent, eindopmerking} (intent = ensureIntent_(s)). dashDayCard_ (WebApp.gs:281-307): wpEntry.sessies.length>1 -> voorstel.sessies=[{titel,duurMin,tss,segmenten:segmentsFromIntent_(s.intent),eindopmerking}]; aggregaat-voorstel intact; niet uitgezonden bij single-session. Script.html: voorstelKaart vertakt vroeg bij v.sessies.length>1 -> N kaarten via sessieKaart_ (titel + zoneBar + duur/TSS + eindopmerking via .muted), opgeslagen volgorde (s1 ochtend -> last middag). Lege segmenten -> "Geen structuur beschikbaar." (geen crash). Multi toont per-sessie eindopmerking; single toont dag-reden ongewijzigd.
+- TRIP-EVENT KEY-TYPE compleet & live (HEAD 1e72d6d). Trigger = isTripEvent (event type==='trip'); afstandKm/hm bewust NIET gethread (latere refinement, zie backlog [C]). Build/Peak only.
+  - Free-day (normale dag, keyIntensity site 765): keyIntensity kreeg isTripEvent als 5e param. Trip-tak ná climbTypeWorkout_ (Build/Peak), vóór doel-tak: isTripEvent + geen climb-routing (klimType='vlak'/leeg) → 'long_z2' (genericLongZ2). Climb (lang/kort/gemengd) wint; Taper/Recovery winnen (tak zit ná Recovery).
+  - Commute (pendel-dag, site 731): emit token 'pendel_trip_intervals' bij trip+Build/Peak; genericPendelIntervals isTrip-tak bouwt sweet-spot/tempo (2x15min @ 86-92% FTP), naam "Pendel + sweet spot (tocht, …)".
+  - Recovery-precedentie pendel via DEMOTE_MAP += pendel_trip_intervals → pendel_z2 (recovery-bewust mesoWeek===4 || macroFase==='Recovery'): token gedemoot vóór de generator, dus trip-tak vuurt niet op recovery → schema-recovery wint.
+  - Zone: workoutZones gepind pendel_trip_intervals → ['low','high'] (één expliciete regel vóór de pendel_-prefix-tak 1309), doel-onafhankelijk. Overige pendel_*_intervals houden doel-afhankelijke zone op 1309.
+  - Live-geverifieerd: pendel-dag = "Pendel + Z2" (heen) + "Pendel + sweet spot (tocht)" (terug), zone ['low','high'], geen FTP. Girona (2026-06-13, trip, A, 95km/1200hm, lang): free-day = threshold|sweet_spot (climb wint), pendel = sweet-spot/tempo. long_z2-tak inert voor Girona (lang≠vlak); is voor toekomstige vlakke tochten.
 
 ### Eerdere milestones (gedaan)
 - v2a (521ed24): beschikbaarheid-write-pad — saveAvailability schrijft Weekplanner A3:H9 (A=Train?/D=Minuten/E=Dagtype), returnt vers getDashboardState -> onState.
@@ -41,15 +47,48 @@ Push: pushAllPending_ core / pushAllPendingWorkouts wrapper (Sync.gs); pushEvent
 - deck-CSS .status-card + .status-wrap NIET aanraken (.status-deck bestaat niet). Per-sessie render gebruikt .card/.metrics/.metric/.muted/.zonebar, alleen in #dag-detail.
 - sessies[]-shape {naam, totaalMin, tss, intent, eindopmerking}; reden is dag-niveau (d.reden), niet per sessie.
 
-## VOLGENDE
-1. PRIORITY — Girona/key-type: is pendel_<doel>_intervals (nu FTP) het juiste key-type voor een lange tocht/event-doel (Girona Fietsvakantie)? Open: weegt keyIntensity(doel, macroFase, dekking, klimType) het event-karakter (tocht/duur), of staat `doel` vast op FTP? Mogelijk ontbreekt een duur/tocht-key-type, of het doel-setting staat simpelweg op FTP. Read-only recon op keyIntensity/doelKey/het doel-setting VÓÓR enige bouw.
-2. v2b-C (open, model GEAKKOORDEERD): vereenvoudigde beschikbaarheid-UI — binaire pendel-vlag -> E='pendel'; auto-weekend za/zo -> E='weekend' tenzij pendel; anders E='vrij'; dropdown recovery/weekend weg; recovery engine-gestuurd.
-3. Optioneel: avoid-consecutive-hard op pendel (avond-Z2 na een zware dag — nog niet gevraagd); debt/dekking-asymmetrie (open sinds v2c/v2d); dode waarom-code Script.html:71-75; patches #16-17 (wellness-gedreven keuze, recentHardDayDate_ op actuals).
+TRIP-INVARIANTEN:
+- keyIntensity-volgorde: Taper → Recovery → climbTypeWorkout_ (Build/Peak) → trip (long_z2) → doel-tak. Trip-tak NOOIT vóór Recovery of climb.
+- Pendel-recovery loopt via DEMOTE_MAP, NIET via if-volgorde in de generator. Een nieuw trip/pendel-key-type MOET een DEMOTE_MAP-entry (→ pendel_z2) krijgen, anders breekt recovery.
+- workoutZones: pendel_trip_intervals gepind ['low','high'] vóór de pendel_-prefix-tak (1309); pendel_z2 gepind ['low'] (1303); overige pendel_*_intervals doel-afhankelijk op 1309 — niet samenvoegen.
+- Twee dag-smaken: pendel-dag → token-pad (731), normale dag → keyIntensity (765). d.voorgesteldType op een pendel-dag komt uit 731, niet uit keyIntensity.
 
-## BACKLOG (later — niet de huidige priority)
-- RPE post-ride (web-app write-feature, UI ontworpen in Claude Design): 1–10 selector + "gepland-vs-gevoeld"-feedbackregel. Logica (latere STAP 0-recon op mismatch-engine + patches #16-17): signaal = TREND, rollende ratio geplande zwaarte (IF/TSS) vs RPE ~14d; RPE -> PLAN direct (trend licht = progressiever, trend zwaar = terugschakelen/herstel); RPE -> NIVEAU INDIRECT (niveau blijft W/kg-verankerd, niet direct opblazen i.v.m. wobble; aanhoudend "voelt licht" -> FTP-cel loopt achter -> coach stelt FTP-test/-ophoging voor; ftp_auto_update blijft UIT). Write-pad zoals v2a (google.script.run -> vers getDashboardState -> onState).
-- Visuele redesign / design-track: volledige dark pro-tool mockups + design-tokens (palette/type/spacing + zone-kleur-subpalet) leven in Claude Design — schermen: status-deck, Vorm, Settings, Schema, RPE-invoer, workout-blok-detail. Spec-bron voor een latere polish-pass. Staat NIET in de repo; bij die pass de fragiele deck-CSS (.status-card/.status-wrap) respecteren.
-- Events/doel = wederzijds uitsluitende MODUS (UX-intentie, hangt aan uitkomst Girona/key-type): ~2 events/jr (Amstel Gold Race, Girona) + standaard trainingsdoel; bij een nabij A-event neemt evenement-modus het over (doel-blok pauzeert) + coach kondigt de overgang aan; lead-time geschaald op prioriteit (A lang / B kort / C niet). Settings houdt beide (events-lijst + doel).
+## VOLGENDE — [C] Variant/duur-schaling (KRITISCH, fundament)
+Engine-correctheid: harde reps mogen NIET meeschalen met duur; begrensde key-set + endurance-vulling; per-type harde-dosis-cap; IF DAALT bij langere duur. Geldt OOK voor de kern-engine (assignWorkouts duur-schaling) — raakt ook de net-gebouwde long_z2. GEEN bouw voor recon: eerst read-only STAP 0 — schaalt de generator nu reps of endurance naar de doel-duur? Waar zit de duur→workout-mapping (assignWorkouts + genericLongZ2/genericPendelIntervals/conditiePools_)? Bestaat er een harde-dosis-cap of schaalt alles lineair? Pas na bevestiging een bouwprompt.
+
+## BACKLOG
+Gefaseerd op afhankelijkheid (kritisch pad: C → (F, #3 parallel) → A/G → B → D → E; displays + randstaten waar hun bron klaar is). Elk item: read-only recon VÓÓR bouw.
+FUNDAMENT:
+- [C] Variant/duur-schaling = VOLGENDE (zie boven). Fundament voor B + variant-correctheid.
+- [F] Beschikbaarheid-UI (v2b-C): per-dag knop, scope "deze dag"/"hele week"; Train?+minuten+pendel-toggle (geen dagtype-dropdown, weekend auto, recovery engine-gestuurd). Rustdag niet doodlopend: "toch trainen" = beschikbaarheid aan; onderscheid onbeschikbaar vs engine-recovery. Write-pad voor D/G/J. Recon: saveAvailability dag- vs week-scope.
+VOORTZETTING:
+- [#3] Events/doel-modus (resterend deel — key-type IS opgelost, zie DECISIE). Modus-overname-UX: bij nabij A-event neemt event-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide.
+WRITE-/GEREEDHEID:
+- [A] RPE post-ride (write-feature, write-pad v2a-stijl): 1-10 selector + gepland-vs-gevoeld-feedback. Trend-ratio zwaarte(IF/TSS) vs RPE ~14d; RPE→plan direct, RPE→niveau INDIRECT (W/kg-anker, niet opblazen; "voelt licht"-trend → FTP-cel achter → FTP-test/-ophoging voorstellen; ftp_auto_update blijft UIT). Recon: mismatch-engine + patches #16-17.
+- [G] Ochtend-check-in (write-feature): slaap/benen/stress → bijstelling gereedheid + mogelijke afschaling vandaag. Recon: hoe het wellness/gereedheid + dag-voorstel beïnvloedt.
+CONTENT + INTERACTIE:
+- [B] Trainingen-tab (bibliotheek): categorie → VARIANT-keuze, on-demand uit engine (GEEN statisch archief). Ná C. Recon: variant-pool als opsombare data? sprint/anaerobe key-type aanwezig?
+- [D] "Doe iets anders"-override (per dag): kies variant/categorie of vrije rit/groepsrit. Pin/lock-vlag zodat regenerate de dag niet overschrijft; stroomt in debt/dekking. Ná B+F. Recon: pin-mechanisme.
+- [E] Per-dag "Stuur naar Garmin": smalle ingang op bestaande push (zelfde uitzonderings-laag als pushWeb). Swap+re-push via upsert (external_id). Ná D (deelt upsert/ORPHAN-laag). Recon: per-dag scope + ORPHAN-delete van weggevallen sessies bij een override die het sessie-aantal verlaagt.
+DISPLAYS (waar bron klaar):
+- [I] Event-/periodisering-tijdlijn: fase-boog naar A-event + weken + verwachte uren + actieve MODUS. Ná #3. Display.
+- [H] Gereedheid-"waarom"-uitklap: factoren achter het cijfer (Vorm/HRV/belasting/slaap) = geparkeerde draad (3). Ná A/G. Display.
+- [J] Week-belasting + "werk week bij"-regenerate (verouderd-hint bij gewijzigde beschikbaarheid) = bestaande v2b-A. Ná F.
+DOORLOPEND + LAATSTE:
+- [K] Rand-/lege staten: intervals niet verbonden, sync mislukt, geen voorstel, geen historie, push-fout. Kritische foutpaden (intervals/sync) niet te lang uitstellen.
+- [DESIGN-TRACK] visuele polish-pass — LAATSTE, zie DESIGN-TRACK-sectie.
+
+## DESIGN-TRACK
+(spec-bron voor latere visuele polish-pass; LAATSTE pass, niet nu bouwen)
+- Stijl: dark mode, data-dicht performance-pro-tool, accent oranje/rood. Volledige tokens.css incl. form-componenten + zone-kleur-subpalet.
+- Schermen: status-deck (ring+verdict / niveau-blok), Vorm, Schema (dag-strip + dag-detail voorstel/voltooid/rustdag), Trainingen, Instellingen.
+- Spec-decisie: vermogen afronden op 5 W.
+- Bij implementatie: fragiele deck-CSS (.status-card/.status-wrap) respecteren.
+- ARTEFACT-TODO (Daan, nu al, los van CC): tokens.css + screenshots uit de Claude Design-sessie exporteren naar /design — anders leeft de spec alleen in een vluchtige sessie.
+
+## DECISIE
+events/doel = wederzijds uitsluitende MODUS: ~2 events/jr (Amstel Gold Race, Girona) + standaard trainingsdoel; bij nabij A-event neemt event-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide.
+KEY-TYPE-STURING OPGELOST (trip-feature, HEAD 1e72d6d): event-karakter (type==='trip') stuurt het key-type via long_z2 (free-day) / pendel_trip_intervals (pendel), naast klimType voor klim-routing; doel blijft baseline buiten event-modus. RESTEREND OPEN (= backlog #3): de modus-overname-UX (pauzeren/aankondigen/lead-time).
 
 ## Durabele lessen
 Zie CLAUDE.md. Kort: visueel verifieren op /dev (incognito + hard refresh); write-pad-patroon = google.script.run -> serverfn returnt vers getDashboardState -> onState (behalve pushWeb); NL-locale-formules bij setFormula (komma decimaal + puntkomma separator) - nu n.v.t. (writes zijn waarden/JSON), relevant zodra een write formules raakt; STAP 0-recon + 200-woorden rapport-cap.
