@@ -227,7 +227,8 @@
     // 2b-2 adherence-subtekst, STRIKT binnen .niveau-block na .niveau-wkg.
     // voortgangPct staat top-level op state. Null → regel weglaten (geen "–% van plan").
     var voortgang = (state.voortgangPct != null)
-      ? '<div class="niveau-voortgang">' + nl(state.voortgangPct, 0) + '% van plan</div>' : '';
+      ? '<div class="niveau-voortgang">' + nl(state.voortgangPct, 0) + '% van plan</div>'
+      : '<div class="niveau-voortgang">blok net gestart</div>';
     var card2 = '<div class="status-card"><div class="niveau-block">' +
       '<div class="niveau-getal">' + nivGetal + '</div>' +
       '<div class="niveau-label">Niveau</div>' +

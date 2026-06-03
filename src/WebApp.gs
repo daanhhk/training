@@ -413,29 +413,38 @@ function getDashboardState() {
   var niveauLevend = (niveauBasis == null) ? null
     : Math.max(0, Math.min(50, niveauBasis + conditieMod));
 
-  // 2b-2: voortgang% = adherence (werkelijke ÷ verwachte cum. TSS, vanaf doelStart).
-  // Noemer uniform uit fase-uren (NIET de incomplete weekplan-snapshots).
-  var vt = getVolumeTargets();
-  var verwachtUrenCum = 0;
-  var wkMon = weekStartDate(settings.doelStart);
-  var nuMon = weekStartDate(today);
-  while (wkMon.getTime() <= nuMon.getTime()) {
-    var wkFase = bepaalFaseVoorDatum_(wkMon).fase;
-    var band = vt[wkFase] || vt.Build || [4, 7];   // Test/onbekend → Build-fallback
-    var urenWeek = (band[0] + band[1]) / 2;
-    if (wkMon.getTime() === nuMon.getTime()) {
-      var dagOffset = Math.floor((today.getTime() - nuMon.getTime()) / 86400000);  // ma=0
-      urenWeek *= (dagOffset + 1) / 7;   // lopende week pro-rata
-    }
-    verwachtUrenCum += urenWeek;
-    wkMon = new Date(wkMon.getFullYear(), wkMon.getMonth(), wkMon.getDate() + 7);
-  }
+  // 2b-2: voortgang% = adherence over VOLTOOIDE weken sinds doelStart. Per week
+  // (uren/week × tssPerUur), de lopende week valt eruit (geen mid-week-dip).
+  // Bij 0 voltooide weken → null (frontend toont "blok net gestart").
   var jaarTSS = (statsBundle.stats && statsBundle.stats.jaar) ? statsBundle.stats.jaar.tss : 0;
   var jaarUren = (statsBundle.stats && statsBundle.stats.jaar) ? statsBundle.stats.jaar.tijdMin / 60 : 0;
   var tssPerUur = jaarUren > 0 ? jaarTSS / jaarUren : 54;
-  var verwachtTssCum = Math.round(verwachtUrenCum * tssPerUur);
-  var werkelijkTssCum = sumTssVanafDatum_(ss, settings.doelStart);
-  var voortgangPct = verwachtTssCum > 0 ? Math.round(werkelijkTssCum / verwachtTssCum * 100) : null;
+
+  var vt = getVolumeTargets();
+  // eersteWeekStart = eerste maandag >= doelStart (partiële eerste week valt af).
+  var eersteWeekStart = weekStartDate(settings.doelStart);
+  if (eersteWeekStart.getTime() < stripTime_(settings.doelStart).getTime()) {
+    eersteWeekStart = new Date(eersteWeekStart.getFullYear(), eersteWeekStart.getMonth(), eersteWeekStart.getDate() + 7);
+  }
+  var huidigeWeekStart = weekStartDate(today);
+
+  var verwachtTssCum = null, werkelijkTssCum = null, voortgangPct = null;
+  var aantalVoltooideWeken = 0;
+  var verwachtCum = 0;
+  var wkM = new Date(eersteWeekStart.getFullYear(), eersteWeekStart.getMonth(), eersteWeekStart.getDate());
+  while (wkM.getTime() < huidigeWeekStart.getTime()) {
+    var wkFase = bepaalFaseVoorDatum_(wkM).fase;
+    var band = vt[wkFase] || vt.Build || [4, 7];   // Test/onbekend → Build-fallback
+    verwachtCum += ((band[0] + band[1]) / 2) * tssPerUur;   // per week, geen /7
+    aantalVoltooideWeken++;
+    wkM = new Date(wkM.getFullYear(), wkM.getMonth(), wkM.getDate() + 7);
+  }
+  if (aantalVoltooideWeken > 0) {
+    verwachtTssCum = Math.round(verwachtCum);
+    // aftrek-truc: [eersteWeekStart, huidigeWeekStart) = voltooide weken.
+    werkelijkTssCum = sumTssVanafDatum_(ss, eersteWeekStart) - sumTssVanafDatum_(ss, huidigeWeekStart);
+    voortgangPct = verwachtTssCum > 0 ? Math.round(werkelijkTssCum / verwachtTssCum * 100) : null;
+  }
 
   return {
     athlete: { ftp: settings.ftp || null, naam: '' },
