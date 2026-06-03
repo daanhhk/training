@@ -229,10 +229,14 @@
     var voortgang = (state.voortgangPct != null)
       ? '<div class="niveau-voortgang">' + nl(state.voortgangPct, 0) + '% van plan</div>'
       : '<div class="niveau-voortgang">blok net gestart</div>';
+    // 2b-3: beginniveau→huidig delta (− blijft − via nl). Geen begin-data → weglaten.
+    var progressie = (state.niveauDelta != null && state.beginLabel)
+      ? '<div class="niveau-progressie">' + (state.niveauDelta >= 0 ? '+' : '') +
+        nl(state.niveauDelta, 1) + ' sinds ' + esc(state.beginLabel) + '</div>' : '';
     var card2 = '<div class="status-card"><div class="niveau-block">' +
       '<div class="niveau-getal">' + nivGetal + '</div>' +
       '<div class="niveau-label">Niveau</div>' +
-      '<div class="niveau-wkg">' + nivWkg + '</div>' + voortgang + '</div></div>';
+      '<div class="niveau-wkg">' + nivWkg + '</div>' + voortgang + progressie + '</div></div>';
 
     return '<div class="status-wrap" id="swrap-' + sfx + '" onscroll="syncDots(\'' + sfx + '\')">' +
       '<div class="status-card">' + left + right + '</div>' + card2 + '</div>' +

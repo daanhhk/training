@@ -203,6 +203,27 @@ function sumTssVanafDatum_(ss, startDate) {
   return Math.round(sum);
 }
 
+/** Oudste Activiteiten-rij (= vroegste datum) → begin-anker voor niveau-historie.
+ *  Kolommen: A datum(0), M FTP(12), N Gewicht(13). Null bij ontbreken/pre-backfill. */
+function dashBeginAnker_(ss) {
+  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  if (!sh) return null;
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+  var oudste = null;
+  data.forEach(function (r) {
+    if (!(r[0] instanceof Date)) return;
+    if (!oudste || stripTime_(r[0]).getTime() < stripTime_(oudste[0]).getTime()) oudste = r;
+  });
+  if (!oudste) return null;
+  return {
+    datum: oudste[0],
+    ftp: (oudste[12] !== '' && oudste[12] != null) ? Number(oudste[12]) : null,
+    gewicht: (oudste[13] !== '' && oudste[13] != null) ? Number(oudste[13]) : null
+  };
+}
+
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
 function dashDayCard_(dISO, wpEntry, actual, rpe) {
   var voorstel = null;
@@ -413,6 +434,21 @@ function getDashboardState() {
   var niveauLevend = (niveauBasis == null) ? null
     : Math.max(0, Math.min(50, niveauBasis + conditieMod));
 
+  // 2b-3: beginniveau-anker uit de oudste Activiteiten-rij (icu_ftp/icu_weight).
+  // conditieModBegin = 0 (data-start = referentie; Wellness-tab reikt niet tot 2024).
+  var DASH_MND_ = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  var anker = dashBeginAnker_(ss);
+  var beginNiveau = null, beginLabel = null, niveauDelta = null;
+  if (anker && anker.ftp) {
+    var nivBegin = computeNiveau_(anker.ftp, anker.gewicht || gewicht);
+    if (nivBegin.niveau != null) {
+      beginNiveau = Math.max(0, Math.min(50, nivBegin.niveau));   // conditieMod 0
+      var bd = anker.datum;
+      beginLabel = DASH_MND_[bd.getMonth()] + " '" + String(bd.getFullYear()).slice(-2);
+      if (niveauLevend != null) niveauDelta = Math.round((niveauLevend - beginNiveau) * 10) / 10;
+    }
+  }
+
   // 2b-2: voortgang% = adherence over VOLTOOIDE weken sinds doelStart. Per week
   // (uren/week × tssPerUur), de lopende week valt eruit (geen mid-week-dip).
   // Bij 0 voltooide weken → null (frontend toont "blok net gestart").
@@ -459,6 +495,9 @@ function getDashboardState() {
     werkelijkTssCum: werkelijkTssCum,
     verwachtTssCum: verwachtTssCum,
     tssPerUur: Math.round(tssPerUur * 10) / 10,
+    beginNiveau: beginNiveau,
+    beginLabel: beginLabel,
+    niveauDelta: niveauDelta,
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,
