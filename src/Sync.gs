@@ -361,11 +361,12 @@ function resolveZones_(athlete, kind) {
  *
  * Vereist: eerst Menu → Genereer voorstel (vult de DocProps).
  */
-function pushAllPendingWorkouts() {
-  var ss = SpreadsheetApp.getActive();
-  var ui;
-  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
-
+/**
+ * UI-vrije core: pusht alle pending voorstel-dagen. Returnt
+ * { pushedCount, skipped: [string], errors: [string] }. Geen getUi/alert —
+ * herbruikbaar vanuit het menu (wrapper) én de web-app (pushWeb).
+ */
+function pushAllPending_(ss) {
   var planner = readPlanner(ss);
   var today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -376,15 +377,10 @@ function pushAllPendingWorkouts() {
     return day >= today;
   });
 
-  if (!pending.length) {
-    if (ui) ui.alert('Geen workouts om te pushen — alle toekomstige dagen zijn al gedaan of leeg.');
-    return;
-  }
+  var skipped = [], errors = [];
+  if (!pending.length) return { pushedCount: 0, skipped: skipped, errors: errors };
 
-  // Bouw alle event-payloads, één call naar /events/bulk?upsert=true
   var events = [];
-  var skipped = [];
-
   pending.forEach(function (d) {
     var dateISO = formatDate(d.datum, 'yyyy-MM-dd');
     var raw = getDocProp('proposal_' + dateISO, '');
@@ -393,35 +389,50 @@ function pushAllPendingWorkouts() {
       return;
     }
     try {
-      var wo = JSON.parse(raw);
-      events.push(buildEventPayload(wo, dateISO, 'Ride'));
+      events.push(buildEventPayload(JSON.parse(raw), dateISO, 'Ride'));
     } catch (e) {
       skipped.push(d.dag + ' (' + dateISO + '): ' + e.message);
     }
   });
 
-  if (!events.length) {
-    if (ui) ui.alert('Niets om te pushen', skipped.join('\n') || 'Geen geldige voorstellen.', ui.ButtonSet.OK);
-    return;
-  }
+  if (!events.length) return { pushedCount: 0, skipped: skipped, errors: errors };
 
-  ss.toast('Pushing ' + events.length + ' workouts in 1 bulk call...', '🚴 Coach', 5);
   try {
     var response = pushEvents_(events);
     var pushedCount = Array.isArray(response) ? response.length : events.length;
-    var msg = '✅ ' + pushedCount + ' workouts gepusht naar intervals.icu (upsert).\n' +
-              'Re-push met dezelfde external_id triggert update i.p.v. duplicate.\n' +
-              'Synct binnen 1-2 minuten naar Garmin Epix.';
-    if (skipped.length) {
-      msg += '\n\n⚠️ Overgeslagen:\n' + skipped.join('\n');
-    }
-    if (ui) ui.alert('Push voltooid', msg, ui.ButtonSet.OK);
+    return { pushedCount: pushedCount, skipped: skipped, errors: errors };
   } catch (e) {
-    console.error('pushAllPendingWorkouts bulk failed', e);
-    var fmsg = '❌ Bulk push mislukt: ' + e.message;
-    if (skipped.length) fmsg += '\n\nOvergeslagen:\n' + skipped.join('\n');
-    if (ui) ui.alert('Push mislukt', fmsg, ui.ButtonSet.OK);
+    console.error('pushAllPending_ bulk failed', e);
+    errors.push('Bulk push mislukt: ' + (e && e.message ? e.message : e));
+    return { pushedCount: 0, skipped: skipped, errors: errors };
   }
+}
+
+function pushAllPendingWorkouts() {
+  var ss = SpreadsheetApp.getActive();
+  var ui;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+
+  var res = pushAllPending_(ss);
+
+  if (res.errors.length) {
+    var fmsg = '❌ ' + res.errors.join('\n');
+    if (res.skipped.length) fmsg += '\n\nOvergeslagen:\n' + res.skipped.join('\n');
+    if (ui) ui.alert('Push mislukt', fmsg, ui.ButtonSet.OK);
+    return;
+  }
+  if (res.pushedCount === 0) {
+    var nm = res.skipped.length
+      ? 'Niets om te pushen:\n' + res.skipped.join('\n')
+      : 'Geen workouts om te pushen — alle toekomstige dagen zijn al gedaan of leeg.';
+    if (ui) ui.alert(nm);
+    return;
+  }
+  var msg = '✅ ' + res.pushedCount + ' workouts gepusht naar intervals.icu (upsert).\n' +
+            'Re-push met dezelfde external_id triggert update i.p.v. duplicate.\n' +
+            'Synct binnen 1-2 minuten naar Garmin Epix.';
+  if (res.skipped.length) msg += '\n\n⚠️ Overgeslagen:\n' + res.skipped.join('\n');
+  if (ui) ui.alert('Push voltooid', msg, ui.ButtonSet.OK);
 }
 
 // ── Reconcile planner met activities ─────────────────────────────

@@ -594,3 +594,22 @@ function saveAvailability(updates) {
   sh.getRange(3, 5, 7, 1).setValues(typeCol);    // E3:E9 Dagtype
   return getDashboardState();
 }
+
+/**
+ * v2b-A web-callable: (re)genereer het weekvoorstel. generateProposal
+ * gebruikt geen getUi (alleen ss.toast/setActiveSheet ná de cache-writes);
+ * die UI-stappen worden in web-context geslikt. Returnt verse state.
+ */
+function regenerateWeb() {
+  try { generateProposal(); }
+  catch (e) { console.warn('regenerateWeb: ' + (e && e.message ? e.message : e)); }
+  return getDashboardState();
+}
+
+/**
+ * v2b-A web-callable: push de pending voorstellen naar intervals.icu.
+ * Returnt { pushedCount, skipped, errors } uit de UI-vrije core.
+ */
+function pushWeb() {
+  return pushAllPending_(SpreadsheetApp.getActive());
+}
