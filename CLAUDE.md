@@ -1,18 +1,24 @@
 # FTP Trainings Coach
 
 Custom training-tool voor Daan (en uitrolbaar voor fietsende vrienden).
-Genereert wekelijkse trainingsvoorstellen op basis van intervals.icu
-data en pusht structured workouts naar Garmin Epix.
+Leest intervals.icu-data, genereert wekelijkse trainingsvoorstellen en
+pusht structured workouts (ZWO) naar Garmin Epix. Frontend = read/write
+HtmlService web-app (dashboard) bovenop Google Sheets.
 
-Status: MVP werkend (mei 2026). Mesocyclus + Wellness-demotie +
-ZWO-push naar Garmin live. Outcome-based feedback loop = volgende fase.
+> **STAND / roadmap / openstaande draden → [HANDOFF.md](HANDOFF.md).**
+> Dit bestand bevat ALLEEN de durable laag (werkwijze + conventies +
+> architectuur + invarianten). HANDOFF.md = de actuele projectstatus;
+> roadmap NIET hier dupliceren.
 
 ## Tech stack
 
-- Google Sheets + Apps Script (.gs) — primair platform
-- intervals.icu API (Basic auth via base64 API key)
-- Garmin Connect (via intervals.icu sync)
-- ZWO XML format voor structured workouts naar Epix
+- Google Sheets + Apps Script (.gs) — primair platform, geen alternatief
+  (geen Excel, geen server-based oplossing). Python alleen voor preprocessing.
+- HtmlService web-app (Index/Script/Styles.html) — dashboard, read + write.
+- intervals.icu API (Basic auth via base64 API key).
+- Garmin Connect (via intervals.icu sync).
+- ZWO XML voor structured workouts naar Epix.
+- Telegram bot (`doPost` webhook) — 2-way interactie.
 
 ## Locaties
 
@@ -20,118 +26,180 @@ ZWO-push naar Garmin live. Outcome-based feedback loop = volgende fase.
 - Apps Script: 18Q5UXRSUU1ZVIWnkeXg6_HnejuVh-G-DIoqVIJbFxRP22irbc_err-CN
 - Sheet: 1YTgfkwehC1VJKo-MZTYDRJ_6e6SrjT3auMmHfD97ozA
 - Lokaal: C:\Users\daan\Projects\training
+- Web-app /dev deploy-URL: zie HANDOFF.md
 
-## Bestandsstructuur
+## Werkwijze & communicatie
 
-- src/Code.gs — menu + onEdit handlers
-- src/Settings.gs — DocProps persistente settings + Instellingen tab
-- src/Zones.gs — Zones tab rendering (power + HR + Sweet Spot)
-- src/Doel.gs — 12-week mesocyclus + macro-fase logica
-- src/Planner.gs — Weekplanner tab build
-- src/Algorithm.gs — workout selection + buildWorkout +
-  getWellnessSignal + buildWorkoutZwo_
-- src/Proposal.gs — Voorstel tab rendering (banner + per-dag blokken)
-- src/IntervalsApi.gs — intervals.icu API calls + pushWorkout
-- src/Sync.gs — data sync orchestratie + pushAllPendingWorkouts
-- src/Email.gs — stub (07:00 digest, nog te implementeren)
-- src/Utils.gs — helpers (nlNumber, sanitize, etc.)
-- src/Activiteiten.gs — Activiteiten tab
-- src/Wellness.gs — Wellness tab
-- src/Workouts/{Ftp,Vo2max,Conditie,Beklimmingen}.gs — workout
-  libraries per doel
+Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
+(CLI lokaal)** = uitvoerder.
 
-## Workflow
-
-Daan (chat in Claude.ai) ↔ Claude Code (CLI lokaal):
-
-1. Daan beschrijft wens of bug aan Claude (chat)
-2. Claude schrijft uitgewerkte prompt → Daan plakt in Claude Code
-3. Claude Code implementeert + commit + clasp push + git push
-4. Resultaat-rapport (incl. eerlijke notities over afwijkingen) terug
-   naar Claude (chat) voor volgende iteratie
-
-Commits in logische stappen — bundeling voor samenhangende changes
-is OK, geen geforceerde 1-commit-per-prompt-subitem splits.
+- Daan plakt NOOIT code. Alles loopt via Claude Code + `clasp push -f`.
+  Diagnostiek via read-only `_Diag.gs` (gitignored — niet committen,
+  opruimen na gebruik).
+- Close-out van ELKE wijziging: `clasp push -f` (Apps Script → direct live
+  op /dev, geen redeploy) **én** `git push` (GitHub). CLAUDE.md en
+  HANDOFF.md gaan via **git, NIET clasp** (geen Apps Script-bestanden, niet
+  in src/).
+- Elke prompt start met **STAP 0-recon**: de chat zet aannames, Claude Code
+  verifieert die tegen de ECHTE code (functies/signatures/literals) vóór
+  bouwen, en meldt afwijkingen.
+- **Rapport-cap**: MAX 200 woorden proza. Literals (bestand/functie/regel/
+  key/commit-hash) exact en tellen niet mee. Geen code-dumps, geen
+  prompt-herhaling, afwijkingen expliciet melden.
+- Mobiel-signaal "ik zit op mijn telefoon" → lever prompts als PLATTE TEKST,
+  geen triple-backtick-blokken (slecht plakbaar op telefoon).
+- **HANDOFF.md = bron van waarheid voor de STAND** (chat leest die).
+  **CLAUDE.md = conventies + architectuur** (auto-load, durable).
+- Taal: NL met Daan; English voor code/commits/logging; NL voor UI-strings.
 
 ## Conventies (HARD-EARNED — niet zelf herontdekken)
 
-### NL-locale Google Sheets formules
-- KOMMA als decimaal EN PUNTKOMMA als argument-separator:
-  `=ROUND(B3*0,55;0)`
-- `setFormula()` doet GEEN automatische locale-conversie.
-  String-interpolatie van JS Number geeft "." dus altijd
-  `.replace('.', ',')` of via `nlNumber()` helper in Utils.gs.
-- Zone max-watt rendering: gebruik FLOOR (niet ROUND) voor exact
-  parity met intervals.icu. Z3 max @ 90% = FLOOR(247.5) = 247W,
-  niet 248W.
-- Boundary conventie: zone N min = zone N-1 max + 1 (parity met
-  intervals.icu). Z2 = 56-75%, niet 55-75%.
+### NL-locale Google Sheets formules (bij ELKE setFormula-write)
+- KOMMA als decimaal EN PUNTKOMMA als argument-separator: `=ROUND(B3*0,55;0)`.
+- `setFormula()` doet GEEN locale-conversie. JS-Number interpoleert met "."
+  → altijd `.replace('.', ',')` of via `nlNumber()` (Utils.gs). Genereer
+  complete, hardcoded formule-strings.
+- Zone max-watt: FLOOR (niet ROUND) voor parity met intervals.icu.
+  Z3 max @ 90% = FLOOR(247.5) = 247W.
+- Boundary: zone N min = zone N-1 max + 1 (parity). Z2 = 56-75%.
 
 ### intervals.icu API quirks
-- Base URL: `https://intervals.icu/api/v1`
-- Auth: `Basic ` + base64(`API_KEY:<api_key>`)
-- `/events` endpoint NEGEERT `workout_doc` embedded (slikt zonder
-  error, slaat niet op). Voor structured workouts gebruik
-  `file_contents_base64` met ZWO XML.
-- DSL-in-description werkt voor intervals.icu UI-chart, maar Garmin
-  krijgt dan ALLEEN TEKST (1 lap). Voor multi-step op Epix is
-  ZWO-file de enige route die werkt.
-- Idempotent push: `external_id` +
-  `POST /events/bulk?upsert=true` (geen aparte delete nodig).
-- Athlete settings → Garmin → "Upload workouts to Garmin" toggle
-  MOET aan staan (`icu_garmin_upload_workouts: true`) anders
-  syncen workouts niet naar Garmin Connect.
+- Base URL `https://intervals.icu/api/v1` (`INTERVALS_BASE_URL`). Auth:
+  `Basic ` + base64(`API_KEY:<api_key>`).
+- `/events` NEGEERT embedded `workout_doc` (slikt zonder error). Voor
+  structured workouts → `file_contents_base64` met ZWO XML.
+- DSL-in-description werkt voor de intervals.icu UI-chart, maar Garmin krijgt
+  dan ALLEEN TEKST (1 lap). Multi-step op Epix = alleen via ZWO.
+- Idempotent push: `external_id` + `POST /events/bulk?upsert=true` (geen
+  aparte delete).
+- Garmin-sync: athlete-toggle "Upload workouts to Garmin"
+  (`icu_garmin_upload_workouts: true`) MOET aan.
 
 ### Zone-data quirks
-- HR zones uit `sportSettings[Ride].hr_zones` = RAW BPM-waardes
-  (geen percentages). Power zones = % FTP. Mix dit niet op.
-- `icu_sweet_spot_min/max` op athlete-object = NULL voor velen.
-  Aanwezig op activity-object van rides met power. Fallback: 84/97
-  (intervals.icu standaard).
-- 999 in zone-array = "onbegrensd" indicator. Render als ∞ niet
-  als percentage of W-waarde.
+- `sportSettings[Ride].hr_zones` = RAW BPM. Power zones = % FTP. Niet mixen.
+- `icu_sweet_spot_min/max` op athlete = vaak NULL; aanwezig op activity met
+  power. Fallback 84/97.
+- 999 in zone-array = onbegrensd → render als ∞.
 
-### Code stijl
-- Engelse code en commit messages
-- Nederlandse UI-strings (menu's, Sheet labels, banner-teksten,
-  toast-meldingen)
-- `setItalic()` bestaat NIET op Range; gebruik `setFontStyle('italic')`
-- `setFrozenColumns()` conflicteert met merged title rows over
-  alle kolommen
-- Column widths zetten als LAATSTE stap (`stelBreedtes()` na
-  `SpreadsheetApp.flush()`) — anders overschrijven merge/write
-  operaties dit
-- `getLastRow()` onbetrouwbaar bij ARRAYFORMULA-tabs; scan kolom A
-  voor eerste lege cel
+### Code-stijl & Apps Script gotchas
+- Engelse code + commits; Nederlandse UI-strings.
+- `setItalic()` bestaat NIET op Range → `setFontStyle('italic')`.
+- `setFrozenColumns()` conflicteert met merged title-rows over alle kolommen.
+- Column widths als LAATSTE stap (na `SpreadsheetApp.flush()`) — anders
+  overschrijven merge/write dit.
+- `getLastRow()` onbetrouwbaar bij ARRAYFORMULA-tabs → scan kolom A voor
+  eerste lege cel.
+- Sheet-tab-rendering toont pas effect NA `🚴 Coach → Bouw alles opnieuw`;
+  pure clasp-push is niet genoeg. (Web-app /dev reflecteert clasp-push WEL
+  direct.)
+- Dedup: Date-object vs text-string consistent typen.
+- ARRAYFORMULA + dropdown-validation kan imports crashen — let op
+  reset-volgorde; column count in sync houden met script-logica.
 
 ### Security
-- API keys NOOIT in chat plakken. Bij blootstelling: regenereer
-  meteen via intervals.icu Developer Settings.
-- API key wordt in DocProperties opgeslagen (Apps Script encrypted
-  storage).
+- API-keys NOOIT in chat. Bij blootstelling: meteen regenereren
+  (intervals.icu Developer Settings).
+- Alle secrets (API key, Telegram token/chat-id/webhook-secret, deploy-URL)
+  in DocumentProperties via Secrets.gs (`SECRET_KEYS`). NOOIT in cellen, code
+  of commits.
 
-## Bekende open punten
+## Bestandsstructuur
 
-- **Prompt 5 — Outcome-based feedback loop**: vergelijk werkelijke
-  zoneTimes van voltooide rides met intent van geplande workout.
-  Compenseer gemiste zone-load in resterende week. Self-correcting
-  algoritme.
-- **Email digest 07:00**: Email.gs is stub. Eén ochtend-mail met
-  vandaag's workout + wellness-signaal + week-overview.
-- **ZWO-fallback voor complexe workouts**: vo2_3015 (30/15s
-  dual-power patterns) en sommige combos parsen we niet naar ZWO.
-  Vallen terug op description-only (Epix wordt 1-lap voor die
-  specifieke types). Niet urgent — komt pas in mesocyclus-week 5+.
-- **Telegram bot** (optioneel): 2-way interactie voor on-the-fly
-  herziening ("ik kan donderdag niet trainen, regenereer voorstel").
+Web-app laag:
+- src/WebApp.gs — `doGet` (dashboard-template), `getDashboardState`,
+  write-pad serverfns (`saveAvailability` / `regenerateWeb` / `pushWeb`),
+  niveau-calc (`computeNiveau_`, `computeConditieMod_`, `dashNiveauReeks_`,
+  `dashBeginAnker_`, `dashStatsFromActivities_`).
+- src/Index.html — HtmlService-template (alleen includes + tab-markup).
+- src/Script.html — client-JS (boot/loadState/onState/render*/switchTab/charts).
+- src/Styles.html — CSS (incl. fragiele status-CSS — zie invarianten).
 
-## Veel-gemaakte fouten (lessons learned)
+Domein-laag (.gs):
+- src/Code.gs — menu + onEdit handlers + Setup-UI.
+- src/Settings.gs — DocProps-settings + Instellingen-tab (`SETTINGS_SHEET`,
+  `readSettings`, `loadSettingValue`).
+- src/Secrets.gs — secret-laag (DocumentProperties, legacy-cel-migratie).
+- src/Zones.gs — Zones-tab (power + HR + Sweet Spot).
+- src/Doel.gs — 12-week mesocyclus + macro-fase + event-fase.
+- src/Events.gs — Events-tab (race/trip-kalender met profiel; stuurt
+  periodisering + klim-type-selectie).
+- src/Planner.gs — Weekplanner-tab + `readPlanner` + `DAGTYPE_OPTIONS`.
+- src/Algorithm.gs — `generateProposal`, `buildWorkout`, `getWellnessSignal`,
+  `buildWorkoutZwo_`.
+- src/Proposal.gs — Voorstel-tab rendering (`renderProposal`).
+- src/IntervalsApi.gs — intervals.icu API (`intervalsRequest_`, `pushEvents_`,
+  `getActivities`, `getWellness`).
+- src/Sync.gs — `syncAll` orchestratie + `syncActivities` +
+  `pushAllPending_` / `pushAllPendingWorkouts`.
+- src/Activiteiten.gs — Activiteiten-tab (`ACT_HEADERS`).
+- src/Wellness.gs — Wellness-tab.
+- src/TelegramBot.gs — `doPost` webhook + command-router + audit/dedupe.
+- src/Email.gs — stub (dagelijkse digest, nog te implementeren).
+- src/Utils.gs — helpers (`nlNumber`, sanitize, datum, DocProps).
+- src/Workouts/{Ftp,Vo2max,Conditie,Beklimmingen}.gs — workout-libraries.
 
-- Sheet-rendering wijzigingen tonen pas effect NA `🚴 Coach → Bouw
-  alles opnieuw`. Pure code-push via clasp is niet genoeg.
-- Bij dedup: Date object vs text-string mismatch — typen consistent
-  houden.
-- ARRAYFORMULA + dropdown validation kan imports crashen — careful met
-  reset-volgorde.
-- Het 13e Status-kolom in km-registratie crashte ooit; column count
-  moet in sync met script logic blijven.
+## Web-app architectuur (geverifieerde literals)
+
+Twee web-entrypoints: `doGet` (dashboard, WebApp.gs) + `doPost` (Telegram
+webhook, TelegramBot.gs).
+
+**Boot / read-pad:**
+- `doGet` → `HtmlService.createTemplateFromFile('Index').evaluate()`
+  (+ `.setTitle().addMetaTag().setXFrameOptionsMode()`), WebApp.gs. Index
+  injecteert alleen includes (Styles, Script) + tab-markup.
+- Initial load: `boot()` → `loadState()` doet
+  `google.script.run.withSuccessHandler(onState).withFailureHandler(showError).getDashboardState()`
+  (Script.html). `onState(s)` re-rendert (renderSchema / renderVorm /
+  renderBeschikbaarheid → switchTab('schema')).
+
+**Write/action-pad:** `google.script.run` → serverfn returnt een vers
+`getDashboardState()` → `onState` re-rendert. Concreet:
+- `regenerateWeb()` (regenWeek) → roept `generateProposal()`, returnt
+  `getDashboardState()` → onState.
+- `saveAvailability(updates)` (saveAvail) → schrijft Weekplanner A/D/E,
+  returnt `getDashboardState()` → onState.
+- UITZONDERING: `pushWeb()` (pushGarmin) returnt `{ pushedCount, skipped,
+  errors }`; client-handler `onPushResult` update ALLEEN de knop-status,
+  GEEN volledige re-render.
+
+**UI-vrije cores** returnen resultaat-objecten; menu-functies houden
+`ui.alert` als dunne wrapper (web-context kan `getUi()` niet gebruiken).
+Bijv. core `pushAllPending_(ss)` (Sync.gs) ↔ wrapper `pushAllPendingWorkouts()`.
+
+**Sleutel-functies:**
+- `generateProposal` (Algorithm.gs): leest `readPlanner` live, schrijft
+  DocProps `proposal_<yyyy-MM-dd>` (per dag) + `weekplan_<maandag yyyy-MM-dd>`,
+  dan `renderProposal`.
+- `pushEvents_` → `intervalsRequest_` `POST /athlete/{id}/events/bulk?upsert=true`
+  (IntervalsApi.gs); `external_id = 'coach_' + dateISO + '_' + type.toLowerCase()`.
+- `readSettings` / `loadSettingValue` + `SETTINGS_SHEET = 'Instellingen'`
+  (Settings.gs).
+- `DAGTYPE_OPTIONS = ['pendel','vrij','weekend','recovery']` (Planner.gs).
+  `readPlanner` leest A3:H9 (`getRange(3,1,7,8)`): A=train `d[0]`,
+  D=minuten `d[3]`, E=type `d[4]`, F=notitie `d[5]`, H=gedaan `d[7]`.
+- `syncAll(e)` (Sync.gs): syncAthleteZones → syncActivities → syncWellness →
+  reconcilePlannerWithActivities; zet `last_sync` DocProp.
+
+**Activiteiten-tab op kolom-INDEX** (NIET header-naam; `ACT_HEADERS` = 15,
+self-healing header-write): datum `idx0`, FTP `idx12`, Gewicht `idx13`,
+Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
+
+## Invarianten / niet aanraken
+
+- **Fragiele status-CSS** (Styles.html): `.status-card { flex:0 0 100%;
+  scroll-snap-align:center; display:flex; gap:12px; }` + scroll-container
+  `.status-wrap` — NIET wijzigen. (Let op: er is GEEN `.status-deck`-class,
+  ondanks oudere notities die ernaar verwijzen.)
+- **Multi-session NIET ondersteund**: 1 dag → 1 event, hard op
+  `proposal_<yyyy-MM-dd>` (één key per datum) + `external_id`
+  (`coach_<dateISO>_<type>`, één per datum/type). Voor pendel = 2× per dag is
+  een sessie-index in BEIDE nodig.
+- **Visueel verifiëren op de /dev-URL** (incognito + hard refresh), niet op een
+  diag leunen. Geen lokale vars die payload-keys schaduwen (dagen / vorm /
+  athlete / event / voortgangPct / niveau / niveauBasis / conditieMod /
+  niveauReeks).
+- **Readers werken op kolom-INDEX** (`ACT_HEADERS.length`): header-rename is
+  puur cosmetisch + self-healing, breekt de readers niet.
+- `doPost` (Telegram) moet ALTIJD HTTP 200 returnen (anders Telegram
+  retry-loop); secret als `?s=` query-param want Apps Script geeft custom
+  headers niet door aan doPost.
