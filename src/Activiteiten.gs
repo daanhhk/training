@@ -13,7 +13,8 @@ var ACTIVITEITEN_SHEET = 'Activiteiten';
 
 var ACT_HEADERS = [
   'Datum', 'Type', 'Naam', 'Duur (min)', 'Afstand (km)',
-  'Gem W', 'Norm W', 'IF', 'TSS', 'Gem HR', 'Max HR', 'PI'
+  'Gem W', 'Norm W', 'IF', 'TSS', 'Gem HR', 'Max HR', 'PI',
+  'FTP', 'Gewicht', 'Rolling FTP'
 ];
 
 function buildActiviteiten(ss) {
@@ -40,6 +41,6 @@ function buildActiviteiten(ss) {
   sh.setConditionalFormatRules(rules);
 
   SpreadsheetApp.flush();
-  var widths = [100, 80, 240, 80, 100, 70, 75, 60, 70, 80, 80, 60];
+  var widths = [100, 80, 240, 80, 100, 70, 75, 60, 70, 80, 80, 60, 60, 70, 80];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 }

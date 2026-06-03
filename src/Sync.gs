@@ -152,7 +152,10 @@ function syncActivities() {
       tss  != null ? Math.round(tss) : '',
       ahr  != null ? ahr  : '',
       mhr  != null ? mhr  : '',
-      pi   != null ? Math.round(pi   * 100) / 100 : ''
+      pi   != null ? Math.round(pi   * 100) / 100 : '',
+      a.icu_ftp         != null ? a.icu_ftp         : '',   // gezette FTP @ rit
+      a.icu_weight      != null ? a.icu_weight      : '',   // gewicht @ rit
+      a.icu_rolling_ftp != null ? a.icu_rolling_ftp : ''    // rolling/eFTP (2c)
     ];
   });
 
