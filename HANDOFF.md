@@ -1,61 +1,47 @@
-# HANDOFF — FTP Coach web-app (project: training)
+# HANDOFF — project training (FTP Coach web-app)
 
-Read-only HtmlService web-app, tabs Schema + Vorm. /dev:
+Bron van waarheid voor de projectstand. Conventies + architectuur-detail + invarianten staan in CLAUDE.md (auto-load Claude Code); deze HANDOFF = STAND, engine-gedrag en roadmap.
+
+## STAND (leidend)
+INTERACTIEVE HtmlService web-app, tabs Schema + Vorm. /dev:
 https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev
 
-Laatste code-commit vóór deze HANDOFF: 95f72cb.
+Architectuur: server WebApp.gs (getDashboardState bouwt payload-state); client Index.html (markup-containers) + Script.html (render-JS: renderSchema/renderVorm/voorstelKaart, switchTab, google.charts). doGet → HtmlService.createTemplateFromFile('Index').evaluate() (gechaind .setTitle()/.addMetaTag()/.setXFrameOptionsMode()). Initiële load: google.script.run.withSuccessHandler(onState).withFailureHandler(showError).getDashboardState() in loadState() (boot() roept loadState).
 
-## Draad (2) — niveau-kaart (status-deck boven Schema + Vorm) — VOLLEDIG AF (2a/2b/2c)
+### Read-only -> interactief: GROTENDEELS GEDAAN
+- v2a (521ed24) - beschikbaarheid-write-pad. saveAvailability schrijft Weekplanner A3:H9 (A=Train?/D=Minuten/E=Dagtype) en returnt vers getDashboardState -> onState re-rendert.
+- v2b-A (d680037) - in-app regenerate + push. UI-vrije cores returnen resultaat-objecten; menu-functies houden ui.alert als dunne wrapper (web-context kan getUi() niet). regenerateWeb() -> generateProposal -> vers getDashboardState. pushWeb() = UITZONDERING: returnt {pushedCount,skipped,errors}; onPushResult re-rendert NIET via onState. Knoppen "Regenereer voorstel" + "Push naar Garmin" in Schema-tab.
+- v2c (22c5a30) - per-dag rationale. reden vastgelegd in assignWorkouts -> weekplan-snapshot -> dashDayCard_-voorstel -> zichtbare regel in voorstelKaart; onderdrukt zodra er een actual is. Dode waarom-array achter ingeklapt <details> (Script.html:71-75) ONGEBRUIKT - opruimen/consolideren = open UX-keuze.
+- v2d (96c57a3) - runs = vermoeidheid, niet cycling-fitness. Gates toegevoegd: rollingZoneCoverage (r[1] in CYCLING_TYPES) + computeZoneDebt_ (a.type, gate-first bij actsByDate-opbouw). recentHardDayDate_ ONGEMOEID.
 
-2a AF — swipe-deck, 2 kaarten, per-mount ids swrap-/sdots-{sfx}. Kaart 1 = ring + verdict (.status-left + .status-right). Kaart 2 = .niveau-block.
-Deck-CSS FRAGIEL — NIET aanraken: .status-card { flex:0 0 100%; scroll-snap-align:center; display:flex; gap:12px; }. .status-wrap/.status-deck met rust laten.
+### Bestaande stabiele features
+Schema-tab: swipe-deck (ring+verdict / niveau-blok). Vorm-tab: niveau-over-tijd grafiek (server dashNiveauReeks_ -> payload vorm.niveauReeks, client drawNiveauChart). niveau = clamp(niveauBasis + conditieMod, 0, 50); niveauBasis = computeNiveau_(ftp, gewicht).
 
-2b-1 AF — niveau = clamp(niveauBasis + conditieMod, 0, 50). niveauBasis = computeNiveau_(ftp,gewicht) (W/kg-anker, 1,0=0 / 6,9=50). conditieMod = computeConditieMod_(ctlNow,ctlRef) (CTL_SPAN=10, BAND=2,0, cap ±2). FTP = handmatige cel, ftp_auto_update UIT.
+### Engine-gedrag (geverifieerd - relevant voor adaptiviteit)
+- generateProposal: geen args; draait ensureDataAndReconcile_ -> syncAll (verse actuals); leest readPlanner live; her-plant alleen tePlannen (train && !gedaan && datum >= vandaag); voltooid behoudt voorgesteldType; schrijft proposal_<yyyy-MM-dd> + weekplan_<maandag>. Geen auto-regen - alleen menu (Code.gs:44) of web-knop (WebApp.gs:604).
+- assignWorkouts: typekeuze per dag uit dagtype + fase + debt/dekking + wellness; minuten schalen alleen de duur, niet het type. GEEN week-volume-bewustheid in de typekeuze.
+- avoid-consecutive-hard: alleen dag N-1 (calendar), downgradet hard -> long_z2; rust-gap-dag reset de guard; geen N+1-vooruitblik; geen rust-INVOEGING op load.
+- recentHardDayDate_ (Algorithm.gs:230): leest Activiteiten-tab actuals, hard op IF >= 0,85 - incl. ongeplande ritten en runs (na v2d nog steeds run-inclusief).
+- dekking (rollingZoneCoverage, 7d): actuals-bewust; na v2d alleen CYCLING_TYPES.
+- debt (computeZoneDebt_): alleen dagen met train && gedaan; na v2d alleen CYCLING_TYPES. ASYMMETRIE (open beslissing): ongeplande/niet-aangevinkte ritten zitten wel in dekking, NIET in debt.
 
-2b-2 AF —
-- Frontend: subtekst in .niveau-block ná .niveau-wkg, class .niveau-voortgang (GEEN id, mount-suffix-safe).
-- voortgangPct = adherence over VOLTOOIDE weken sinds doelStart (lopende week uitgesloten); 0 voltooide weken → null → placeholder "blok net gestart". Week = ma–zo (weekStartDate). eersteWeekStart = eerste maandag ≥ doelStart; voltooide = [eersteWeekStart, huidigeWeekStart); verwacht per week = midden(getVolumeTargets[fase])×tssPerUur (GEEN /7); werkelijk = sumTssVanafDatum_(eersteWeekStart) − sumTssVanafDatum_(huidigeWeekStart). (commit cac6678)
-- Toont nu terecht "blok net gestart": doelStart = vandaag → 0 voltooide weken.
+### Data & sleutel-functies
+Actuals in Activiteiten-tab via syncActivities <- getActivities (intervals.icu; GEEN sport-filter in de sync; Type = idx1 / r[1] / a.type). ACT_HEADERS = 15: Datum idx0, IF idx7 (kolom 8), TSS idx8 (kolom 9), FTP idx12, Gewicht idx13, Rolling FTP idx14. ACT_HISTORY_DAYS = 730. CYCLING_TYPES (Algorithm.gs:42) = Ride/VirtualRide/GravelRide/MountainBikeRide.
+Push: pushAllPending_ core / pushAllPendingWorkouts wrapper (Sync.gs); pushEvents_ -> intervalsRequest_ POST /events/bulk?upsert=true; external_id = coach_<dateISO>_<type.toLowerCase()> (IntervalsApi.gs). Settings: readSettings/loadSettingValue + sheet 'Instellingen' (SETTINGS_SHEET). DAGTYPE_OPTIONS = pendel/vrij/weekend/recovery. Weekplanner A3:H9 (readPlanner): A=Train? D=Minuten E=Dagtype F=Toelichting H=Gedaan?.
 
-2b-3 AF — beginniveau→huidig delta op de niveau-kaart.
-- Frontend: .niveau-progressie regel ná .niveau-voortgang: "+X,X sinds mmm 'jj" (weggelaten zonder begin-data). Geen id, mount-safe. Kaart 2 heeft nu 5 regels (getal→label→wkg→voortgang→progressie); geen overflow.
-- Backfill uit intervals.icu-velden die al meekomen in getActivities (volledige objecten, geen fields-filter). Activiteiten-tab +3 kolommen: FTP(idx12), Gewicht(idx13), Rolling FTP(idx14) ← icu_ftp / icu_weight / icu_rolling_ftp. ACT_HEADERS = 15. Readers werken op kolom-INDEX (ACT_HEADERS.length), niet header-naam.
-- beginRij = oudste rij (data tot 2024-06-03, ACT_HISTORY_DAYS=730). ftpBegin=icu_ftp, gewichtBegin=icu_weight (null→huidig gewicht). niveauBasisBegin=computeNiveau_. conditieModBegin = 0 (Wellness-tab gecapt ~30d, WELL_STATS_ROW=35 → historische CTL niet leesbaar; data-start=referentie). beginNiveau=clamp(niveauBasisBegin+0,0,50). niveauDelta = huidigNiveau − beginNiveau. Payload top-level: beginNiveau/beginLabel/niveauDelta. (commits aadf53b + 5b72fdc)
-- syncActivities borgt rij 1 = ACT_HEADERS idempotent vóór de data-write (zelf-helend bij schema-uitbreiding; full-rewrite sync). (commit eca1483)
-- icu-velden referentie: icu_ftp = gezette FTP per rit (260→275 over 2024→2026). icu_rolling_ftp = lopende eFTP (264→272). icu_pm_ftp = per-rit power-model (springerig, ONBRUIKBAAR). icu_weight aanwezig.
+### Invarianten
+Fragiele deck-CSS: .status-card { flex:0 0 100%; scroll-snap-align:center; display:flex; gap:12px; } + .status-wrap - NIET aanraken. (.status-deck bestaat NIET - eerdere drift, gecorrigeerd.) Multi-session NIET ondersteund: 1 dag -> 1 event hard op proposal_<dISO> (een key/datum) + external_id (een per datum/type) - sessie-index in beide nodig voor pendel = 2x.
 
-2c AF — niveau-over-tijd grafiek op Vorm-tab, per kalendermaand jun '24→huidig (commit 95f72cb, visueel geverifieerd op /dev incognito).
-- Server: dashNiveauReeks_(ss) (WebApp.gs) — bucket Activiteiten per yyyy-MM (datum idx0, ftp idx12, gewicht idx13); representatief = laatste-op-datum rij met ftp+gewicht beide gevuld; begin-ankermaand overschreven met dashBeginAnker_ → punt 1 = exact beginNiveau; reeks begin→huidige maand, gat → niveau:null. Payload-key vorm.niveauReeks [{maand,niveau,ftp,gewicht}]. dashStatsFromActivities_ en de 12-maand-cap ongemoeid.
-- Client: Index.html "Niveau-trend"-blok ná #vorm-stats; drawNiveauChart() (LineChart corechart, kleur #5B5BD6, interpolateNulls:true, vAxis auto-zoom floor(min−1)/ceil(max+1), tooltip komma-decimaal + W/kg); helper nlMaandLabel_('yyyy-MM')→"mmm 'jj"; subregel uit state.beginLabel; gewired in google.charts load-callback + switchTab('vorm'). Toggle-onafhankelijk.
-- Metric: puur computeNiveau_ (niveauBasis, W/kg-gedreven), conditieMod overal 0 → glad/wobble-vrij. Eindpunt = niveauBasisNow (valt alleen samen met kaart-niveau als conditieMod≈0; bewust niet conditieMod-inclusief). Begin-anker = oudste Activiteiten-rij. Waargenomen: punt 1 ≈ 20,6, eind ≈ 22,7, ~24 punten, plateau sinds najaar '25.
+## GEPARKEERD
+- Vorm-tab verfraaiing (fase-bewuste status-toon + polish).
+- Dode waarom-code (Script.html:71-75) opruimen/consolideren.
+- Open beslissing: debt-asymmetrie / run-middenvariant (runs gewogen in dekking i.p.v. uitgesloten).
 
-## 2b-3 SYNC/HEADER — FEITELIJK AFGEROND
-- Volle historie rendert, dus Activiteiten-kolommen 12/13 (icu_ftp/icu_weight) zijn gevuld over de hele tab; headers FTP/Gewicht/Rolling FTP staan correct (idempotente header-write). Geen openstaande handmatige stap meer.
+## VOLGENDE - v2b-B dan v2b-C
+- v2b-B (zwaar, structureel): multi-session. Sessie-index in proposal_<dISO>-key EN external_id; pendel-dag expandeert naar pendelAantal sessies van pendelDuurMin. Nieuwe Instellingen-rijen pendelDuurMin (default 80) + pendelAantal (default 2) via readSettings. Raakt Algorithm.gs + IntervalsApi.gs + settings.
+- v2b-C (UI, hangt op v2b-B): vereenvoudigde beschikbaarheid-UI. Binaire pendel-vlag -> E='pendel'; auto-weekend (za/zo -> E='weekend' tenzij pendel) behoudt de lange-rit-branch; anders E='vrij'. Dropdown recovery/weekend weg uit UI; recovery blijft engine-gestuurd (macroFase/mesoWeek=4/wellness). GEAKKOORDEERD model: pendel = 2x80, aanpasbaar in Instellingen; auto-weekend akkoord.
+- Volgorde: v2b-B eerst (pendel-UI betekenisloos zonder multi-session), dan v2b-C.
+- GEEN bouw voor recon: elke stap start met een read-only STAP 0-recon.
 
-## UITGESTELDE VERIFICATIE
-- voortgangPct %-pad nooit met echte voltooide weken gedraaid. Live na Girona zodra doelStart op een echte blok-start staat → dan checken: ~80–115% en stabiel (niet mid-week wiebelend).
-- delta-wobble: niveauDelta hangt aan live huidigNiveau (incl. conditieMod ±2), begin = alleen niveauBasis → "+X,X sinds 2024" kan ±~2 dag-tot-dag wiebelen. Bekend/akkoord. Later evt. delta op niveauBasis baseren (stabiel, maar begin+delta ≠ headline).
-
-## GEPARKEERD (later mooi maken — niet weggegooid)
-- Vorm-tab verfraaiing.
-- draad (3) — fase-bewuste status-toon (verdict/gereedheid past zich aan de trainingsfase aan).
-- draad (4) — polish.
-
-## VOLGENDE — app interactief maken
-Nu is het een read-only HtmlService web-app. Eerste stap in de verse chat = SCOPE SCHERP vóór bouwen:
-- Wélke interactiviteit? Invoer/acties die terugschrijven naar Sheets? RPE/post-ride-feedback vanuit de web-app? Settings aanpassen? Knoppen die Apps Script-functies triggeren?
-- Op welke tab, en de read/write-implicatie — read-only → er moet een write-pad bij (google.script.run of doPost).
-- Geen bouw vóór scope; daarna read-only recon-prompt (STAP 0), dan bouw-prompt.
-
-## FILES / CONTRACTEN
-- WebApp.gs: getDashboardState (per-week while-loop voortgangPct), statusGraphicHtml(sfx), niveau-calc.
-- Sync.gs: syncActivities (full-rewrite + idempotente header-write).
-- Activiteiten.gs: buildActiviteiten, ACT_HEADERS (15).
-- IntervalsApi.gs: getActivities(daysBack) /athlete/{id}/activities; getWellness /athlete/{id}/wellness. Wellness-tab kol CTL/ATL/Vorm/Ramp, gecapt ~30d.
-- sumTssVanafDatum_(ss,startDate): som datum ≥ startDate t/m vandaag, inclusief, geen bovengrens.
-## DURABELE LESSEN / WERKWIJZE
-- REGRESSIE-LES: geen lokale vars die payload-keys schaduwen (dagen/vorm/athlete/reeks/event/voortgangPct/niveau/niveauBasis/conditieMod/niveauReeks). Bij content-verlies: eerst console + incognito, dan diag — niet CSS/HTML gokken.
-- Deck-CSS is FRAGIEL — .status-card/.status-wrap/.status-deck NIET aanraken (zie draad 2a).
-- Elke implementatie/recon-prompt: STAP 0-recon (lees echte functies/signatures, bevestig/pas-aan, meld afwijkingen) + rapport-cap MAX 200 woorden proza, literals exact.
-- Visueel verifiëren op de /dev (HEAD) URL in incognito + hard refresh — niet op een diag leunen. clasp push -f = direct live op /dev (geen redeploy); _Diag.gs read-only + gitignored, opruimen na gebruik.
-- HANDOFF.md via git (commit+push), GEEN clasp (niet in src/).
+## Durabele lessen
+Zie CLAUDE.md. Kort: visueel verifieren op /dev (incognito + hard refresh); write-pad-patroon = google.script.run -> serverfn returnt vers getDashboardState -> onState (behalve pushWeb); NL-locale-formules bij setFormula (komma decimaal + puntkomma separator) - nu n.v.t. (writes zijn waarden/JSON), relevant zodra een write formules raakt; STAP 0-recon + 200-woorden rapport-cap.
