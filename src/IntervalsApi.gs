@@ -162,19 +162,28 @@ function getWellness(daysBack) {
  * Primary route: ZWO-XML als file_contents_base64. intervals.icu zet dit
  * om naar structured FIT → Garmin Epix krijgt multi-step workout.
  */
-function buildEventPayload(workout, dateISO, type) {
+function buildEventPayload(workout, dateISO, type, sessionIndex, sessionCount) {
   if (!workout || !workout.naam) throw new Error('buildEventPayload: geen geldig workout-object.');
   if (!dateISO || !/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
     throw new Error('buildEventPayload: dateISO moet yyyy-MM-dd zijn (kreeg "' + dateISO + '").');
   }
   type = type || 'Ride';
+  sessionIndex = sessionIndex || 1;   // v2b-B: 1-based; n>=2 krijgt _s<n>-suffix
+  sessionCount = sessionCount || 1;
+
+  // v2b-B: distinct start-uur per sessie (pendel = ochtend/middag). Tijd is GEEN
+  // dedup-key (external_id is dat) — puur zodat sessies niet op één tijdstip stapelen.
+  var SESSIE_UUR = [7, 17, 12, 19, 6];
+  var uur = SESSIE_UUR[sessionIndex - 1] != null ? SESSIE_UUR[sessionIndex - 1] : 12;
+  var hh = ('0' + uur).slice(-2);
+  var suffix = sessionIndex >= 2 ? ('_s' + sessionIndex) : '';
 
   var base = {
     category: 'WORKOUT',
-    start_date_local: dateISO + 'T00:00:00',
+    start_date_local: dateISO + 'T' + hh + ':00:00',
     type: type,
-    name: COACH_NAME_PREFIX + workout.naam,
-    external_id: 'coach_' + dateISO + '_' + type.toLowerCase()
+    name: COACH_NAME_PREFIX + workout.naam + (sessionCount > 1 ? (' (sessie ' + sessionIndex + '/' + sessionCount + ')') : ''),
+    external_id: 'coach_' + dateISO + '_' + type.toLowerCase() + suffix
   };
 
   // Primary: ZWO file (structured FIT via intervals.icu → Garmin multi-step)

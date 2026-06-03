@@ -128,26 +128,57 @@ function generateProposal() {
   var SCALABLE_TYPES = { long_z2: 1, combo_long_with_efforts: 1 };
   days.forEach(function (d) {
     if (!d.train || !d.voorgesteldType || !d.datum) return;
-    var wo = buildWorkout(d.voorgesteldType, d.minuten, settings, mesoWeek, macro.fase, eventCtx, d.dagIdx);
-    if (!wo) return;
-    if (!SCALABLE_TYPES[d.voorgesteldType] && d.minuten > 0 &&
-        Math.abs(d.minuten - (wo.totaalMin || 0)) > 30) {
-      Logger.log('Workout-duur mismatch: dag=' + d.dag + ' type=' + d.voorgesteldType +
-                 ' beschikbaar=' + d.minuten + 'min template=' + wo.totaalMin + 'min');
-    }
     var dISO = formatDate(d.datum, 'yyyy-MM-dd');
-    setDocProp('proposal_' + dISO, JSON.stringify(wo));
+
+    // v2b-B: pendel-dag expandeert naar pendelAantal sessies van pendelDuurMin;
+    // overige dagen = één sessie van d.minuten (basiskey, ongewijzigd gedrag).
+    var isPendel = d.type === 'pendel';
+    var sessieCount = isPendel ? Math.max(1, Math.round(settings.pendelAantal) || 1) : 1;
+    var sessieMin = isPendel ? (settings.pendelDuurMin || d.minuten) : d.minuten;
+
+    var sessions = [];
+    for (var si = 0; si < sessieCount; si++) {
+      var wo = buildWorkout(d.voorgesteldType, sessieMin, settings, mesoWeek, macro.fase, eventCtx, d.dagIdx);
+      if (wo) sessions.push(wo);
+    }
+    if (!sessions.length) return;
+
+    if (!isPendel && !SCALABLE_TYPES[d.voorgesteldType] && d.minuten > 0 &&
+        Math.abs(d.minuten - (sessions[0].totaalMin || 0)) > 30) {
+      Logger.log('Workout-duur mismatch: dag=' + d.dag + ' type=' + d.voorgesteldType +
+                 ' beschikbaar=' + d.minuten + 'min template=' + sessions[0].totaalMin + 'min');
+    }
+
+    writeDaySessions_(dISO, sessions);
+
+    // Aggregaat-snapshot: top-level velden blijven werken (naam samengevat,
+    // totaalMin/tss/intent = som, blokken/zones samengevoegd) + sessies[] forward-compat.
+    var sumMin = 0, sumTss = 0;
+    var aggIntent = { low: 0, high: 0, anaerobic: 0 };
+    var aggBlok = [], zoneSet = {};
+    sessions.forEach(function (s) {
+      sumMin += s.totaalMin || 0;
+      sumTss += s.tss || 0;
+      var it = ensureIntent_(s);
+      ['low', 'high', 'anaerobic'].forEach(function (b) { aggIntent[b] += (it[b] || 0); });
+      (s.blokken || []).forEach(function (b) { aggBlok.push(b); });
+      (s.zones || []).forEach(function (z) { zoneSet[z] = true; });
+    });
+
     weekplan.push({
       datum: dISO,
       workoutType: d.voorgesteldType,
-      naam: wo.naam || '',
-      variantId: wo.variantId || null,
-      zones: wo.zones || [],
-      intent: ensureIntent_(wo),
-      blokken: wo.blokken || null,
-      tss: wo.tss || 0,
-      minuten: wo.totaalMin || 0,
-      reden: d.reden || ''   // v2c: per-dag rationale (leeg voor voltooid/missed)
+      naam: sessions.length > 1 ? ('Pendel ' + sessions.length + '× ' + sessieMin + 'm') : (sessions[0].naam || ''),
+      variantId: sessions[0].variantId || null,
+      zones: Object.keys(zoneSet),
+      intent: aggIntent,
+      blokken: aggBlok.length ? aggBlok : null,
+      tss: Math.round(sumTss),
+      minuten: Math.round(sumMin),
+      reden: d.reden || '',   // v2c: per-dag rationale (leeg voor voltooid/missed)
+      sessies: sessions.map(function (s) {
+        return { naam: s.naam || '', totaalMin: s.totaalMin || 0, tss: Math.round(s.tss || 0) };
+      })
     });
   });
   setDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), JSON.stringify(weekplan));
@@ -453,9 +484,8 @@ function computeWeekVolumeMin_(ss, weekStart) {
       // Toekomst/vandaag geplande dag → geplande (geschaalde) workout-duur uit
       // de proposal-snapshot; val terug op beschikbaarheid als er nog geen
       // voorstel voor die dag bestaat.
-      var raw = getDocProp('proposal_' + key, '');
       var plannedMin = 0;
-      if (raw) { try { plannedMin = JSON.parse(raw).totaalMin || 0; } catch (e) {} }
+      readDaySessions_(key).forEach(function (s) { plannedMin += (s.totaalMin || 0); });
       total += plannedMin || (planner[i].minuten || 0);
     }
   }
@@ -558,8 +588,41 @@ function eventContextFrom_(macro) {
 function cleanupOldProposals_() {
   var props = PropertiesService.getDocumentProperties();
   props.getKeys().forEach(function (k) {
-    if (k.indexOf('proposal_') === 0) props.deleteProperty(k);
+    if (k.indexOf('proposal_') === 0) props.deleteProperty(k);  // dekt ook _s<n>-suffixen (prefix-match)
   });
+}
+
+// ── v2b-B multi-session: proposal key-scheme (ENIGE plek waar het sleutelformaat leeft) ──
+// Sessie 1 = basiskey proposal_<dISO> (byte-identiek aan vroeger single-session);
+// sessie n>=2 = proposal_<dISO>_s<n>. Alle lezers/schrijvers/verwijderaars lopen via deze helpers.
+function readDaySessions_(dISO) {
+  var out = [];
+  var base = getDocProp('proposal_' + dISO, '');
+  if (!base) return out;
+  try { out.push(JSON.parse(base)); } catch (e) { return out; }
+  for (var n = 2; ; n++) {
+    var raw = getDocProp('proposal_' + dISO + '_s' + n, '');
+    if (!raw) break;
+    try { out.push(JSON.parse(raw)); } catch (e) { break; }
+  }
+  return out;
+}
+function writeDaySessions_(dISO, sessions) {
+  if (!sessions || !sessions.length) return;
+  deleteDaySessions_(dISO);  // ruim eventuele stale (hogere) suffixen op
+  setDocProp('proposal_' + dISO, JSON.stringify(sessions[0]));
+  for (var n = 2; n <= sessions.length; n++) {
+    setDocProp('proposal_' + dISO + '_s' + n, JSON.stringify(sessions[n - 1]));
+  }
+}
+function deleteDaySessions_(dISO) {
+  var props = PropertiesService.getDocumentProperties();
+  props.deleteProperty('proposal_' + dISO);
+  for (var n = 2; ; n++) {
+    var k = 'proposal_' + dISO + '_s' + n;
+    if (props.getProperty(k) === null) break;
+    props.deleteProperty(k);
+  }
 }
 
 /**

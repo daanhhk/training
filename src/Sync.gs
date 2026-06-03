@@ -383,16 +383,18 @@ function pushAllPending_(ss) {
   var events = [];
   pending.forEach(function (d) {
     var dateISO = formatDate(d.datum, 'yyyy-MM-dd');
-    var raw = getDocProp('proposal_' + dateISO, '');
-    if (!raw) {
+    var sessies = readDaySessions_(dateISO);   // v2b-B: 1..N sessies per dag
+    if (!sessies.length) {
       skipped.push(d.dag + ' (' + dateISO + '): geen opgeslagen voorstel — Genereer voorstel eerst.');
       return;
     }
-    try {
-      events.push(buildEventPayload(JSON.parse(raw), dateISO, 'Ride'));
-    } catch (e) {
-      skipped.push(d.dag + ' (' + dateISO + '): ' + e.message);
-    }
+    sessies.forEach(function (wo, idx) {
+      try {
+        events.push(buildEventPayload(wo, dateISO, 'Ride', idx + 1, sessies.length));
+      } catch (e) {
+        skipped.push(d.dag + ' (' + dateISO + ' s' + (idx + 1) + '): ' + e.message);
+      }
+    });
   });
 
   if (!events.length) return { pushedCount: 0, skipped: skipped, errors: errors };

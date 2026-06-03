@@ -34,7 +34,10 @@ var SETTINGS_FIELDS = {
   FTP_AUTO:          { row: 47, label: 'FTP auto-update',      unit: ''   },
   WEIGHT_AUTO:       { row: 48, label: 'Gewicht auto-update',  unit: ''   },
   FTP_LAST_SYNC:     { row: 49, label: 'FTP laatst gesynct',   unit: ''   },
-  WEIGHT_LAST_SYNC:  { row: 50, label: 'Gewicht laatst gesynct', unit: '' }
+  WEIGHT_LAST_SYNC:  { row: 50, label: 'Gewicht laatst gesynct', unit: '' },
+  // ── v2b-B multi-session (pendel) ──
+  PENDEL_DUUR:       { row: 52, label: 'Pendel duur per rit',   unit: 'min' },
+  PENDEL_AANTAL:     { row: 53, label: 'Pendel ritten per dag', unit: ''    }
 };
 
 /** Rij → docprop key. Alleen velden die de gebruiker kan bewerken.
@@ -57,7 +60,10 @@ var SETTINGS_ROW_TO_KEY = {
   42: 'gewicht',
   43: 'profiel_preset',
   47: 'ftp_auto_update',
-  48: 'weight_auto_update'
+  48: 'weight_auto_update',
+  // v2b-B multi-session (pendel)
+  52: 'pendelDuurMin',
+  53: 'pendelAantal'
 };
 
 /** Harde defaults, gebruikt als prop niet ingesteld is. */
@@ -81,7 +87,10 @@ var SETTINGS_DEFAULTS = {
   ftp_auto_update:      false,
   weight_auto_update:   false,
   ftp_last_sync:        '',
-  weight_last_sync:     ''
+  weight_last_sync:     '',
+  // v2b-B multi-session (pendel)
+  pendelDuurMin:        80,
+  pendelAantal:         2
 };
 
 var DOEL_OPTIONS = ['FTP', 'Conditie', 'Beklimmingen', 'VO2max'];
@@ -97,13 +106,14 @@ var SETTINGS_SECTIONS = [
   { row: 31, title: '✉️  Notificaties' },
   { row: 35, title: '📊  Status (auto — niet bewerken)' },
   { row: 40, title: '👤  Profiel' },
-  { row: 45, title: '📡  Auto-sync vanuit intervals.icu' }
+  { row: 45, title: '📡  Auto-sync vanuit intervals.icu' },
+  { row: 51, title: '🚲  Pendel (multi-session)' }
 ];
 
 /** Numerieke + datum + bool velden (kind hint voor parsen). */
 var SETTINGS_KIND = {
   ftp: 'num', hr_max: 'num', hr_rest: 'num', lthr: 'num', doel_duur: 'num',
-  gewicht: 'num',
+  gewicht: 'num', pendelDuurMin: 'num', pendelAantal: 'num',
   doel_start: 'date', ftp_last_sync: 'date', weight_last_sync: 'date',
   ftp_auto_update: 'bool', weight_auto_update: 'bool'
 };
@@ -270,7 +280,9 @@ function readSettings(ss) {
     // apiKey / botToken / chatId zijn secrets — niet uit cellen lezen.
     // Roep getIntervalsApiKey_() / getTelegramBotToken_() / getTelegramChatId_()
     // rechtstreeks aan vanuit code dat ze nodig heeft.
-    email:      String(v('EMAIL')      || '')
+    email:      String(v('EMAIL')      || ''),
+    pendelDuurMin: Number(v('PENDEL_DUUR'))   || SETTINGS_DEFAULTS.pendelDuurMin,
+    pendelAantal:  Number(v('PENDEL_AANTAL')) || SETTINGS_DEFAULTS.pendelAantal
   };
 }
 
