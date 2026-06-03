@@ -146,7 +146,8 @@ function generateProposal() {
       intent: ensureIntent_(wo),
       blokken: wo.blokken || null,
       tss: wo.tss || 0,
-      minuten: wo.totaalMin || 0
+      minuten: wo.totaalMin || 0,
+      reden: d.reden || ''   // v2c: per-dag rationale (leeg voor voltooid/missed)
     });
   });
   setDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), JSON.stringify(weekplan));
@@ -577,9 +578,14 @@ function ensureIntent_(wo) {
   return intent;
 }
 
+// v2c: zone-bucket → korte NL-term voor de reden-string (UI).
+function redenZoneLabel_(b) {
+  return b === 'low' ? 'duur' : b === 'high' ? 'intensiteit' : b === 'anaerobic' ? 'anaeroob' : String(b || '');
+}
+
 /**
  * Wijst per dag een workout-type toe. Muteert days in-place (voorgesteldType
- * + tss-hint) en update dekking.
+ * + reden + tss-hint) en update dekking.
  *
  * @param wellness  resultaat van getWellnessSignal(); demote/recovery
  *                  signal overschrijft de assignment cascade.
@@ -605,11 +611,13 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
 
   days.forEach(function (d) {
     var type;
+    var reden = '';        // v2c: primaire reden bij het FINALE type
     var debtForced = false; // debt-geforceerde compensatie → exempt van avoid-consecutive-hard
 
     if (isEventRecovery) {
       // Recovery-week na A-race: alles easy Z2.
       type = 'recovery';
+      reden = 'Herstel — herstelweek na A-race';
     } else if (isTaper) {
       if (isTripEvent) {
         // Tour-taper: meerdaagse rittenreis vraagt durability, geen race-snap.
@@ -617,14 +625,19 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
         var dToEvent = (eventDate && d.datum)
           ? Math.round((stripTime_(eventDate).getTime() - stripTime_(d.datum).getTime()) / 86400000)
           : null;
-        type = (dToEvent != null && dToEvent <= 2) ? 'taper_z2_kort' : 'tour_taper_z2';
+        var isLaatste2 = (dToEvent != null && dToEvent <= 2);
+        type = isLaatste2 ? 'taper_z2_kort' : 'tour_taper_z2';
+        reden = isLaatste2 ? 'Korte taper-rit — vers worden voor de trip'
+                           : 'Taper-duurrit — durability vasthouden';
       } else {
         // Race-taper: één korte openers-sessie, rest korte Z2.
         if (!openersGedaan && (d.type === 'vrij' || d.type === 'weekend')) {
           type = 'taper_openers';
           openersGedaan = true;
+          reden = 'Openers — kort en scherp voor de wedstrijd';
         } else {
           type = 'taper_z2_kort';
+          reden = 'Korte taper-rit — vers worden';
         }
       }
     } else if (isRecovery) {
@@ -632,11 +645,14 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       if (d.type === 'pendel')       type = 'pendel_z2';
       else if (d.type === 'weekend') type = 'long_z2';
       else                            type = 'recovery';
+      reden = 'Herstel — herstelweek';
     } else if (isTestWeek && !testGedaan && (d.type === 'vrij' || d.type === 'weekend')) {
       type = 'test';
       testGedaan = true;
+      reden = 'Test — FTP/conditie bepalen';
     } else if (d.type === 'pendel') {
       type = 'pendel_' + doelKey(doel) + '_intervals';
+      reden = 'Pendelrit — vaste woon-werkrit';
     } else if (d.type === 'weekend') {
       // Debt-aware: groot high/anaerobic tekort → forceer combo met
       // expliciete high-blokken (i.p.v. alleen long_z2 + klim-sim).
@@ -644,30 +660,40 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
         type = 'combo_long_with_efforts';
         debtWerk.high = 0; // gecompenseerd
         debtForced = true;
+        reden = 'Inhaalsessie — ' + redenZoneLabel_('high') + ' tekort';
       } else if (debtActief && debtWerk.anaerobic > DEBT_FORCE_ANAER_MIN) {
         type = 'combo_long_with_efforts';
         debtWerk.anaerobic = 0;
         debtForced = true;
+        reden = 'Inhaalsessie — ' + redenZoneLabel_('anaerobic') + ' tekort';
       } else if (!dekking.low) {
         type = 'long_z2';
+        reden = 'Lange duurrit — weekend';
       } else if (!dekking.high && macroFase !== 'Base') {
         type = 'combo_long_with_efforts';
+        reden = 'Lange rit met blokken — intensiteit aanvullen';
       } else {
         type = 'long_z2';
+        reden = 'Lange duurrit — weekend';
       }
     } else if (d.type === 'vrij') {
       // Debt-weging: prioriteer grootste positieve tekort-bucket.
       var dp = debtWerk ? debtPreferredType_(debtWerk, doel, macroFase) : null;
       if (dp) {
         type = dp;
-        debtWerk[typeBucket_(dp, doel)] = 0; // verbruikt → volgende dag andere bucket
+        var dpBucket = typeBucket_(dp, doel);
+        debtWerk[dpBucket] = 0; // verbruikt → volgende dag andere bucket
+        reden = 'Inhaalsessie — ' + redenZoneLabel_(dpBucket) + ' tekort';
       } else {
         type = keyIntensity(doel, macroFase, dekking, klimType);
+        reden = 'Sleutelsessie · ' + doel + ' — fase ' + macroFase;
       }
     } else if (d.type === 'recovery') {
       type = 'recovery';
+      reden = 'Herstel — ingeroosterd';
     } else {
       type = 'recovery';
+      reden = 'Rustige dag — geen sleutelprikkel nodig';
     }
 
     // Avoid-consecutive-hard: als de vorige kalenderdag een harde dag was
@@ -680,10 +706,12 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       if (prevDay.getTime() === lastHardDate.getTime()) {
         type = 'long_z2';
         isHard = false;
+        reden = 'Rustige duurrit — dag na een zware dag';  // load-context wint
       }
     }
 
     d.voorgesteldType = type;
+    d.reden = reden;
     var zones = workoutZones(type, doel);
     zones.forEach(function (z) { dekking[z] = true; });
     if (isHard && d.datum) lastHardDate = stripTime_(d.datum);
@@ -695,8 +723,13 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       if (!d.voorgesteldType) return;
       if (wellness.signal === 'recovery') {
         d.voorgesteldType = 'recovery';
+        d.reden = 'Herstel — wellness laag';
       } else {
-        d.voorgesteldType = demoteType_(d.voorgesteldType);
+        var gedemoot = demoteType_(d.voorgesteldType);
+        if (gedemoot !== d.voorgesteldType) {
+          d.voorgesteldType = gedemoot;
+          d.reden = 'Lichter gehouden — wellness laag';
+        }
       }
     });
   }

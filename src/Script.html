@@ -68,6 +68,9 @@
     h += '<div class="metric"><div class="v">' + Math.round(v.tss || 0) + '</div><div class="l">TSS</div></div>';
     h += '<div class="metric"><div class="v">' + esc(v.type || '–') + '</div><div class="l">type</div></div>';
     h += '</div>';
+    if (v.reden) {
+      h += '<div class="muted">' + esc(v.reden) + '</div>';  // v2c: waarom-deze-training regel
+    }
     if (v.waarom && v.waarom.length) {
       h += '<details><summary>Waarom deze training?</summary><ul>';
       v.waarom.forEach(function (w) { h += '<li>' + esc(w) + '</li>'; });

@@ -289,7 +289,9 @@ function dashDayCard_(dISO, wpEntry, actual, rpe) {
       titel: wpEntry.naam || wpEntry.workoutType || 'Training',
       duurMin: wpEntry.minuten || 0,
       tss: wpEntry.tss || 0,
-      segmenten: segs
+      segmenten: segs,
+      // v2c: rationale alleen tonen voor (nog) niet-gefietste dagen.
+      reden: actual ? '' : (wpEntry.reden || '')
     };
   }
   var act = null;
