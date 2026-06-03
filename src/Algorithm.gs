@@ -136,10 +136,13 @@ function generateProposal() {
     var sessieCount = isPendel ? Math.max(1, Math.round(settings.pendelAantal) || 1) : 1;
     var sessieMin = isPendel ? (settings.pendelDuurMin || d.minuten) : d.minuten;
 
-    var sessions = [];
+    var sessions = [], sessieTypes = [];
     for (var si = 0; si < sessieCount; si++) {
-      var wo = buildWorkout(d.voorgesteldType, sessieMin, settings, mesoWeek, macro.fase, eventCtx, d.dagIdx);
-      if (wo) sessions.push(wo);
+      // Asymmetrische pendel: vroege sessie(s) geforceerd Z2, laatste = engine-keuze
+      // (d.voorgesteldType). Niet-pendel: altijd d.voorgesteldType (1 sessie).
+      var sessieType = (isPendel && si < sessieCount - 1) ? 'pendel_z2' : d.voorgesteldType;
+      var wo = buildWorkout(sessieType, sessieMin, settings, mesoWeek, macro.fase, eventCtx, d.dagIdx);
+      if (wo) { sessions.push(wo); sessieTypes.push(sessieType); }
     }
     if (!sessions.length) return;
 
@@ -165,10 +168,17 @@ function generateProposal() {
       (s.zones || []).forEach(function (z) { zoneSet[z] = true; });
     });
 
+    // Aggregaat-naam: gelijke sessies → "Pendel N× <m>m"; gemengd (Z2 + engine) → mix.
+    var alleZelfde = sessieTypes.every(function (t) { return t === sessieTypes[0]; });
+    var aggNaam = sessions.length > 1
+      ? (alleZelfde ? ('Pendel ' + sessions.length + '× ' + sessieMin + 'm')
+                    : ('Pendel Z2 + ' + settings.doel + ' intervallen'))
+      : (sessions[0].naam || '');
+
     weekplan.push({
       datum: dISO,
       workoutType: d.voorgesteldType,
-      naam: sessions.length > 1 ? ('Pendel ' + sessions.length + '× ' + sessieMin + 'm') : (sessions[0].naam || ''),
+      naam: aggNaam,
       variantId: sessions[0].variantId || null,
       zones: Object.keys(zoneSet),
       intent: aggIntent,
@@ -1759,7 +1769,7 @@ function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx, slot)
   if (type === 'sweet_spot_long')    return genericSweetSpotLong(mins, settings, mesoWeek);
 
   if (type === 'recovery')    return genericRecovery(mins, settings);
-  if (type === 'pendel_z2')   return genericPendelZ2(mins, settings);
+  if (type === 'pendel_z2')   return genericPendelZ2(mins, settings, mesoWeek, macroFase);
   if (type.indexOf('pendel_') === 0 && type.indexOf('_intervals') > 0) {
     return genericPendelIntervals(type, mins, settings, mesoWeek, macroFase, doel);
   }
@@ -2022,12 +2032,14 @@ function genericSweetSpotLong(mins, settings, mesoWeek) {
   };
 }
 
-function genericPendelZ2(mins, settings) {
+function genericPendelZ2(mins, settings, mesoWeek, macroFase) {
   var ftp = settings.ftp, lthr = settings.lthr;
   mins = mins || 150;
   var heen = Math.floor(mins / 2), terug = mins - heen;
+  var isRecoveryWeek = (mesoWeek === 4) || (macroFase === 'Recovery');
   return {
-    naam: 'Pendel Z2 (' + mins + ' min, recovery week)',
+    naam: isRecoveryWeek ? ('Pendel Z2 (' + mins + ' min, recovery week)')
+                         : ('Pendel + Z2 (' + mins + ' min)'),
     focus: 'aerobic base',
     zones: ['low'],
     totaalMin: mins,
@@ -2036,7 +2048,8 @@ function genericPendelZ2(mins, settings) {
       ['Terug', terug + ' min', wattsRange(ftp, 60, 72), bpmRange(lthr, 78, 86), 'Rustige Z2']
     ],
     tss: Math.round(mins * 0.6),
-    eindopmerking: 'Recovery-week pendel — geen intensiteit, alleen volume.'
+    eindopmerking: isRecoveryWeek ? 'Recovery-week pendel — geen intensiteit, alleen volume.'
+                                  : 'Rustige pendel — fris op werk aankomen.'
   };
 }
 
