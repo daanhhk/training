@@ -728,7 +728,9 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       testGedaan = true;
       reden = 'Test — FTP/conditie bepalen';
     } else if (d.type === 'pendel') {
-      type = 'pendel_' + doelKey(doel) + '_intervals';
+      type = (isTripEvent && (macroFase === 'Build' || macroFase === 'Peak'))
+        ? 'pendel_trip_intervals'                          // tocht-pendel → sweet-spot/tempo (zie genericPendelIntervals)
+        : ('pendel_' + doelKey(doel) + '_intervals');
       reden = 'Pendelrit — vaste woon-werkrit';
     } else if (d.type === 'weekend') {
       // Debt-aware: groot high/anaerobic tekort → forceer combo met
@@ -762,7 +764,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
         debtWerk[dpBucket] = 0; // verbruikt → volgende dag andere bucket
         reden = 'Inhaalsessie — ' + redenZoneLabel_(dpBucket) + ' tekort';
       } else {
-        type = keyIntensity(doel, macroFase, dekking, klimType);
+        type = keyIntensity(doel, macroFase, dekking, klimType, isTripEvent);
         reden = 'Sleutelsessie · ' + doel + ' — fase ' + macroFase;
       }
     } else if (d.type === 'recovery') {
@@ -845,6 +847,7 @@ var DEMOTE_MAP = {
   'pendel_vo2_intervals':      'pendel_z2',
   'pendel_conditie_intervals': 'pendel_z2',
   'pendel_climb_intervals':    'pendel_z2',
+  'pendel_trip_intervals':     'pendel_z2',
   // Test → recovery (geen testen tijdens slechte recovery)
   'test': 'recovery'
 };
@@ -1246,7 +1249,7 @@ function xmlEscape_(s) {
  * Kiest de key-intensity workout voor een vrije dag op basis van doel,
  * macro-fase en wat nog open staat in dekking.
  */
-function keyIntensity(doel, macroFase, dekking, klimType) {
+function keyIntensity(doel, macroFase, dekking, klimType, isTripEvent) {
   if (macroFase === 'Taper')    return 'taper_openers'; // defensief — taper handled in assignWorkouts
   if (macroFase === 'Recovery') return 'recovery';
 
@@ -1254,6 +1257,8 @@ function keyIntensity(doel, macroFase, dekking, klimType) {
   if (macroFase === 'Build' || macroFase === 'Peak') {
     var ct = climbTypeWorkout_(klimType, macroFase, dekking);
     if (ct) return ct;
+    // Trip/tocht-event zonder klim-routing → duur-key i.p.v. doel-FTP-intervallen.
+    if (isTripEvent) return 'long_z2';
   }
 
   // Categorie-types → variant-pools (selectVariant_ roteert de vorm).
@@ -2062,7 +2067,14 @@ function genericPendelIntervals(type, mins, settings, mesoWeek, macroFase, doel)
   var f = mesoFactor(mesoWeek);
 
   var blok = ['—', '—', '—', '—', '—'];
-  if (doel === 'FTP') {
+  var isTrip = (type === 'pendel_trip_intervals');
+  if (isTrip) {
+    // Tocht/trip-pendel: sweet-spot/tempo (duurspecifiek), niet doel-FTP-intervallen.
+    blok = ['Terug-sweetspot', '2x15min',
+            wattsRange(ftp, Math.round(86 * f), Math.round(92 * f)),
+            bpmRange(lthr, 90, 96),
+            'Sweet spot / tempo — tocht-specifieke duurkracht'];
+  } else if (doel === 'FTP') {
     blok = ['Terug-intervallen', '3-4x 8min',
             wattsRange(ftp, Math.round(88 * f), Math.round(94 * f)),
             bpmRange(lthr, 95, 102),
@@ -2085,7 +2097,8 @@ function genericPendelIntervals(type, mins, settings, mesoWeek, macroFase, doel)
   }
 
   return {
-    naam: 'Pendel + ' + doel + ' intervallen (' + mins + ' min)',
+    naam: isTrip ? ('Pendel + sweet spot (tocht, ' + mins + ' min)')
+                 : ('Pendel + ' + doel + ' intervallen (' + mins + ' min)'),
     focus: 'pendel + doel-specifiek',
     zones: workoutZones(type, doel),
     totaalMin: mins,
