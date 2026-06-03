@@ -14,12 +14,13 @@
   function uMin(m) { m = Math.round(m || 0); return Math.floor(m / 60) + 'u ' + (m % 60) + 'm'; }
 
   // ── Boot ──
-  function boot() {
+  function loadState() {
     google.script.run
       .withSuccessHandler(onState)
       .withFailureHandler(showError)
       .getDashboardState();
   }
+  function boot() { loadState(); }
   function showError(err) {
     document.getElementById('loading').style.display = 'none';
     var e = document.getElementById('error');
@@ -33,6 +34,7 @@
     document.getElementById('bottomnav').style.display = 'flex';
     renderSchema();
     renderVorm();
+    renderBeschikbaarheid();
     switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
     google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); drawNiveauChart(); });
@@ -124,6 +126,42 @@
       c.classList.toggle('sel', c.getAttribute('data-date') === dISO);
     });
     renderDagDetail();
+  }
+
+  // ── v2a: beschikbaarheid-editor (write-pad) ──
+  function renderBeschikbaarheid() {
+    var av = state.availability || [];
+    var opts = state.dagtypeOptions || [];
+    var rows = av.map(function (d, i) {
+      var sel = opts.map(function (o) {
+        return '<option value="' + esc(o) + '"' + (o === d.dagtype ? ' selected' : '') + '>' + esc(o) + '</option>';
+      }).join('');
+      return '<div class="avail-row">' +
+        '<label class="avail-dag"><input type="checkbox" data-av="train" data-idx="' + i + '"' + (d.train ? ' checked' : '') + '> ' + esc(d.dagLabel) + '</label>' +
+        '<input type="number" class="avail-min" data-av="min" data-idx="' + i + '" min="0" max="600" step="5" value="' + (d.minuten || 0) + '">' +
+        '<select class="avail-type" data-av="type" data-idx="' + i + '"><option value="">—</option>' + sel + '</select>' +
+        '</div>';
+    }).join('');
+    document.getElementById('avail-rows').innerHTML = rows;
+    var btn = document.getElementById('avail-save');
+    if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; }
+  }
+
+  function saveAvail() {
+    var updates = [];
+    for (var i = 0; i < 7; i++) {
+      updates.push({
+        train: !!document.querySelector('[data-av="train"][data-idx="' + i + '"]').checked,
+        minuten: Number(document.querySelector('[data-av="min"][data-idx="' + i + '"]').value) || 0,
+        dagtype: document.querySelector('[data-av="type"][data-idx="' + i + '"]').value || ''
+      });
+    }
+    var btn = document.getElementById('avail-save');
+    if (btn) { btn.disabled = true; btn.textContent = 'Opslaan…'; }
+    google.script.run
+      .withSuccessHandler(onState)
+      .withFailureHandler(function (err) { showError(err); if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } })
+      .saveAvailability(updates);
   }
 
   function renderDagDetail() {

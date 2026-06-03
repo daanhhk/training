@@ -552,9 +552,45 @@ function getDashboardState() {
     beginNiveau: beginNiveau,
     beginLabel: beginLabel,
     niveauDelta: niveauDelta,
+    availability: planner.map(function (p) {
+      return { train: p.train === true, minuten: p.minuten || 0, dagtype: p.type || '', dagLabel: p.dag };
+    }),
+    dagtypeOptions: DAGTYPE_OPTIONS,
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,
     maandTotalen: statsBundle.maandTotalen
   };
+}
+
+/**
+ * v2a write-pad: schrijf beschikbaarheid terug naar 'Weekplanner' (A/D/E,
+ * rijen 3-9). Server-side gevalideerd vóór write. Schrijft ECHTE numbers
+ * (setValues, geen formules → NL-locale-formuletrap niet van toepassing).
+ * F (toelichting) + H (gedaan) blijven ongemoeid. Returnt verse state
+ * (atomic write+refresh in één round-trip).
+ *
+ * @param {Array<{train, minuten, dagtype}>} updates  index 0-6 = rij 3-9
+ */
+function saveAvailability(updates) {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(PLANNER_SHEET);
+  if (!sh) throw new Error('Tab "Weekplanner" ontbreekt.');
+  updates = updates || [];
+  var trainCol = [], minCol = [], typeCol = [];
+  for (var i = 0; i < 7; i++) {
+    var u = updates[i] || {};
+    var dt = String(u.dagtype || '');
+    if (DAGTYPE_OPTIONS.indexOf(dt) < 0) dt = '';        // onbekend → leeg (geen validatie-break)
+    var min = Number(u.minuten);
+    if (isNaN(min) || min < 0) min = 0;
+    if (min > 600) min = 600;
+    trainCol.push([u.train === true]);
+    minCol.push([min]);
+    typeCol.push([dt]);
+  }
+  sh.getRange(3, 1, 7, 1).setValues(trainCol);   // A3:A9 Train?
+  sh.getRange(3, 4, 7, 1).setValues(minCol);     // D3:D9 Minuten
+  sh.getRange(3, 5, 7, 1).setValues(typeCol);    // E3:E9 Dagtype
+  return getDashboardState();
 }
