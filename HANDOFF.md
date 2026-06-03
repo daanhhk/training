@@ -3,9 +3,9 @@
 Read-only HtmlService web-app, tabs Schema + Vorm. /dev:
 https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev
 
-Laatste code-commit vóór deze HANDOFF: eca1483.
+Laatste code-commit vóór deze HANDOFF: 95f72cb.
 
-## Draad (2) — niveau-kaart (status-deck boven Schema + Vorm)
+## Draad (2) — niveau-kaart (status-deck boven Schema + Vorm) — VOLLEDIG AF (2a/2b/2c)
 
 2a AF — swipe-deck, 2 kaarten, per-mount ids swrap-/sdots-{sfx}. Kaart 1 = ring + verdict (.status-left + .status-right). Kaart 2 = .niveau-block.
 Deck-CSS FRAGIEL — NIET aanraken: .status-card { flex:0 0 100%; scroll-snap-align:center; display:flex; gap:12px; }. .status-wrap/.status-deck met rust laten.
@@ -24,17 +24,28 @@ Deck-CSS FRAGIEL — NIET aanraken: .status-card { flex:0 0 100%; scroll-snap-al
 - syncActivities borgt rij 1 = ACT_HEADERS idempotent vóór de data-write (zelf-helend bij schema-uitbreiding; full-rewrite sync). (commit eca1483)
 - icu-velden referentie: icu_ftp = gezette FTP per rit (260→275 over 2024→2026). icu_rolling_ftp = lopende eFTP (264→272). icu_pm_ftp = per-rit power-model (springerig, ONBRUIKBAAR). icu_weight aanwezig.
 
-## OPEN HANDMATIGE STAP
-- Daan draait één keer "Sync nu (intervals.icu)" → headers FTP/Gewicht/Rolling FTP verschijnen boven de bestaande kolommen (cosmetisch; data + delta al correct).
+2c AF — niveau-over-tijd grafiek op Vorm-tab, per kalendermaand jun '24→huidig (commit 95f72cb, visueel geverifieerd op /dev incognito).
+- Server: dashNiveauReeks_(ss) (WebApp.gs) — bucket Activiteiten per yyyy-MM (datum idx0, ftp idx12, gewicht idx13); representatief = laatste-op-datum rij met ftp+gewicht beide gevuld; begin-ankermaand overschreven met dashBeginAnker_ → punt 1 = exact beginNiveau; reeks begin→huidige maand, gat → niveau:null. Payload-key vorm.niveauReeks [{maand,niveau,ftp,gewicht}]. dashStatsFromActivities_ en de 12-maand-cap ongemoeid.
+- Client: Index.html "Niveau-trend"-blok ná #vorm-stats; drawNiveauChart() (LineChart corechart, kleur #5B5BD6, interpolateNulls:true, vAxis auto-zoom floor(min−1)/ceil(max+1), tooltip komma-decimaal + W/kg); helper nlMaandLabel_('yyyy-MM')→"mmm 'jj"; subregel uit state.beginLabel; gewired in google.charts load-callback + switchTab('vorm'). Toggle-onafhankelijk.
+- Metric: puur computeNiveau_ (niveauBasis, W/kg-gedreven), conditieMod overal 0 → glad/wobble-vrij. Eindpunt = niveauBasisNow (valt alleen samen met kaart-niveau als conditieMod≈0; bewust niet conditieMod-inclusief). Begin-anker = oudste Activiteiten-rij. Waargenomen: punt 1 ≈ 20,6, eind ≈ 22,7, ~24 punten, plateau sinds najaar '25.
+
+## 2b-3 SYNC/HEADER — FEITELIJK AFGEROND
+- Volle historie rendert, dus Activiteiten-kolommen 12/13 (icu_ftp/icu_weight) zijn gevuld over de hele tab; headers FTP/Gewicht/Rolling FTP staan correct (idempotente header-write). Geen openstaande handmatige stap meer.
 
 ## UITGESTELDE VERIFICATIE
 - voortgangPct %-pad nooit met echte voltooide weken gedraaid. Live na Girona zodra doelStart op een echte blok-start staat → dan checken: ~80–115% en stabiel (niet mid-week wiebelend).
 - delta-wobble: niveauDelta hangt aan live huidigNiveau (incl. conditieMod ±2), begin = alleen niveauBasis → "+X,X sinds 2024" kan ±~2 dag-tot-dag wiebelen. Bekend/akkoord. Later evt. delta op niveauBasis baseren (stabiel, maar begin+delta ≠ headline).
 
-## VOLGENDE
-- 2c — maand-trend op Vorm. LET OP: historische CTL is NIET opgeslagen (Wellness gecapt ~30d). Voor een echte trend CTL herrekenen uit activiteiten-TSS (de "herberekenbaar tot 2024"-belofte; data reikt tot 2024-06-03). Geen API/tab-uitbreiding.
+## GEPARKEERD (later mooi maken — niet weggegooid)
+- Vorm-tab verfraaiing.
 - draad (3) — fase-bewuste status-toon (verdict/gereedheid past zich aan de trainingsfase aan).
 - draad (4) — polish.
+
+## VOLGENDE — app interactief maken
+Nu is het een read-only HtmlService web-app. Eerste stap in de verse chat = SCOPE SCHERP vóór bouwen:
+- Wélke interactiviteit? Invoer/acties die terugschrijven naar Sheets? RPE/post-ride-feedback vanuit de web-app? Settings aanpassen? Knoppen die Apps Script-functies triggeren?
+- Op welke tab, en de read/write-implicatie — read-only → er moet een write-pad bij (google.script.run of doPost).
+- Geen bouw vóór scope; daarna read-only recon-prompt (STAP 0), dan bouw-prompt.
 
 ## FILES / CONTRACTEN
 - WebApp.gs: getDashboardState (per-week while-loop voortgangPct), statusGraphicHtml(sfx), niveau-calc.
@@ -42,4 +53,9 @@ Deck-CSS FRAGIEL — NIET aanraken: .status-card { flex:0 0 100%; scroll-snap-al
 - Activiteiten.gs: buildActiviteiten, ACT_HEADERS (15).
 - IntervalsApi.gs: getActivities(daysBack) /athlete/{id}/activities; getWellness /athlete/{id}/wellness. Wellness-tab kol CTL/ATL/Vorm/Ramp, gecapt ~30d.
 - sumTssVanafDatum_(ss,startDate): som datum ≥ startDate t/m vandaag, inclusief, geen bovengrens.
-- REGRESSIE-LES: geen lokale vars die payload-keys schaduwen (dagen/vorm/athlete/reeks/event/voortgangPct/niveau/niveauBasis/conditieMod). Bij content-verlies: eerst console + incognito, dan diag — niet CSS/HTML gokken.
+## DURABELE LESSEN / WERKWIJZE
+- REGRESSIE-LES: geen lokale vars die payload-keys schaduwen (dagen/vorm/athlete/reeks/event/voortgangPct/niveau/niveauBasis/conditieMod/niveauReeks). Bij content-verlies: eerst console + incognito, dan diag — niet CSS/HTML gokken.
+- Deck-CSS is FRAGIEL — .status-card/.status-wrap/.status-deck NIET aanraken (zie draad 2a).
+- Elke implementatie/recon-prompt: STAP 0-recon (lees echte functies/signatures, bevestig/pas-aan, meld afwijkingen) + rapport-cap MAX 200 woorden proza, literals exact.
+- Visueel verifiëren op de /dev (HEAD) URL in incognito + hard refresh — niet op een diag leunen. clasp push -f = direct live op /dev (geen redeploy); _Diag.gs read-only + gitignored, opruimen na gebruik.
+- HANDOFF.md via git (commit+push), GEEN clasp (niet in src/).
