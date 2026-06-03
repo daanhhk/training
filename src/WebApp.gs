@@ -293,6 +293,18 @@ function dashDayCard_(dISO, wpEntry, actual, rpe) {
       // v2c: rationale alleen tonen voor (nog) niet-gefietste dagen.
       reden: actual ? '' : (wpEntry.reden || '')
     };
+    // v2c-pendel: multi-session → losse sessie-kaarten met eigen zonebar (alleen bij >1).
+    if (wpEntry.sessies && wpEntry.sessies.length > 1) {
+      voorstel.sessies = wpEntry.sessies.map(function (s) {
+        return {
+          titel: s.naam || 'Sessie',
+          duurMin: s.totaalMin || 0,
+          tss: s.tss || 0,
+          segmenten: segmentsFromIntent_(s.intent),
+          eindopmerking: s.eindopmerking || ''
+        };
+      });
+    }
   }
   var act = null;
   if (actual) {
