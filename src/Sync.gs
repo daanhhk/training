@@ -120,6 +120,12 @@ function syncActivities() {
   var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
   if (!sh) return;
 
+  // Borg de header-rij idempotent (schema-uitbreidingen zelf-helend zonder
+  // "Bouw alles opnieuw"; readers werken op index, dit is puur cosmetisch).
+  sh.getRange(1, 1, 1, ACT_HEADERS.length).setValues([ACT_HEADERS])
+    .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff')
+    .setHorizontalAlignment('center');
+
   // Clear bestaande data rijen (behoud header)
   var lastRow = sh.getLastRow();
   if (lastRow > 1) {
