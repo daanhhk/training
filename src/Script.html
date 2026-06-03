@@ -35,7 +35,7 @@
     renderVorm();
     switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
-    google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); });
+    google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); drawNiveauChart(); });
   }
 
   // ── Zone-bar SVG — schaalt ALTIJD naar 100% breedte (viewBox 0..100,
@@ -281,6 +281,8 @@
     }
     document.getElementById('vorm-huidig').innerHTML = hu;
     renderVormStats();
+    document.getElementById('niveau-trend-sub').textContent =
+      'W/kg-niveau per maand sinds ' + (state.beginLabel || 'start');
   }
 
   function renderVormStats() {
@@ -325,6 +327,48 @@
       backgroundColor: 'transparent'
     });
     drawVormStrip(reeks);
+  }
+
+  // 'yyyy-MM' → "mmm 'jj" (NL maand-afkorting).
+  var NL_MND = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  function nlMaandLabel_(yyyyMM) {
+    var p = String(yyyyMM).split('-');
+    var m = parseInt(p[1], 10) - 1;
+    return (NL_MND[m] || '?') + " '" + p[0].slice(-2);
+  }
+
+  // 2c: niveau-per-maand trend. Eén reeks, auto-zoom Y op databereik,
+  // interpolateNulls voor maanden zonder power-data.
+  function drawNiveauChart() {
+    if (!chartsReady || !state || !state.vorm || !state.vorm.niveauReeks) return;
+    var reeks = state.vorm.niveauReeks;
+    var el = document.getElementById('niveau-chart');
+    if (!reeks.length) { el.innerHTML = '<div class="muted">Geen niveau-data.</div>'; return; }
+    var dt = new google.visualization.DataTable();
+    dt.addColumn('string', 'Maand');
+    dt.addColumn('number', 'Niveau');
+    dt.addColumn({ type: 'string', role: 'tooltip' });
+    var mn = Infinity, mx = -Infinity;
+    reeks.forEach(function (p) {
+      var tip = null;
+      if (p.niveau != null) {
+        tip = nlMaandLabel_(p.maand) + ': ' + p.niveau.toFixed(1).replace('.', ',');
+        if (p.ftp && p.gewicht) tip += ' (' + (p.ftp / p.gewicht).toFixed(2).replace('.', ',') + ' W/kg)';
+        if (p.niveau < mn) mn = p.niveau;
+        if (p.niveau > mx) mx = p.niveau;
+      }
+      dt.addRow([nlMaandLabel_(p.maand), p.niveau, tip]);
+    });
+    var opts = {
+      legend: { position: 'none' },
+      chartArea: { width: '85%', height: '70%' },
+      colors: ['#5B5BD6'], curveType: 'function', interpolateNulls: true,
+      hAxis: { textStyle: { fontSize: 9 } },
+      vAxis: { gridlines: { color: '#eef2f7' }, baselineColor: '#cbd5e1' },
+      backgroundColor: 'transparent'
+    };
+    if (mn !== Infinity) opts.vAxis.viewWindow = { min: Math.floor(mn - 1), max: Math.ceil(mx + 1) };
+    new google.visualization.LineChart(el).draw(dt, opts);
   }
 
   // Vorm-zone-strip: Google Charts kan geen horizontale y-range-banden
@@ -373,7 +417,7 @@
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === name);
     });
-    if (name === 'vorm') drawVormChart();
+    if (name === 'vorm') { drawVormChart(); drawNiveauChart(); }
     // Schema opent op vandaag: scroll de geselecteerde chip in beeld zodra
     // de container zichtbaar is (scrollIntoView werkt niet op display:none).
     if (name === 'schema') setTimeout(scrollSelectedChip, 30);

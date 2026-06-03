@@ -224,6 +224,59 @@ function dashBeginAnker_(ss) {
   };
 }
 
+/**
+ * 2c: niveau (0–50 W/kg-metric) per kalendermaand, begin-ankermaand → nu.
+ * Onafhankelijk van vorm.reeks (Wellness ~30d). Per maand = ftp+gewicht van
+ * de LAATSTE rij (op datum) met beide gevuld; begin-ankermaand = exact
+ * beginNiveau. Ontbrekende maand → niveau:null (chart interpoleert).
+ * Shape: [{maand:'yyyy-MM', niveau:Number|null, ftp:Number|null, gewicht:Number|null}].
+ */
+function dashNiveauReeks_(ss) {
+  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  if (!sh) return [];
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+
+  var byMonth = {};   // 'yyyy-MM' → { t, ftp, gewicht } (laatste-op-datum met beide gevuld)
+  data.forEach(function (r) {
+    if (!(r[0] instanceof Date)) return;
+    var ftp = (r[12] !== '' && r[12] != null) ? Number(r[12]) : null;
+    var gew = (r[13] !== '' && r[13] != null) ? Number(r[13]) : null;
+    if (ftp == null || gew == null) return;
+    var mk = formatDate(r[0], 'yyyy-MM');
+    var t = stripTime_(r[0]).getTime();
+    if (!byMonth[mk] || t > byMonth[mk].t) byMonth[mk] = { t: t, ftp: ftp, gewicht: gew };
+  });
+
+  var anker = dashBeginAnker_(ss);
+  if (!anker || !anker.datum) return [];
+  // Begin-ankermaand overschrijven zodat punt 1 EXACT beginNiveau is.
+  if (anker.ftp) {
+    byMonth[formatDate(anker.datum, 'yyyy-MM')] =
+      { t: stripTime_(anker.datum).getTime(), ftp: anker.ftp, gewicht: anker.gewicht || null };
+  }
+
+  var huidigGewicht = getGewicht();
+  var now = new Date();
+  var out = [];
+  var cur = new Date(anker.datum.getFullYear(), anker.datum.getMonth(), 1);
+  while (cur.getFullYear() < now.getFullYear() ||
+         (cur.getFullYear() === now.getFullYear() && cur.getMonth() <= now.getMonth())) {
+    var mk2 = formatDate(cur, 'yyyy-MM');
+    var b = byMonth[mk2];
+    var niveau = null, ftpM = null, gewM = null;
+    if (b) {
+      ftpM = b.ftp; gewM = b.gewicht;
+      var nv = computeNiveau_(ftpM, gewM || huidigGewicht);
+      niveau = nv.niveau != null ? Math.round(nv.niveau * 10) / 10 : null;
+    }
+    out.push({ maand: mk2, niveau: niveau, ftp: ftpM, gewicht: gewM });
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+  return out;
+}
+
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
 function dashDayCard_(dISO, wpEntry, actual, rpe) {
   var voorstel = null;
@@ -400,6 +453,7 @@ function getDashboardState() {
   }
   var vorm = {
     reeks: reeks,
+    niveauReeks: dashNiveauReeks_(ss),
     huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null,
     stats: statsBundle.stats,
     spanDagen: statsBundle.spanDagen,
