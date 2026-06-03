@@ -209,6 +209,7 @@ function rollingZoneCoverage(ss, daysBack) {
     var d = r[0];
     if (!(d instanceof Date)) return;
     if (stripTime_(d) < cutoff) return;
+    if (CYCLING_TYPES.indexOf(String(r[1] || '')) < 0) return;  // alleen fiets — runs niet in dekking (v2d)
 
     var intentZones = intentZonesForDate_(d);
     if (intentZones && intentZones.length) {
@@ -344,6 +345,7 @@ function computeZoneDebt_(ss, weekStart) {
   try { acts = getActivities(14) || []; } catch (e) { console.warn('computeZoneDebt getActivities: ' + e.message); }
   var actsByDate = {};
   acts.forEach(function (a) {
+    if (CYCLING_TYPES.indexOf(String(a.type || '')) < 0) return;  // alleen fiets — runs betalen geen cycling-debt (v2d)
     if (!a.start_date_local) return;
     var key = formatDate(stripTime_(new Date(a.start_date_local)), 'yyyy-MM-dd');
     (actsByDate[key] = actsByDate[key] || []).push(a);
