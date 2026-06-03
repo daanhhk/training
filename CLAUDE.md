@@ -167,11 +167,19 @@ webhook, TelegramBot.gs).
 Bijv. core `pushAllPending_(ss)` (Sync.gs) ↔ wrapper `pushAllPendingWorkouts()`.
 
 **Sleutel-functies:**
-- `generateProposal` (Algorithm.gs): leest `readPlanner` live, schrijft
-  DocProps `proposal_<yyyy-MM-dd>` (per dag) + `weekplan_<maandag yyyy-MM-dd>`,
-  dan `renderProposal`.
+- `generateProposal` (Algorithm.gs): leest `readPlanner` live, schrijft per dag
+  1..N sessies als DocProps `proposal_<yyyy-MM-dd>[_s<n>]` + een aggregaat in
+  `weekplan_<maandag yyyy-MM-dd>`, dan `renderProposal`.
+- **Multi-session key-scheme (v2b-B)**: sessie 1 = basiskey `proposal_<dISO>`
+  (byte-identiek aan vroeger single-session); sessie n≥2 = `proposal_<dISO>_s<n>`.
+  Het sleutelformaat leeft op ÉÉN plek: `readDaySessions_` / `writeDaySessions_` /
+  `deleteDaySessions_` (Algorithm.gs) — niet elders hardcoden. Een pendel-dag
+  expandeert naar `pendelAantal` (default 2) sessies van `pendelDuurMin`
+  (default 80), beide in Settings.
 - `pushEvents_` → `intervalsRequest_` `POST /athlete/{id}/events/bulk?upsert=true`
-  (IntervalsApi.gs); `external_id = 'coach_' + dateISO + '_' + type.toLowerCase()`.
+  (IntervalsApi.gs); `external_id = 'coach_' + dateISO + '_' + type.toLowerCase()`
+  + `_s<n>` voor n≥2 (sessie 1 ongesuffixt). `buildEventPayload(workout, dateISO,
+  type, sessionIndex, sessionCount)` zet distinct start-uur per sessie (07/17h).
 - `readSettings` / `loadSettingValue` + `SETTINGS_SHEET = 'Instellingen'`
   (Settings.gs).
 - `DAGTYPE_OPTIONS = ['pendel','vrij','weekend','recovery']` (Planner.gs).
@@ -190,10 +198,12 @@ Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
   scroll-snap-align:center; display:flex; gap:12px; }` + scroll-container
   `.status-wrap` — NIET wijzigen. (Let op: er is GEEN `.status-deck`-class,
   ondanks oudere notities die ernaar verwijzen.)
-- **Multi-session NIET ondersteund**: 1 dag → 1 event, hard op
-  `proposal_<yyyy-MM-dd>` (één key per datum) + `external_id`
-  (`coach_<dateISO>_<type>`, één per datum/type). Voor pendel = 2× per dag is
-  een sessie-index in BEIDE nodig.
+- **Multi-session ONDERSTEUND (v2b-B)**: per dag 1..N sessies via
+  `proposal_<dISO>[_s<n>]` + `external_id`-suffix `_s<n>` (n≥2). Sleutelformaat
+  UITSLUITEND via `readDaySessions_` / `writeDaySessions_` / `deleteDaySessions_`
+  (Algorithm.gs) — niet elders hardcoden. Dashboard rendert nog het aggregaat
+  (naam "Pendel N× <m>", som-TSS/min); per-sessie kaarten = v2b-C. `TelegramBot.gs`
+  + de `proposedType`-fallback lezen bewust alleen de basiskey (sessie 1).
 - **Visueel verifiëren op de /dev-URL** (incognito + hard refresh), niet op een
   diag leunen. Geen lokale vars die payload-keys schaduwen (dagen / vorm /
   athlete / event / voortgangPct / niveau / niveauBasis / conditieMod /
