@@ -187,7 +187,9 @@ function generateProposal() {
       minuten: Math.round(sumMin),
       reden: d.reden || '',   // v2c: per-dag rationale (leeg voor voltooid/missed)
       sessies: sessions.map(function (s) {
-        return { naam: s.naam || '', totaalMin: s.totaalMin || 0, tss: Math.round(s.tss || 0) };
+        // v2c-pendel: per-sessie intent (voor eigen zonebar) + eigen eindopmerking.
+        return { naam: s.naam || '', totaalMin: s.totaalMin || 0, tss: Math.round(s.tss || 0),
+                 intent: ensureIntent_(s), eindopmerking: s.eindopmerking || '' };
       })
     });
   });
