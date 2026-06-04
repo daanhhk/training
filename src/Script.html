@@ -299,8 +299,8 @@
     var frac = (dagenTot == null) ? 0 : Math.max(0, Math.min(1, 1 - dagenTot / 90));
     var fill = frac * C;
     return '<svg width="110" height="110" viewBox="0 0 100 100">' +
-      '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="#e2e8f0" stroke-width="9"></circle>' +
-      '<circle cx="50" cy="50" r="' + r + '" fill="none" stroke="#5B5BD6" stroke-width="9" stroke-linecap="round" ' +
+      '<circle cx="50" cy="50" r="' + r + '" fill="none" style="stroke:var(--ring-track)" stroke-width="9"></circle>' +
+      '<circle cx="50" cy="50" r="' + r + '" fill="none" style="stroke:var(--accent)" stroke-width="9" stroke-linecap="round" ' +
       'stroke-dasharray="' + fill.toFixed(1) + ' ' + (C - fill).toFixed(1) + '"></circle></svg>';
   }
 

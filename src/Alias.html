@@ -1,0 +1,19 @@
+<style>
+/* Old → new token bridge. Loads AFTER Styles so it overrides Styles' legacy
+   :root (light skin). Binds the old token names the existing CSS still
+   consumes onto the new design tokens from Tokens.html. */
+:root{
+  --bg:          var(--bg-app);
+  --header:      var(--bg-surface);
+  --card:        var(--bg-surface);
+  --ink:         var(--text-primary);
+  --muted:       var(--text-muted);
+  --accent:      var(--orange-500);
+  --accent-soft: color-mix(in srgb, var(--orange-500) 14%, transparent);
+  --ok-bg:   var(--success-soft);  --ok-ink:   var(--success);
+  --warn-bg: var(--warning-soft);  --warn-ink: var(--warning);
+  --dem-bg:  var(--warning-soft);  --dem-ink:  var(--warning);
+  --rec-bg:  var(--danger-soft);   --rec-ink:  var(--danger);
+}
+html, body{ font-family: var(--font-sans); }
+</style>
