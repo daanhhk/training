@@ -115,11 +115,60 @@
   }
 
   // ── Schema (Vandaag + Kalender samengevoegd) ──
+  // Fase 1a — Schema plan-card (PeriodTimeline). Collapsed by default (<details>).
+  function planCardHtml(plan) {
+    if (!plan) return '';
+    var titel = plan.currentPhaseLabel || plan.currentPhaseKey || 'Plan';
+    var titleHtml;
+    if (plan.eventName && plan.wekenTot != null) {
+      titleHtml = esc(titel) + ' · nog <span class="pc-num">' + plan.wekenTot + '</span> wkn tot ' + esc(plan.eventName);
+    } else if (plan.eventName) {
+      titleHtml = esc(titel) + ' · ' + esc(plan.eventName);
+    } else {
+      titleHtml = esc(titel) + ' · geen A-event gepland';
+    }
+    var seg = (plan.phases || []).map(function (p) {
+      var bg = p.state === 'past' ? 'var(--phase-past)' : (p.state === 'current' ? 'var(--phase-current)' : 'var(--phase-future)');
+      var lbl = p.state === 'current' ? 'var(--phase-label-current)' : 'var(--phase-label)';
+      var mark = p.state === 'current' ? '<span class="pc-marker"></span>' : '';
+      return '<div class="pc-seg" style="background:' + bg + '">' + mark +
+        '<span class="pc-seg-lbl" style="color:' + lbl + '">' + esc(p.label) + '</span></div>';
+    }).join('');
+    var evs = (plan.events || []).map(function (e) {
+      var bgv = e.prio === 'A' ? 'var(--event-a-bg)' : 'var(--event-b-bg)';
+      var txv = e.prio === 'A' ? 'var(--event-a-text)' : 'var(--event-b-text)';
+      return '<span class="pc-event" style="background:' + bgv + ';color:' + txv + '">' +
+        esc(e.naam) + ' · <span class="pc-num">' + e.dagenTot + '</span>d</span>';
+    }).join('');
+    var stats = '<div class="pc-stat"><div class="pc-stat-lbl">Fase</div><div class="pc-stat-val">' + esc(titel) + '</div></div>';
+    if (plan.eventName && plan.dagenTot != null) {
+      stats += '<div class="pc-stat"><div class="pc-stat-lbl">Tot ' + esc(plan.eventName) + '</div><div class="pc-stat-val"><span class="pc-num">' + plan.dagenTot + '</span> d</div></div>';
+    }
+    if (plan.volume) {
+      stats += '<div class="pc-stat"><div class="pc-stat-lbl">' + esc(plan.volume.label) + '</div><div class="pc-stat-val">' + esc(plan.volume.value) + '</div></div>';
+    }
+    return '<details class="plan-card">' +
+      '<summary class="pc-head">' +
+        '<div class="pc-head-main">' +
+          '<div class="pc-overline">Plan · Periodisering</div>' +
+          '<div class="pc-title">' + titleHtml + '</div>' +
+        '</div>' +
+        '<span class="pc-chip">' + esc(plan.modeLabel || '') + '</span>' +
+        '<span class="pc-chevron" aria-hidden="true">⌄</span>' +
+      '</summary>' +
+      '<div class="pc-body">' +
+        '<div class="pc-timeline">' + seg + '</div>' +
+        (evs ? '<div class="pc-events">' + evs + '</div>' : '') +
+        '<div class="pc-stats">' + stats + '</div>' +
+      '</div>' +
+    '</details>';
+  }
+
   function renderSchema() {
     var vd = state.vandaag;
     document.getElementById('schema-datum').textContent = vd ? (vd.weekdag + ' · ' + vd.dateISO) : '';
     // Status-graphic bovenaan.
-    document.getElementById('schema-status').innerHTML = state.vorm ? statusGraphicHtml('schema') : '';
+    document.getElementById('schema-status').innerHTML = state.plan ? planCardHtml(state.plan) : '';
 
     var strip = '';
     (state.dagen || []).forEach(function (d) {

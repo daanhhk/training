@@ -90,6 +90,30 @@
   .bottomnav button span { font-size: 19px; }
   .bottomnav button.active { color: var(--accent); }
 
+  /* Fase 1a — Schema plan-card (PeriodTimeline) */
+  .plan-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: var(--card-pad); }
+  .plan-card > summary { list-style: none; cursor: pointer; display: flex; align-items: flex-start; gap: 10px; }
+  .plan-card > summary::-webkit-details-marker { display: none; }
+  .pc-head-main { flex: 1; min-width: 0; }
+  .pc-overline { font-size: var(--fs-caption); font-weight: var(--fw-caption); text-transform: uppercase; letter-spacing: var(--tracking-overline); color: var(--text-muted); }
+  .pc-title { font-size: var(--fs-h2); font-weight: var(--fw-h2); color: var(--text-primary); margin-top: 4px; }
+  .pc-num { font-family: var(--font-num); }
+  .pc-chip { flex: 0 0 auto; align-self: center; background: var(--mode-chip-bg); color: var(--mode-chip-text); border: 1px solid var(--mode-chip-border); border-radius: var(--r-pill); padding: 3px 10px; font-size: var(--fs-caption); font-weight: var(--fw-caption); white-space: nowrap; }
+  .pc-chevron { flex: 0 0 auto; align-self: center; color: var(--text-muted); transition: transform 200ms ease; }
+  .plan-card[open] .pc-chevron { transform: rotate(180deg); }
+  .pc-body { margin-top: var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); }
+  .pc-timeline { display: flex; gap: 4px; }
+  .pc-seg { flex: 1; position: relative; height: 30px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; }
+  .pc-seg-lbl { font-size: var(--fs-caption); font-weight: var(--fw-caption); }
+  .pc-marker { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--phase-marker); box-shadow: 0 0 0 4px var(--accent-ring); }
+  .pc-events { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pc-event { border-radius: var(--r-pill); padding: 4px 10px; font-size: var(--fs-caption); }
+  .pc-stats { display: flex; border-top: 1px solid var(--border-subtle); }
+  .pc-stat { flex: 1; padding: 8px 4px 0; }
+  .pc-stat + .pc-stat { border-left: 1px solid var(--border-subtle); }
+  .pc-stat-lbl { font-size: var(--fs-caption); color: var(--text-muted); }
+  .pc-stat-val { font-family: var(--font-num); color: var(--text-primary); margin-top: 2px; }
+
   /* Vorm status-graphic — swipeable deck */
   .status-wrap {
     display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
