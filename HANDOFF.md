@@ -5,68 +5,87 @@ Bron van waarheid voor de projectstand. Conventies + architectuur-detail + code-
 ## STAND (leidend)
 INTERACTIEVE HtmlService web-app. /dev:
 https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev
+- **DONKERE SKIN IS LIVE.** 4 tabs (Schema/Vorm/Trainingen/Niveau). Fase 0 compleet, Fase 1a compleet. Volgende = Fase 1b (readiness-kaart op Vorm).
+- 1a VISUEEL nog te verifiëren op /dev. Eerste actie nieuwe chat: bevestig 1a (Schema-plan-kaart: dicht = overline+titel+mode-chip+chevron; open = fase-timeline + A/B-pills + stat-rij), daarna 1b.
 
 ## Visual system / aanpak
-- Beslissing: **THEME-FIRST**. `design/tokens.css` (donker, 4-tabs) = styling-bron van waarheid.
+- Beslissing: **THEME-FIRST**. `design/tokens.css` (donker, 4-tabs) = styling-bron van waarheid; volledig gemirrord in `src/Tokens.html`.
 - Het ONTWERP is leidend; bestaande functies bouwen we erin, en vullen aan waar nodig.
-- Nieuwe bron-doc: `design/INTERACTIONS.md` = volledig interactie-contract (wat elke control doet, READ/WRITE, server/client). Leidend voor functioneel gedrag.
+- **`design/FTP-Coach-export.md` = de feitelijke per-tab layout-bron** (componenten + states + tokens per scherm). `design/DESIGN.md` = visuele taal (geen per-kaart-layout). **`design/INTERACTIONS.md` ONTBREEKT in de repo (404)** — gedrag komt uit deze STAND + export.md.
 
-## Readiness-formule (bouwklaar)
+## Readiness-formule (bouwklaar — 1b)
 - Output 0–100; banden **≥62 ready / 48–61 caution / <48 rest** (uit `tokens.css`).
-- Gewogen gemiddelde van genormaliseerde factoren (0–100). Objectief-geleid.
-- Gewichten (vol model, na check-in):
-  - Vorm-trend **30%** — uit `statusVoor` (map buckets → punten).
-  - Belasting **22%** — ramp/ATL vs CTL (intervals.icu).
-  - HRV **20%** — vandaag vs baseline (intervals.icu).
-  - Slaap **13%** — intervals.icu; bij check-in geblend 70% data / 30% feel.
-  - Benen **10%** — fris/normaal/zwaar → 100/65/30.
-  - Stress **5%** — laag/normaal/hoog → 100/65/30.
-- Vóór check-in: alleen vorm-trend/belasting/HRV/slaap, gewichten herschaald naar 100; kaart toont "+ ochtend-check-in"-prompt.
-- Ontbrekende factor → wegvallen + herschalen (geen harde nul). HRV + slaap zijn bevestigd aanwezig in deze gebruiker's intervals.icu.
-- "Waarom dit cijfer": per factor 0–100 + status-dot (groen ≥70 / amber 45–69 / rood <45, tunebaar).
-- `statusVoor` wordt dus HERGEBRUIKT als de vorm-trend-factor, niet weggegooid.
+- Gewogen gemiddelde van genormaliseerde factoren (0–100). **Objectief-geleid (door Daan gekozen).**
+- **GELOCKT deze sessie — objectieve/pré-check-in weging (= wat 1b bouwt; check-in bestaat nog niet):**
+  - Vorm-trend **0,30** · Belasting (ramp/ATL vs CTL) **0,30** · HRV (vs baseline) **0,25** · Slaap (uit intervals) **0,15**. Som 1,00.
+  - Vervangt de eerdere pré-check-in-getallen (30/22/20/13 rescaled). Schuifbaar: zet als named constant bovenaan de readiness-fn.
+  - **3 presets** `objectief / gebalanceerd / subjectief` (objectief = default; de andere twee + benen/stress = toekomst, post-check-in).
+- **Vol model (post-check-in, TOEKOMST):** voegt Benen + Stress in (subjectief, uit ochtend-check-in) en herberekent; gebalanceerd/subjectief schuiven richting slaap-zwaar (Garmin-achtig). Check-in-capture = future write-side (gebruikt de overlay-primitive uit Fase 0b).
+- Ontbrekende factor → wegvallen + herschalen (geen harde nul). **HRV + slaap bevestigd aanwezig** in deze gebruiker's intervals.icu.
+- "Waarom dit cijfer": per factor 0–100 + status-dot (good ≥70 / warn 45–69 / muted <45, tunebaar).
 
 ## Bouw-roadmap (volgorde)
-Verticale plakken: UI + bijbehorende Apps Script-handler + Sheet-range per feature. Elke fase = bruikbaar increment.
-- **Fase 0 Fundament:** skin-flip (tokens serveren + alias-bridge + IBM Plex + ring-literals→tokens) + Trainingen/Niveau als lege tab-containers + drawer open/sluit-mechaniek.
-- **Fase 1 Status-deck & plan herstructurering:** countdown VERHUIST naar Schema-plan-kaart; Vorm-prime-kaart WORDT readiness (check-in-sheet + opslag + score per formule hierboven). Lost readiness + countdown-verhuizing samen op.
-- **Fase 2 Rest van Schema:** availability F.1b (deze dag + entry-chooser), WeekLoad + stale-banner (F.3), dag-detail-varianten, WorkoutPicker/override, RPE, rust/niet-beschikbaar + toch-trainen (F.2), multi-sessie, edge states.
-- **Fase 3 Rest van Vorm:** level-kaart verifiëren, vorm-analyse (grafiek-tijdvenster, metrics, conditie-balans).
+Verticale plakken: UI + Apps Script-handler + Sheet-range per feature. Elke fase = bruikbaar increment.
+- **Fase 0 Fundament — DONE.** skin-flip (tokens geserveerd + alias-bridge + IBM Plex + ring→tokens), 4-tab-shell (Trainingen/Niveau lege containers), herbruikbare overlay (sheet/drawer).
+- **Fase 1 Status-deck & plan herstructurering — 1a DONE / 1b NEXT.**
+  - **1a DONE:** Schema-plan-kaart (PeriodTimeline, countdown verhuisd hierheen); deck VERWIJDERD van Schema (design: Schema heeft geen deck).
+  - **1b NEXT:** Vorm-prime → readiness-kaart (`ReadinessCard`, export §2a) op Vorm-top; vervangt de oude deck op Vorm.
+- **Fase 2 Rest van Schema:** availability F.1b, WeekLoad + stale (F.3), dag-detail-varianten, WorkoutPicker/override, RPE, rust/niet-beschikbaar + toch-trainen (F.2), multi-sessie, edge states. (Ochtend-check-in-sheet hoort hier — write-side, overlay-primitive.)
+- **Fase 3 Rest van Vorm:** level-kaart + niveau-grafiek + metrics + conditie-balans; **+ chart/legenda tokeniseren** (off-palette leftovers, zie contracten).
 - **Fase 4 Trainingen:** bibliotheek drill-down + Inplannen.
-- **Fase 5 Instellingen-drawer:** profiel/volume/doel&blok/events/koppelingen/meldingen/account (CRUD op Sheet). Naar voren te halen indien eigen doel/FTP/events vroeg bewerkbaar moeten zijn.
-- **Fase 6 Garmin-push** (leaf, laatst/optioneel).
+- **Fase 5 Instellingen-drawer** (CRUD; gebruikt overlay drawer-variant). Naar voren te halen indien nodig.
+- **Fase 6 Garmin-push** (leaf; incl. teal-knop tokeniseren).
 - **Fase 7 Niveau** afmaken + QA-pass.
 
 ## Beslissingen & invarianten
-- **INGETROKKEN:** ".status-card/.status-wrap niet aanraken" — het ontwerp herwerkt die kaart bewust (countdown→Schema, Vorm-prime→readiness). Was een guardrail, geen blokkade.
-- **Blijven:** `google.script.run` only (geen losse fetch); tss zone-gewogen via `tssFromZoneMinutes_`; v2b-C leidt nooit `'recovery'` af; `design/tokens.css` = styling-bron.
-- **[#3]-CORRECTIE:** de client leest het server-`mode`-object NIET. countdown = `vorm.event.dagenTot`; "Onderhoudt" = `statusVoor` (vorm/ramp), NIET `mode.seasonMode`. De eerdere claim dat /dev al mode read-side toont was misattributie. Mode read- én write-side = toekomst.
+- **Schema heeft GEEN status-deck** (design/export §1: trainingsgericht). Status-deck alleen op Vorm/Trainingen/Niveau.
+- **INGETROKKEN:** ".status-card/.status-wrap niet aanraken" — ontwerp herwerkt die kaart bewust.
+- **Blijven:** `google.script.run` only (geen losse fetch); tss zone-gewogen via `tssFromZoneMinutes_`; v2b-C leidt nooit `'recovery'` af; `design/tokens.css` = styling-bron; readiness = read-side (server rekent, client rendert).
+- **[#3]-CORRECTIE:** client leest server-`mode` NIET. countdown = `vorm.event.dagenTot`; "Onderhoudt" = `statusVoor` (vorm/ramp). Mode read-/write-side client = toekomst.
 
 ## Hergebruik vs nieuw
-- **Hergebruiken** (slot in ontwerp): dagstrip, `assignWorkouts`/`voorgesteldType`, availability F.1a, `vorm.event.dagenTot` (countdown→Schema), `statusVoor` (readiness-factor), niveau-block, intervals.icu-sync, 2-kaart swipe-deck (structuur blijft).
-- **Echt nieuw:** check-in-sheet + readiness-score, WorkoutPicker + override-persistentie, RPE-UI + opslag, Trainingen-bibliotheek, Instellingen-drawer, Garmin-push, edge states (ConnectState/SyncBanner/EmptyState), stale-banner (F.3), toch-trainen (F.2).
+- **Hergebruiken:** dagstrip, `assignWorkouts`/`voorgesteldType`, availability F.1a, `getWellnessSignal`/`getFormScore_` (readiness-factoren), niveau-block (→ Fase 3 Vorm-body), intervals.icu-sync, `ringSvg` (readiness-ring), overlay-primitive (check-in-sheet + instellingen-drawer).
+- **Echt nieuw:** readiness-score + kaart (1b), check-in-sheet + opslag, WorkoutPicker + override, RPE-UI + opslag, Trainingen-bibliotheek, Instellingen-drawer, Garmin-push, edge states, stale-banner (F.3), toch-trainen (F.2).
 
-## Live stand (uit recon)
-- HtmlService web-app, OUDE lichte skin op /dev. 2 tabs: `#tab-schema` + `#tab-vorm`, `#bottomnav`. Trainingen/Niveau ontbreken.
-- status-deck = `.status-wrap` > `.status-card`×2 (kaart1 ring+verdict via `ringSvg`/`statusVoor`, kaart2 `.niveau-block`), flex/scroll-snap.
-- F.1a DONE (commit 44b170f, Script.html+Styles.html): week-editor train/minuten/pendel. `saveAvailability` ONGEMOEID. F.1b nog te bouwen.
-- `tokens.css` staat in `design/` (NIET `src/`) → niet geserveerd; skin nog niet geflipt. IBM Plex niet geladen. Live token-namen wijken af (`--bg/--header/--card/--ink/--muted/--ok/warn/dem/rec-*`) → alias-bridge nodig; alleen `--accent/--accent-soft` overlappen qua naam. Ring-stroke `#5B5BD6`/`#e2e8f0` hardcoded in `ringSvg`-JS.
+## Live stand (geverifieerd, na Fase 0 + 1a)
+- HtmlService web-app, **DONKERE skin live**. 4 tabs: `#tab-schema` `#tab-vorm` `#tab-trainingen` `#tab-niveau` + `#bottomnav` (generiek gewired). Trainingen/Niveau = inline-styled placeholders.
+- Schema-top = **plan-kaart** (`planCardHtml(state.plan)`); deck weg van Schema.
+- Vorm-top = nog de **oude** `statusGraphicHtml('vorm')`-deck → 1b vervangt dit door de readiness-kaart.
+- Overlay-primitive aanwezig (`window.openDrawer/closeDrawer`), nog geen UI-trigger.
+- Off-palette leftovers: Vorm-grafiek hardcoded hex (`#5B5BD6` Script.html:473 chart-lijn / :512 legenda + licht-thema-legenda-hex) + grijze chart-staven `#e2e8f0` → **Fase 3**; teal "Push naar Garmin"-knop → **Fase 6**.
 - Alles via `google.script.run`.
 
 ## Architectuur
-Per-user Sheet, geen centrale backend, Apps Script. Elke server-actie (🌐 in INTERACTIONS.md) = een handler + Sheet-range.
+Per-user Sheet, geen centrale backend, Apps Script. Elke server-actie = handler + Sheet-range.
 
 ## Bronnen (commit-gepinde raw-URL, nooit blob)
-- `design/tokens.css` (styling-bron), `design/DESIGN.md`, `design/FTP-Coach-export.md`, `design/INTERACTIONS.md` (interactie-contract), `design/screenshots/` (01-schema..07-plan-card), `design/F-beschikbaarheid.md` ([F]-contract).
+`design/tokens.css` (styling-bron, gemirrord in `src/Tokens.html`), `design/DESIGN.md` (taal), `design/FTP-Coach-export.md` (per-tab layout-bron), `design/screenshots/` (01-schema..07-plan-card), `design/F-beschikbaarheid.md`. **`design/INTERACTIONS.md` = 404 (niet in repo).**
+
+## Nieuwe contracten (Fase 0 + 1a — geverifieerd)
+**Skin (0a):** `src/Tokens.html` = `<style>` + verbatim `design/tokens.css`. `src/Alias.html` = old→new `:root`-bridge + `html,body{font-family:var(--font-sans)}`. Include-volgorde Index `<head>`: fonts(IBM Plex) → Tokens → Styles → **Alias (overschrijft Styles' legacy lichte :root)**. Base-selector = `html, body` (Styles.html:17). `ringSvg` (Script.html:309) strokes via inline `style`: track `var(--ring-track)`, progress `var(--accent)`.
+**4-tab-shell (0b):** hardcoded `<section id="tab-{schema|vorm|trainingen|niveau}">`. `#bottomnav` `<button data-tab="..">` (emoji-`<span>`+bare-text), generiek `querySelectorAll('#bottomnav button')→switchTab`; literal `['schema','vorm','trainingen','niveau']`; niet-actief inline `display:none`, init `switchTab('schema')`. Nieuwe secties nog zonder `class="tab"` (onschadelijk).
+**Overlay (0b):** `src/Drawer.html` CSS (head, ná Alias). Markup vóór Script-include: `#overlay-scrim[data-overlay-close]` + `#overlay-panel[data-variant=sheet|drawer]` (off-screen transform, `.is-open`) + `.overlay-handle` + `#overlay-content`. `window.openDrawer({variant,html})`/`closeDrawer()`: `body.overlay-open` scroll-lock, aria-hidden, focus+restore; Esc + gedelegeerde `[data-overlay-close]`. z-index scrim 1000/panel 1001. **Basis voor ochtend-check-in-sheet (F2) + instellingen-drawer (F5).** Console-test = `userHtmlFrame`-context.
+**Deck (pre-1b, nu alléén Vorm):** `statusGraphicHtml(sfx)` (Script.html:309) → `.status-wrap#swrap-{sfx}` (scroll-snap+`syncDots`). card1 = `.status-left` (`ringSvg`+`.fase-pill`) + `.status-right` (`.status-word`/`.status-verdict`); card2 `.niveau-block`. `renderVormStatus`→`#vorm-status`. `statusVoor(v)` (Script.html:287) = FUNCTIE→labelstring (leest `v.huidig.vormZone`/`ramp`, `v.rampBuildMin`), geen object.
+**Readiness-data (server, read-side — 1b-input):** `getFormScore_`→`{date,ctl,atl,form,ramp,label}`. `state.vorm.huidig`=`{vorm,vormZone,ctl,atl,ramp}` (WebApp.gs:471) + `vorm.macroFase/ftp/rampBuildMin`. `getWellnessSignal` (Algorithm.gs:888)→`{hrvBaseline(28d),hrvRecent(3d),sleepLastNight,sleepAvg3,hrvDeficit%}`. Wellness-tab (Algorithm.gs:900): A=Datum B=RHR C=HRV D=Slaap; baselines computed; cadans `getWellness(30)` bij `syncAll`. **Check-in (ochtend, benen/stress/slaap) = AFWEZIG** (future); `rpeAvondCheck` (Telegram) = avond-RPE, los.
+**Plan-kaart (1a, live):** `buildPlanModel_(macro, settings)` (Doel.gs) → `state.plan` (WebApp.gs, na `mode`) = `{modeLabel, eventName, wekenTot, dagenTot, currentPhaseKey, currentPhaseLabel, phases:[{key,label,state}], events:[{naam,prio,type,dagenTot}], volume:{label,value}|null}`. Hergebruikt `bepaalFaseVoorDatum_(weekStart)`→`{fase∈Base/Build/Peak/Taper/Recovery, wekenTotEvent, eventDriven, eventName, eventDate}`, `computeMacroPhase(start,today)`→`{week,fase∈Base/Build/Peak/Test,isTestWeek}`, `getAllEvents_`, `getVolumeTargets()[fase]=[min,max]u/wk`. NL-labels Basis/Build/Peak/Taper. `planCardHtml(plan)` (Script.html, `<details>`, default dicht); CSS in Styles.html. Edge: Test→Taper-bucket(idx3), Recovery→alle-4-past (geen current-marker) — herzien als 't leeg oogt.
+
+## 1b — bouwspec (NEXT, na visuele 1a-verificatie)
+Vorm-top `ReadinessCard` (export §2a), vervangt `renderVormStatus('vorm')`→`#vorm-status`-mount.
+- **Server** `getReadinessScore_` (combineert `getWellnessSignal`+`getFormScore_`) → `{score 0–100, band(ready/caution/rest), factors:[{key,label,value0-100,status:good/warn/muted}], chips:[{label,tone}]}`. Gewichten als named constant (presets objectief/gebalanceerd/subjectief; default objectief = 0,30/0,30/0,25/0,15). Normaliseer per factor (vorm-trend uit form/TSB, belasting uit ramp/ATL-CTL, HRV uit hrvDeficit/baseline, slaap uit sleepAvg3/need). Expose via getDashboardState (bv. `state.readiness`).
+- **Client** `readinessCardHtml`: overline "Status · vandaag"; `ringSvg` gekleurd naar band (`--readiness-ready/caution/rest`, track `--readiness-ring-track`, center `--font-num`); verdict + chips ("Vorm +n" `--fresh/--fresh-soft`, "HRV n" `--text-muted`); "Waarom dit cijfer?"-expander → factor-lijst met status-dots. Onder: gestippelde "+ Ochtend-check-in invullen"-prompt — capture is TOEKOMST. niveau-block valt uit Vorm-top (herbouw = Fase 3).
+- STAP 0-recon: `renderVormStatus`/`#vorm-status`-mount, `getWellnessSignal`/`getFormScore_`-shapes, getDashboardState-assembly, `ringSvg`-kleurparam.
 
 ## Volgende stap
-Fase 0 skin-flip (skin-flip-buildprompt is in de vorige chat opgesteld), daarna Fase 1.
+1. Verifieer 1a visueel op /dev (Schema-plan-kaart). 2. Bouw Fase 1b (readiness-kaart) per bouwspec hierboven.
 
 ---
 
 ## Historie & engine-referentie (bruikbare historie — overleeft de restyle)
 
 ### KLAAR (done sinds bbd1a6b)
+- **Fase 1a — Schema plan-kaart (8c774da server / 5ff0219 client):** buildPlanModel_→state.plan; planCardHtml (collapsible) vervangt deck-mount op Schema. Detail: zie "Nieuwe contracten".
+- **Fase 0b — 4-tab-shell + overlay (3fb917f / ad31aa9):** Trainingen/Niveau containers, switchTab 4-tabs; window.openDrawer/closeDrawer (sheet/drawer) via src/Drawer.html.
+- **Fase 0a — dark skin-flip (48ba640):** src/Tokens.html + src/Alias.html, IBM Plex, ring→tokens.
 - v2b-B multi-session (2f5a645 feat, 7f6c9a6 docs): per-sessie proposal-keys — base = proposal_<dISO> (s1), extra = proposal_<dISO>_s<n> voor n>=2. external_id: s1 = coach_<dateISO>_ride, n>=2 = coach_<dateISO>_ride_s<n>. Distinct start_date_local (s1 07:00, last 17:00; n>=3 12/19/06h). Single-session events ook verschoven 00:00->07:00 (idempotent via ongewijzigd external_id). Settings PENDEL_DUUR (rij 52, default 80) + PENDEL_AANTAL (rij 53, default 2). Key-format leeft UITSLUITEND in readDaySessions_/writeDaySessions_/deleteDaySessions_ (Algorithm.gs). computeWeekVolumeMin_ sommeert sessies.
 - Asymmetrische pendel-intensiteit (9af34fc): sessies 0..N-2 geforceerd pendel_z2; laatste = d.voorgesteldType. genericPendelZ2(mins, settings, mesoWeek, macroFase); recovery-predikaat mesoWeek===4 || macroFase==='Recovery' maakt de "recovery week"-tekst conditioneel.
 - Per-sessie kaarten (eab1591/7f076dc/7ee851f): sessies[]-entries {naam, totaalMin, tss, intent, eindopmerking}. dashDayCard_ → voorstel.sessies bij length>1; voorstelKaart → N kaarten via sessieKaart_.
