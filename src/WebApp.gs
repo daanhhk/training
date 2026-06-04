@@ -578,6 +578,7 @@ function getDashboardState() {
       seasonMode: settings.fase || null,         // FASE-setting: build/maintain
       weeksToEvent: (macro.wekenTotEvent != null) ? macro.wekenTotEvent : null
     },
+    plan: buildPlanModel_(macro, settings),
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,

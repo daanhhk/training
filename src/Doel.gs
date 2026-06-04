@@ -214,6 +214,58 @@ function pickMainEvent_(events, fromDate) {
  * @return { fase, week, wekenTotEvent, isTaper, isRecovery, isTestWeek,
  *           eventDriven, hoofdEvent, eventName, eventDate }
  */
+/**
+ * Fase 1a: plan-card model (PeriodTimeline) voor de Schema-top. Puur afgeleid
+ * uit de bestaande fase-logica (macro = bepaalFaseVoorDatum_-resultaat) + Events
+ * + getVolumeTargets. Geen nieuwe drempels.
+ */
+function buildPlanModel_(macro, settings) {
+  var today = stripTime_(new Date());
+  var PHASES = [
+    { key: 'Base',  label: 'Basis' },
+    { key: 'Build', label: 'Build' },
+    { key: 'Peak',  label: 'Peak'  },
+    { key: 'Taper', label: 'Taper' }
+  ];
+  var LABELS = { Base: 'Basis', Build: 'Build', Peak: 'Peak', Taper: 'Taper', Test: 'Test', Recovery: 'Herstel' };
+  var IDX    = { Base: 0, Build: 1, Peak: 2, Taper: 3, Test: 3, Recovery: 4 };
+  var cur = macro.fase;
+  var curIdx = (IDX[cur] != null) ? IDX[cur] : 1;
+  var phases = PHASES.map(function (p, i) {
+    return { key: p.key, label: p.label,
+             state: i < curIdx ? 'past' : (i === curIdx ? 'current' : 'future') };
+  });
+
+  var dagenTot = macro.eventDate
+    ? Math.round((stripTime_(new Date(macro.eventDate)).getTime() - today.getTime()) / 86400000)
+    : null;
+  if (dagenTot != null && dagenTot < 0) dagenTot = null;
+
+  var events = getAllEvents_()
+    .filter(function (e) {
+      return (e.prioriteit === 'A' || e.prioriteit === 'B') && stripTime_(e.datum).getTime() >= today.getTime();
+    })
+    .slice(0, 3)
+    .map(function (e) {
+      return { naam: e.naam, prio: e.prioriteit, type: e.type,
+               dagenTot: Math.round((stripTime_(e.datum).getTime() - today.getTime()) / 86400000) };
+    });
+
+  var band = getVolumeTargets()[cur] || null;
+
+  return {
+    modeLabel: macro.eventDriven ? 'Doel-gericht' : (settings.fase === 'maintain' ? 'Onderhoud' : 'Opbouw'),
+    eventName: macro.eventName || null,
+    wekenTot: (macro.wekenTotEvent != null) ? macro.wekenTotEvent : null,
+    dagenTot: dagenTot,
+    currentPhaseKey: cur,
+    currentPhaseLabel: LABELS[cur] || cur,
+    phases: phases,
+    events: events,
+    volume: band ? { label: 'Volume', value: band[0] + '–' + band[1] + ' u' } : null
+  };
+}
+
 function bepaalFaseVoorDatum_(weekStart) {
   var ss = SpreadsheetApp.getActive();
   var ws = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
