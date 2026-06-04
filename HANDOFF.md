@@ -19,6 +19,7 @@ Multi-session is nu ONDERSTEUND — de oude invariant "multi-session NIET onders
   - Recovery-precedentie pendel via DEMOTE_MAP += pendel_trip_intervals → pendel_z2 (recovery-bewust mesoWeek===4 || macroFase==='Recovery'): token gedemoot vóór de generator, dus trip-tak vuurt niet op recovery → schema-recovery wint.
   - Zone: workoutZones gepind pendel_trip_intervals → ['low','high'] (één expliciete regel vóór de pendel_-prefix-tak 1309), doel-onafhankelijk. Overige pendel_*_intervals houden doel-afhankelijke zone op 1309.
   - Live-geverifieerd: pendel-dag = "Pendel + Z2" (heen) + "Pendel + sweet spot (tocht)" (terug), zone ['low','high'], geen FTP. Girona (2026-06-13, trip, A, 95km/1200hm, lang): free-day = threshold|sweet_spot (climb wint), pendel = sweet-spot/tempo. long_z2-tak inert voor Girona (lang≠vlak); is voor toekomstige vlakke tochten.
+- ITEM C zone-gewogen tss + variant endurance-fill compleet & live (HEAD 5efd8a6, Algorithm.gs only). tssFromZoneMinutes_({low,high,anaerobic}) = round(low*0.7+high*0.95+anaerobic*1.05) = ENIGE rate-bron. renderVariant_ tss uit intent (rate-lookup verwijderd) + endurance-fill (gap>=5 → Z2-blok vóór cooldown, telt als low). genericLongZ2 tss uit intent, hilly 0.8/0.7 geschrapt. genericPendelIntervals afgeleide vaste werkMin per doel (FTP/Beklimmingen 28, Conditie/trip 30, VO2max 14=anaeroob, else 24). IF (proxy tss/totaalMin) daalt nu met duur; puur-Z2 blijft constant. CALIBRATIE-NOTITIE: pendel-werkMin VO2max=14@anaerobic levert minder work-tss dan FTP=28@high — eerste tweak-kandidaat als pendel-IF bij VO2max-doel te laag voelt; geen blocker.
 
 ### Eerdere milestones (gedaan)
 - v2a (521ed24): beschikbaarheid-write-pad — saveAvailability schrijft Weekplanner A3:H9 (A=Train?/D=Minuten/E=Dagtype), returnt vers getDashboardState -> onState.
@@ -53,8 +54,14 @@ TRIP-INVARIANTEN:
 - workoutZones: pendel_trip_intervals gepind ['low','high'] vóór de pendel_-prefix-tak (1309); pendel_z2 gepind ['low'] (1303); overige pendel_*_intervals doel-afhankelijk op 1309 — niet samenvoegen.
 - Twee dag-smaken: pendel-dag → token-pad (731), normale dag → keyIntensity (765). d.voorgesteldType op een pendel-dag komt uit 731, niet uit keyIntensity.
 
-## VOLGENDE — [C] Variant/duur-schaling (KRITISCH, fundament)
-Engine-correctheid: harde reps mogen NIET meeschalen met duur; begrensde key-set + endurance-vulling; per-type harde-dosis-cap; IF DAALT bij langere duur. Geldt OOK voor de kern-engine (assignWorkouts duur-schaling) — raakt ook de net-gebouwde long_z2. GEEN bouw voor recon: eerst read-only STAP 0 — schaalt de generator nu reps of endurance naar de doel-duur? Waar zit de duur→workout-mapping (assignWorkouts + genericLongZ2/genericPendelIntervals/conditiePools_)? Bestaat er een harde-dosis-cap of schaalt alles lineair? Pas na bevestiging een bouwprompt.
+TSS-INVARIANTEN (item C):
+- tss ALTIJD via tssFromZoneMinutes_({low,high,anaerobic}) = round(low*0.7+high*0.95+anaerobic*1.05); ENIGE rate-bron, NOOIT single-rate-per-workout (minuten × één rate) herintroduceren.
+- Per-zone-minuten uit de bestaande intent (renderVariant_ / genericLongZ2:1860); warm+cool zitten al in intent.low — niet opnieuw invouwen.
+- Begrensde key-set: harde minuten plateauen op het template-plafond, extra duur → Z2 (fill-floor 5 min), NOOIT meer reps. IF (proxy tss/totaalMin) daalt met duur; puur-Z2 = constante IF.
+
+## VOLGENDE — [F] Beschikbaarheid-UI (v2b-C) (+ [#3] events/doel-modus parallel)
+[C] Variant/duur-schaling = DONE (zone-gewogen tss + endurance-fill, HEAD 5efd8a6, Algorithm.gs only). Kritisch pad: C → (F, #3 parallel) → A/G → B → D → E.
+[F] Beschikbaarheid-UI (v2b-C): per-dag knop, scope "deze dag"/"hele week"; Train?+minuten+pendel-toggle (geen dagtype-dropdown, weekend auto, recovery engine-gestuurd). Rustdag niet doodlopend ("toch trainen"); onderscheid onbeschikbaar vs engine-recovery. GEEN bouw voor recon: eerst read-only STAP 0 op saveAvailability (dag- vs week-scope). [#3] events/doel-modus loopt parallel (modus-overname-UX, zie DECISIE).
 
 ## DESIGN-TRACK (spec-bron voor de visuele polish-pass = draad 4)
 Volledig ontwerp vastgelegd in /design (commit 4b7e1e6): tokens.css (canoniek), FTP-Coach-export.md (React + inline-styles bron), DESIGN.md (spec + harde regels), screenshots/ (1-9.png).

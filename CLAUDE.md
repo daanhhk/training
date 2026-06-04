@@ -225,3 +225,15 @@ Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
 - **Twee dag-smaken**: pendel-dag → token-pad (`assignWorkouts` pendel-branch),
   normale dag → `keyIntensity`. `d.voorgesteldType` op een pendel-dag komt uit de
   pendel-branch, niet uit `keyIntensity`.
+- **Zone-gewogen tss** (item C): tss is ALTIJD `tssFromZoneMinutes_({low,high,anaerobic})`
+  = `round(low*0.7 + high*0.95 + anaerobic*1.05)` — ENIGE rate-bron. NOOIT single-rate-
+  per-workout (minuten × één rate) herintroduceren, in geen enkel pad.
+- **Per-zone-minuten uit `intent`**: komen uit de bestaande `intent`-objecten
+  (`renderVariant_`, `genericLongZ2`:1860), 3-bucket. warm+cool zitten AL in
+  `intent.low` — nooit opnieuw invouwen.
+- **Variant endurance-fill** (`renderVariant_`): `gap = (mins − warm − cool) − mainMin`;
+  bij `gap >= 5` → één Z2-blok vóór de cooldown, geteld als low (fill-floor 5 min). De
+  generators (`genericLongZ2` / `genericPendelIntervals`) vullen zichzelf al.
+- **Begrensde key-set**: harde minuten plateauen op het template-plafond; extra duur gaat
+  naar Z2, NOOIT naar meer harde reps. IF (proxy `tss/totaalMin`) MOET dalen met duur.
+  Puur-Z2 houdt constante IF (duur-onafhankelijk) — verwacht.
