@@ -20,6 +20,7 @@ Multi-session is nu ONDERSTEUND — de oude invariant "multi-session NIET onders
   - Zone: workoutZones gepind pendel_trip_intervals → ['low','high'] (één expliciete regel vóór de pendel_-prefix-tak 1309), doel-onafhankelijk. Overige pendel_*_intervals houden doel-afhankelijke zone op 1309.
   - Live-geverifieerd: pendel-dag = "Pendel + Z2" (heen) + "Pendel + sweet spot (tocht)" (terug), zone ['low','high'], geen FTP. Girona (2026-06-13, trip, A, 95km/1200hm, lang): free-day = threshold|sweet_spot (climb wint), pendel = sweet-spot/tempo. long_z2-tak inert voor Girona (lang≠vlak); is voor toekomstige vlakke tochten.
 - ITEM C zone-gewogen tss + variant endurance-fill compleet & live (HEAD 5efd8a6, Algorithm.gs only). tssFromZoneMinutes_({low,high,anaerobic}) = round(low*0.7+high*0.95+anaerobic*1.05) = ENIGE rate-bron. renderVariant_ tss uit intent (rate-lookup verwijderd) + endurance-fill (gap>=5 → Z2-blok vóór cooldown, telt als low). genericLongZ2 tss uit intent, hilly 0.8/0.7 geschrapt. genericPendelIntervals afgeleide vaste werkMin per doel (FTP/Beklimmingen 28, Conditie/trip 30, VO2max 14=anaeroob, else 24). IF (proxy tss/totaalMin) daalt nu met duur; puur-Z2 blijft constant. CALIBRATIE-NOTITIE: pendel-werkMin VO2max=14@anaerobic levert minder work-tss dan FTP=28@high — eerste tweak-kandidaat als pendel-IF bij VO2max-doel te laag voelt; geen blocker.
+- [#3] modus read-side KLAAR & LIVE (commit 381f68d): top-level `mode { eventDriven, macroPhase (Base/Build/Peak/Taper/Recovery), seasonMode (build/maintain), weeksToEvent }` in getDashboardState, rechtstreeks gemapt uit `bepaalFaseVoorDatum_` (`macro.fase`) + `settings.fase`. Read-only, geen engine/UI-wijziging.
 
 ### Eerdere milestones (gedaan)
 - v2a (521ed24): beschikbaarheid-write-pad — saveAvailability schrijft Weekplanner A3:H9 (A=Train?/D=Minuten/E=Dagtype), returnt vers getDashboardState -> onState.
@@ -59,9 +60,10 @@ TSS-INVARIANTEN (item C):
 - Per-zone-minuten uit de bestaande intent (renderVariant_ / genericLongZ2:1860); warm+cool zitten al in intent.low — niet opnieuw invouwen.
 - Begrensde key-set: harde minuten plateauen op het template-plafond, extra duur → Z2 (fill-floor 5 min), NOOIT meer reps. IF (proxy tss/totaalMin) daalt met duur; puur-Z2 = constante IF.
 
-## VOLGENDE — [F] Beschikbaarheid-UI (v2b-C) (+ [#3] events/doel-modus parallel)
+## VOLGENDE — [F] + [#3] (beide WACHT OP DESIGN)
 [C] Variant/duur-schaling = DONE (zone-gewogen tss + endurance-fill, HEAD 5efd8a6, Algorithm.gs only). Kritisch pad: C → (F, #3 parallel) → A/G → B → D → E.
-[F] Beschikbaarheid-UI (v2b-C): per-dag knop, scope "deze dag"/"hele week"; Train?+minuten+pendel-toggle (geen dagtype-dropdown, weekend auto, recovery engine-gestuurd). Rustdag niet doodlopend ("toch trainen"); onderscheid onbeschikbaar vs engine-recovery. GEEN bouw voor recon: eerst read-only STAP 0 op saveAvailability (dag- vs week-scope). [#3] events/doel-modus loopt parallel (modus-overname-UX, zie DECISIE).
+- [#3] modus-overname WRITE-side (pauzeren/aankondigen/lead-time-UX) — WACHT OP DESIGN. Modus-model is BESLOTEN, read-side live. Te bouwen: expliciete pauze/announce-staat + server-mutatie + client-binding. Nu GEEN client-write voor mode (enkel Sheet onEdit->DocProps).
+- [F] Beschikbaarheid = REDESIGN van bestaande v2a-editor (NIET eerste bouw) — WACHT OP DESIGN. Data-laag bestaat: availability-payload array {train, minuten, dagtype, dagLabel} + dagtypeOptions (pendel/vrij/weekend/recovery), per-datum huidige week ma-zo; editor renderBeschikbaarheid (Script.html) -> saveAvail() -> saveAvailability (WebApp.gs).
 
 ## DESIGN-TRACK (spec-bron voor de visuele polish-pass = draad 4)
 Volledig ontwerp vastgelegd in /design (commit 4b7e1e6): tokens.css (canoniek), FTP-Coach-export.md (React + inline-styles bron), DESIGN.md (spec + harde regels), screenshots/ (1-9.png).
@@ -79,6 +81,7 @@ Polish-pass: tokens.css als hand-CSS toepassen op Index.html/Script.html; JSX pl
 - Event-/periodisering-tijdlijn: fase-boog + weken + verwachte uren + actieve MODUS. Display.
 - Week-belasting + "werk week bij"-regenerate (verouderd-hint bij gewijzigde beschikbaarheid) = bestaande v2b-A.
 - Rand-/lege staten: intervals niet verbonden, sync mislukt, geen voorstel, geen historie, push-fout.
+- Opruim-kandidaat (niet urgent): vorm.macroFase (WebApp.gs:476) overlapt nu met top-level mode.macroPhase -> risico out-of-sync.
 
 ## DECISIE — events/doel = wederzijds uitsluitende MODUS
 ~2 events/jr (Amstel Gold Race, Girona) + standaard trainingsdoel; bij nabij A-event neemt evenement-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide. KEY-TYPE-STURING OPGELOST (trip-event, HEAD 1e72d6d, zie KLAAR): event-karakter (type==='trip') stuurt het key-type via long_z2 (free-day) / pendel_trip_intervals (pendel). De modus-keuze zelf (wederzijds uitsluitend) is BESLOTEN; NOG OPEN = enkel de modus-overname-UX (pauzeren/aankondigen/lead-time) — dat is de build-taak [#3] in VOLGENDE.
