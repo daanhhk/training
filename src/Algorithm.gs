@@ -1626,6 +1626,17 @@ function pctZoneBucket_(pct) {
 }
 
 /**
+ * Item C: zone-gewogen TSS — ENIGE bron van de per-zone-rates.
+ * buckets = {low, high, anaerobic} in MINUTEN (warm/cool tellen mee als low).
+ * Effectieve IF daalt als low-minuten groeien (langere duur → meer Z2-vulling).
+ */
+function tssFromZoneMinutes_(buckets) {
+  buckets = buckets || {};
+  var low = buckets.low || 0, high = buckets.high || 0, anaerobic = buckets.anaerobic || 0;
+  return Math.round(low * 0.7 + high * 0.95 + anaerobic * 1.05);
+}
+
+/**
  * Rendert een variant-spec naar een workout-object met intent.
  * adj(basePct) = round(basePct * mesoFactor) + fase-offset.
  * intent = target tijd-in-zone (min) per load-focus bucket.
@@ -1690,11 +1701,22 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
     }
   });
 
+  // (A) Endurance-fill: lange dag → vul de restduur met Z2 i.p.v. onder-vullen.
+  // Vaste harde set (scaleBlocksToFit_ schaalt reps NIET omhoog) + Z2-rest.
+  if (mins) {
+    var gap = (mins - warm - cool) - mainMin;
+    if (gap >= 5) {
+      structuur.push(['Z2 endurance', gap + ' min', wattsRange(ftp, 63, 72), bpmRange(lthr, 78, 88), 'Aanvullende duur — rustige Z2']);
+      blokken.push({ minuten: gap, zone: 'z2' });
+      mainMin += gap;
+      intent.low += gap;   // helper telt deze als low (0.7) → IF daalt
+    }
+  }
+
   structuur.push(['Cooldown', cool + ' min', wattsRange(ftp, 45, 55), '—', 'Easy uit']);
   blokken.push({ minuten: cool, zone: 'rust' });
 
   var totaalMin = warm + cool + mainMin;
-  var rate = variant.zone === 'anaerobic' ? 1.05 : (variant.zone === 'high' ? 0.95 : 0.7);
   Object.keys(intent).forEach(function (k) { intent[k] = Math.round(intent[k]); });
 
   var tooLong = (mins && totaalMin > mins) ? { available: mins, needed: totaalMin } : null;
@@ -1708,7 +1730,7 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
     structuur: structuur,
     intent: intent,
     blokken: blokken,
-    tss: Math.round(totaalMin * rate),
+    tss: tssFromZoneMinutes_(intent),
     eindopmerking: variant.tip || (variant.naam + ' — variant van deze week (roteert wekelijks).'),
     tooLong: tooLong
   };
@@ -1881,7 +1903,7 @@ function genericLongZ2(mins, settings, mesoWeek, eventCtx) {
     structuur: structuur,
     intent: intent,
     blokken: blokken,
-    tss: Math.round(totaalMin * (hilly ? 0.8 : 0.7)),
+    tss: tssFromZoneMinutes_(intent),
     eindopmerking: eind,
     tooLong: tooLong
   };
@@ -2097,6 +2119,15 @@ function genericPendelIntervals(type, mins, settings, mesoWeek, macroFase, doel)
             'Lage cadans op een vals plat — kracht-uithouding'];
   }
 
+  // (B) Zone-gewogen tss: harde werkminuten (≈ vast, los van mins) → IF daalt bij langere pendel.
+  var werkMin = isTrip ? 30 : (doel === 'FTP' ? 28 : doel === 'VO2max' ? 14 : doel === 'Conditie' ? 30 : doel === 'Beklimmingen' ? 28 : 24);
+  var werkAnaeroob = (!isTrip && doel === 'VO2max');
+  var pendelBuckets = {
+    low: Math.max(0, mins - werkMin),
+    high: werkAnaeroob ? 0 : werkMin,
+    anaerobic: werkAnaeroob ? werkMin : 0
+  };
+
   return {
     naam: isTrip ? ('Pendel + sweet spot (tocht, ' + mins + ' min)')
                  : ('Pendel + ' + doel + ' intervallen (' + mins + ' min)'),
@@ -2108,7 +2139,7 @@ function genericPendelIntervals(type, mins, settings, mesoWeek, macroFase, doel)
       blok,
       ['Cooldown', '5 min', wattsRange(ftp, 45, 55), '—', 'Uitrijden']
     ],
-    tss: Math.round(mins * 0.85),
+    tss: tssFromZoneMinutes_(pendelBuckets),
     eindopmerking: 'Pendel-dag — heen rustig, terug doel-specifieke intensiteit.'
   };
 }
