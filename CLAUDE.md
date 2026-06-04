@@ -50,6 +50,10 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
   geen triple-backtick-blokken (slecht plakbaar op telefoon).
 - **HANDOFF.md = bron van waarheid voor de STAND** (chat leest die).
   **CLAUDE.md = conventies + architectuur** (auto-load, durable).
+- **HANDOFF-item-lifecycle**: elk engine-item leeft in precies ÉÉN van
+  BACKLOG / VOLGENDE / KLAAR. Bij promotie naar VOLGENDE of voltooiing naar
+  KLAAR: VERWIJDER het uit BACKLOG. BACKLOG = uitsluitend nog-niet-gestart —
+  voorkomt stale dubbelingen.
 - Taal: NL met Daan; English voor code/commits/logging; NL voor UI-strings.
 
 ## Conventies (HARD-EARNED — niet zelf herontdekken)

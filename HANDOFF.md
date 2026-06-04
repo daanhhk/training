@@ -72,10 +72,8 @@ Polish-pass: tokens.css als hand-CSS toepassen op Index.html/Script.html; JSX pl
 ## BACKLOG — ontworpen, nog te bouwen (elk: recon VOOR bouw)
 - RPE post-ride (write-feature, write-pad v2a-stijl): 1-10 selector + gepland-vs-gevoeld-feedback. Logica: trend-ratio zwaarte(IF/TSS) vs RPE ~14d; RPE->plan direct, RPE->niveau INDIRECT (W/kg-anker, niet opblazen; "voelt licht"-trend -> FTP-cel achter -> FTP-test/-ophoging voorstellen; ftp_auto_update blijft UIT). Recon: mismatch-engine + patches #16-17.
 - Trainingen-tab (bibliotheek): categorie -> VARIANT-keuze, on-demand uit engine (GEEN statisch archief). Recon: variant-pool als opsombare data? sprint/anaerobe key-type aanwezig?
-- Variant/duur-schaling (KRITISCH): geen reps-meeschaling; begrensde key-set + endurance-vulling; per-type harde-dosis-cap; IF daalt bij langere duur. Geldt OOK voor de kern-engine (assignWorkouts). Recon: schaalt de generator nu reps of endurance?
 - "Doe iets anders"-override (per dag): kies variant/categorie of vrije rit/groepsrit. Pin/lock-vlag zodat regenerate de dag niet overschrijft; stroomt in debt/dekking. Recon: pin-mechanisme.
 - Per-dag "Stuur naar Garmin": smalle ingang op bestaande push (zelfde uitzonderings-laag als pushWeb). Swap+re-push overschrijft via upsert (external_id). Recon: per-dag scope + ORPHAN-delete bij override die sessie-aantal verlaagt.
-- Beschikbaarheid-UI = v2b-C: per-dag knop, scope "deze dag"/"hele week"; Train?+minuten+pendel-toggle (geen dagtype-dropdown, weekend auto, recovery engine-gestuurd). Rustdag niet doodlopend ("toch trainen"); onderscheid onbeschikbaar vs engine-recovery. Recon: saveAvailability dag- vs week-scope.
 - Ochtend-check-in (write-feature): slaap/benen/stress -> bijstelling gereedheid + mogelijke afschaling. Recon: invloed op wellness/gereedheid + dag-voorstel.
 - Gereedheid-"waarom"-uitklap (= geparkeerde draad 3). Display.
 - Event-/periodisering-tijdlijn: fase-boog + weken + verwachte uren + actieve MODUS. Display.
@@ -83,7 +81,7 @@ Polish-pass: tokens.css als hand-CSS toepassen op Index.html/Script.html; JSX pl
 - Rand-/lege staten: intervals niet verbonden, sync mislukt, geen voorstel, geen historie, push-fout.
 
 ## DECISIE — events/doel = wederzijds uitsluitende MODUS
-~2 events/jr (Amstel Gold Race, Girona) + standaard trainingsdoel; bij nabij A-event neemt evenement-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide. Open: hoe event vs `doel` het key-type sturen = de lopende Girona/key-type-recon.
+~2 events/jr (Amstel Gold Race, Girona) + standaard trainingsdoel; bij nabij A-event neemt evenement-modus over (doel pauzeert), coach kondigt aan; lead-time op prioriteit (A lang/B kort/C niet). Settings houdt beide. KEY-TYPE-STURING OPGELOST (trip-event, HEAD 1e72d6d, zie KLAAR): event-karakter (type==='trip') stuurt het key-type via long_z2 (free-day) / pendel_trip_intervals (pendel). De modus-keuze zelf (wederzijds uitsluitend) is BESLOTEN; NOG OPEN = enkel de modus-overname-UX (pauzeren/aankondigen/lead-time) — dat is de build-taak [#3] in VOLGENDE.
 
 ## Durabele lessen
 Zie CLAUDE.md. Kort: visueel verifieren op /dev (incognito + hard refresh); write-pad-patroon = google.script.run -> serverfn returnt vers getDashboardState -> onState (behalve pushWeb); NL-locale-formules bij setFormula (komma decimaal + puntkomma separator) - nu n.v.t. (writes zijn waarden/JSON), relevant zodra een write formules raakt; STAP 0-recon + 200-woorden rapport-cap.
