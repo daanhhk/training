@@ -519,7 +519,7 @@
   }
 
   function switchTab(name) {
-    ['schema', 'vorm'].forEach(function (t) {
+    ['schema', 'vorm', 'trainingen', 'niveau'].forEach(function (t) {
       document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
     });
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
