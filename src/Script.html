@@ -184,30 +184,47 @@
   // ── v2a: beschikbaarheid-editor (write-pad) ──
   function renderBeschikbaarheid() {
     var av = state.availability || [];
-    var opts = state.dagtypeOptions || [];
     var rows = av.map(function (d, i) {
-      var sel = opts.map(function (o) {
-        return '<option value="' + esc(o) + '"' + (o === d.dagtype ? ' selected' : '') + '>' + esc(o) + '</option>';
-      }).join('');
-      return '<div class="avail-row">' +
-        '<label class="avail-dag"><input type="checkbox" data-av="train" data-idx="' + i + '"' + (d.train ? ' checked' : '') + '> ' + esc(d.dagLabel) + '</label>' +
-        '<input type="number" class="avail-min" data-av="min" data-idx="' + i + '" min="0" max="600" step="5" value="' + (d.minuten || 0) + '">' +
-        '<select class="avail-type" data-av="type" data-idx="' + i + '"><option value="">—</option>' + sel + '</select>' +
+      var pendelOn = (d.dagtype === 'pendel');   // geen los pendel-veld → afgeleid uit bestaande dagtype
+      return '<div class="avail-row" data-idx="' + i + '">' +
+        '<label class="avail-dag"><input type="checkbox" data-av="train" data-idx="' + i + '"' + (d.train ? ' checked' : '') + ' onchange="availRowSync(' + i + ')"> ' + esc(d.dagLabel) + '</label>' +
+        '<label class="avail-pendel"><input type="checkbox" data-av="pendel" data-idx="' + i + '"' + (pendelOn ? ' checked' : '') + '> Pendel? <span class="muted">woon-werk meegeteld</span></label>' +
+        '<span class="avail-min-wrap" data-idx="' + i + '">' +
+          '<input type="range" class="avail-min" data-av="min" data-idx="' + i + '" min="0" max="600" step="5" value="' + (d.minuten || 0) + '" oninput="availMinSync(' + i + ')">' +
+          '<span class="avail-min-val" data-idx="' + i + '">' + (d.minuten || 0) + ' min</span>' +
+        '</span>' +
+        '<span class="avail-rust" data-idx="' + i + '">rustdag — herstel telt mee</span>' +
         '</div>';
     }).join('');
     document.getElementById('avail-rows').innerHTML = rows;
+    for (var j = 0; j < av.length; j++) availRowSync(j);
     var btn = document.getElementById('avail-save');
     if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; }
+  }
+
+  // Train aan → slider+waarde; Train uit → "rustdag" (slider blijft in DOM, save schrijft de rij wel).
+  function availRowSync(i) {
+    var on = document.querySelector('[data-av="train"][data-idx="' + i + '"]').checked;
+    var wrap = document.querySelector('.avail-min-wrap[data-idx="' + i + '"]');
+    var rust = document.querySelector('.avail-rust[data-idx="' + i + '"]');
+    if (wrap) wrap.style.display = on ? 'flex' : 'none';
+    if (rust) rust.style.display = on ? 'none' : 'block';
+  }
+  function availMinSync(i) {
+    var v = document.querySelector('[data-av="min"][data-idx="' + i + '"]').value;
+    var lbl = document.querySelector('.avail-min-val[data-idx="' + i + '"]');
+    if (lbl) lbl.textContent = v + ' min';
   }
 
   function saveAvail() {
     var updates = [];
     for (var i = 0; i < 7; i++) {
-      updates.push({
-        train: !!document.querySelector('[data-av="train"][data-idx="' + i + '"]').checked,
-        minuten: Number(document.querySelector('[data-av="min"][data-idx="' + i + '"]').value) || 0,
-        dagtype: document.querySelector('[data-av="type"][data-idx="' + i + '"]').value || ''
-      });
+      var train = !!document.querySelector('[data-av="train"][data-idx="' + i + '"]').checked;
+      var minuten = Number(document.querySelector('[data-av="min"][data-idx="' + i + '"]').value) || 0;
+      var pendel = !!document.querySelector('[data-av="pendel"][data-idx="' + i + '"]').checked;
+      // dagtype client-afgeleid (E onafhankelijk van train); nooit 'recovery' (= engine-only).
+      var dagtype = pendel ? 'pendel' : ((i === 5 || i === 6) ? 'weekend' : 'vrij');
+      updates.push({ train: train, minuten: minuten, dagtype: dagtype });
     }
     var btn = document.getElementById('avail-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Opslaan…'; }
