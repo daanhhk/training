@@ -1,0 +1,14 @@
+<style>
+body.overlay-open{ overflow:hidden; }
+.scrim{ position:fixed; inset:0; z-index:1000; background:var(--scrim); opacity:0; pointer-events:none; transition:opacity 240ms ease; }
+.scrim.is-open{ opacity:1; pointer-events:auto; }
+.overlay-panel{ position:fixed; z-index:1001; background:var(--sheet-bg); display:flex; flex-direction:column; overflow:auto; -webkit-overflow-scrolling:touch; transition:transform 260ms cubic-bezier(.32,.72,0,1); will-change:transform; }
+.overlay-panel[data-variant="sheet"]{ left:0; right:0; bottom:0; max-height:90vh; border-radius:var(--r-2xl) var(--r-2xl) 0 0; box-shadow:var(--sheet-shadow); padding-bottom:calc(var(--tabbar-safe-bottom) + var(--s-4)); transform:translateY(100%); }
+.overlay-panel[data-variant="sheet"].is-open{ transform:translateY(0); }
+.overlay-panel[data-variant="drawer"]{ top:0; bottom:0; right:0; width:min(86vw,380px); box-shadow:var(--shadow-drawer); transform:translateX(100%); }
+.overlay-panel[data-variant="drawer"].is-open{ transform:translateX(0); }
+.overlay-handle{ flex:0 0 auto; width:40px; height:4px; margin:10px auto 4px; border-radius:var(--r-pill); background:var(--sheet-handle); }
+.overlay-panel[data-variant="drawer"] .overlay-handle{ display:none; }
+.overlay-content{ padding:var(--s-4); }
+@media (prefers-reduced-motion:reduce){ .scrim,.overlay-panel{ transition:none; } }
+</style>

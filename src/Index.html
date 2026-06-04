@@ -9,6 +9,7 @@
     <?!= include('Tokens'); ?>
     <?!= include('Styles'); ?>
     <?!= include('Alias'); ?>
+    <?!= include('Drawer'); ?>
   </head>
   <body>
     <div id="app">
@@ -86,6 +87,11 @@
         <button data-tab="trainingen"><span>📚</span>Trainingen</button>
         <button data-tab="niveau"><span>📊</span>Niveau</button>
       </nav>
+    </div>
+    <div id="overlay-scrim" class="scrim" data-overlay-close></div>
+    <div id="overlay-panel" class="overlay-panel" data-variant="sheet" role="dialog" aria-modal="true" aria-hidden="true" tabindex="-1">
+      <div class="overlay-handle" aria-hidden="true"></div>
+      <div id="overlay-content" class="overlay-content"></div>
     </div>
     <?!= include('Script'); ?>
   </body>
