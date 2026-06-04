@@ -570,6 +570,14 @@ function getDashboardState() {
       return { train: p.train === true, minuten: p.minuten || 0, dagtype: p.type || '', dagLabel: p.dag };
     }),
     dagtypeOptions: DAGTYPE_OPTIONS,
+    // Read-only spiegel van de fase-engine (bepaalFaseVoorDatum_ @353, hergebruikt) —
+    // databron voor latere [#3] takeover-UX. Geen nieuwe afleiding, geen relabeling.
+    mode: {
+      eventDriven: macro.eventDriven === true,   // bepaalFaseVoorDatum_ (Doel.gs)
+      macroPhase: macro.fase || null,            // engine-fase: Base/Build/Peak/Taper/Recovery
+      seasonMode: settings.fase || null,         // FASE-setting: build/maintain
+      weeksToEvent: (macro.wekenTotEvent != null) ? macro.wekenTotEvent : null
+    },
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,
