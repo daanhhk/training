@@ -997,6 +997,122 @@ function getFormScore_() {
   } catch (e) { Logger.log('getFormScore_ error: ' + e); return null; }
 }
 
+// ── Readiness score (Fase 1b) — objectief preset ─────────────────
+// Gewogen 0-100 readiness uit 4 genormaliseerde factoren. Server rekent,
+// client rendert (read-side). De ochtend-check-in (benen/stress) voedt de
+// score pas in Fase 2 — gebalanceerd/subjectief blijven tot dan placeholder.
+var READINESS_PRESETS = {
+  objectief:    { vormTrend: 0.30, belasting: 0.30, hrv: 0.25, slaap: 0.15 }, // som 1,00
+  gebalanceerd: null,   // TODO Fase 2+ (benen/stress + post-check-in herweging)
+  subjectief:   null    // TODO Fase 2+
+};
+
+function rdyClamp_(x) { return Math.max(0, Math.min(100, x)); }
+
+/** Lineaire normalisatie v∈[lo,hi] → [0,100], geklemd. null → null. */
+function rdyLerp_(v, lo, hi) {
+  if (v == null) return null;
+  return rdyClamp_((v - lo) / (hi - lo) * 100);
+}
+
+/** Decimale uren → "Xu YY" (7,33 → "7u20"). */
+function rdyUren_(h) {
+  var hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  if (mm === 60) { hh++; mm = 0; }
+  return hh + 'u' + (mm < 10 ? '0' + mm : mm);
+}
+
+/**
+ * Readiness 0-100 + band + factor-breakdown + chips. Objectief-preset.
+ * Args optioneel: hergebruikt reeds-berekende signalen uit getDashboardState
+ * (vermijdt een extra live getWellness-call). Ontbrekende factor → wegvallen
+ * + herschalen over de resterende gewichten (geen harde nul).
+ *
+ * Normalisatie-breakpoints (0→100, geklemd):
+ *   vorm-trend : Vorm/TSB  -30 → +10  (frisser = readier) + richting-nudge ±10
+ *   belasting  : ATL/CTL   1.5 → 0.8  (gew. 0.6) ⊕ ramp/wk 10 → 0 (gew. 0.4)
+ *   HRV        : deficit%  -15 → +5   (boven baseline = hoger)
+ *   slaap      : uren        5 → 8
+ * Banden: ≥62 ready / 48-61 caution / <48 rest. dot: ≥67 good / 34-66 warn / <34 muted.
+ */
+function getReadinessScore_(fs, wellness, reeks) {
+  if (fs === undefined)       fs = getFormScore_();
+  if (wellness === undefined) wellness = getWellnessSignal(SpreadsheetApp.getActive());
+  if (reeks === undefined)    reeks = (typeof dashVormReeks_ === 'function') ? dashVormReeks_() : [];
+  var W = READINESS_PRESETS.objectief;
+  fs = fs || {}; wellness = wellness || {};
+
+  // factor 1 — vorm-trend: niveau (TSB) + richting over de Vorm-reeks.
+  var form = (fs.form != null) ? fs.form : null;
+  var vtSub = rdyLerp_(form, -30, 10);
+  var vtText = '–';
+  if (vtSub != null && reeks && reeks.length >= 2) {
+    var vs = reeks.filter(function (r) { return r.vorm != null; });
+    if (vs.length >= 2) {
+      var span = Math.min(7, vs.length - 1);
+      var delta = vs[vs.length - 1].vorm - vs[vs.length - 1 - span].vorm;
+      vtSub = rdyClamp_(vtSub + Math.max(-10, Math.min(10, delta)));
+      vtText = (delta > 2) ? 'stijgend' : (delta < -2 ? 'dalend' : 'stabiel');
+    }
+  }
+  if (vtSub != null && vtText === '–') vtText = (form >= 0) ? 'fris' : 'belast';
+
+  // factor 2 — belasting: ATL/CTL-ratio (acuut) ⊕ ramp (duurzaamheid).
+  var ctl = (fs.ctl != null) ? fs.ctl : null, atl = (fs.atl != null) ? fs.atl : null;
+  var ramp = (fs.ramp != null) ? fs.ramp : null;
+  var blSub = null, blText = '–';
+  if (ctl != null && atl != null && ctl > 0) {
+    var ratio = atl / ctl;
+    var ratioSub = rdyClamp_(100 - (ratio - 0.8) / (1.5 - 0.8) * 100);
+    var rampSub = (ramp != null) ? rdyClamp_(100 - Math.max(0, Math.min(10, ramp)) / 10 * 100) : ratioSub;
+    blSub = Math.round(0.6 * ratioSub + 0.4 * rampSub);
+    blText = (ratio > 1.15) ? 'ATL-piek' : ((ramp != null && ramp >= 6) ? 'ramp steil' : 'in balans');
+  }
+
+  // factor 3 — HRV: recent t.o.v. 28d-baseline (deficit%).
+  var def = (wellness.hrvDeficit != null) ? wellness.hrvDeficit : null;
+  var hrvSub = rdyLerp_(def, -15, 5);
+  var hrvText = (def == null) ? '–' : (def >= 2 ? 'boven baseline' : (def <= -2 ? 'onder baseline' : 'op baseline'));
+
+  // factor 4 — slaap: 3-daags gemiddelde (val terug op laatste nacht).
+  var slp = (wellness.sleepAvg3 != null) ? wellness.sleepAvg3
+          : (wellness.sleepLastNight != null ? wellness.sleepLastNight : null);
+  var slpSub = rdyLerp_(slp, 5, 8);
+  var slpText = (slp == null) ? '–' : rdyUren_(slp);
+
+  var raw = [
+    { key: 'vormTrend', label: 'Vorm-trend', sub: vtSub,  weight: W.vormTrend, valueText: vtText },
+    { key: 'belasting', label: 'Belasting',  sub: blSub,  weight: W.belasting, valueText: blText },
+    { key: 'hrv',       label: 'HRV',        sub: hrvSub, weight: W.hrv,       valueText: hrvText },
+    { key: 'slaap',     label: 'Slaap',      sub: slpSub, weight: W.slaap,     valueText: slpText }
+  ];
+
+  // Gewogen som over aanwezige factoren; herschaal de gewichten (geen harde nul).
+  var present = raw.filter(function (f) { return f.sub != null; });
+  var totW = present.reduce(function (a, f) { return a + f.weight; }, 0);
+  var score = null;
+  if (totW > 0) {
+    score = Math.round(present.reduce(function (a, f) { return a + f.sub * f.weight; }, 0) / totW);
+  }
+  var band = (score == null) ? null : (score >= 62 ? 'ready' : (score >= 48 ? 'caution' : 'rest'));
+
+  var factors = raw.map(function (f) {
+    var dot = (f.sub == null) ? 'muted' : (f.sub >= 67 ? 'good' : (f.sub >= 34 ? 'warn' : 'muted'));
+    return { key: f.key, label: f.label, sub: (f.sub == null) ? null : Math.round(f.sub),
+             dot: dot, valueText: f.valueText, weight: Math.round(f.weight * 100) };
+  });
+
+  // Chips (export §2a): Vorm ±N (fresh als >0) + HRV N (muted).
+  var chips = [];
+  if (form != null) {
+    var fv = Math.round(form);
+    chips.push({ label: 'Vorm ' + (fv > 0 ? '+' : '') + fv, tone: fv > 0 ? 'fresh' : 'muted' });
+  }
+  if (wellness.hrvRecent != null) chips.push({ label: 'HRV ' + Math.round(wellness.hrvRecent), tone: 'muted' });
+
+  return { score: score, band: band, factors: factors, chips: chips };
+}
+
 function doelKey(doel) {
   if (doel === 'FTP')         return 'ftp';
   if (doel === 'VO2max')      return 'vo2';

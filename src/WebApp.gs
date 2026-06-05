@@ -579,6 +579,9 @@ function getDashboardState() {
       weeksToEvent: (macro.wekenTotEvent != null) ? macro.wekenTotEvent : null
     },
     plan: buildPlanModel_(macro, settings),
+    // Fase 1b: readiness (read-side) — hergebruikt reeds-berekende fs/wellness/reeks
+    // zodat getReadinessScore_ geen extra live getWellness-call doet.
+    readiness: getReadinessScore_(fs, wellness, reeks),
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,
