@@ -5,8 +5,8 @@ Bron van waarheid voor de projectstand. Conventies + architectuur-detail + code-
 ## STAND (leidend)
 INTERACTIEVE HtmlService web-app. /dev:
 https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev
-- **DONKERE SKIN IS LIVE.** 4 tabs (Schema/Vorm/Trainingen/Niveau). Fase 0, 1a, **1b (ReadinessCard) en Fase 2-kern (ochtend-check-in + readiness-bijstelling) compleet.** Volgende = rest van Schema (WeekLoad/dag-detail, F.2) of Vorm-body (Fase 3).
-- VISUEEL nog te verifiëren op /dev. Eerste actie nieuwe chat: **bevestig 1b + check-in** (incognito): geen check-in vandaag → sheet opent auto; Vastleggen → samenvatting + delta-callout + ronde +-knop; score schuift met de delta; band herkleurt bij grenskruising.
+- **DONKERE SKIN IS LIVE.** 4 tabs (Schema/Vorm/Trainingen/Niveau). Fase 0, 1a, **1b (ReadinessCard), Fase 2-kern (ochtend-check-in) en Fase 3a (Schema dag-detail skin + opruiming) compleet.** Volgende = WeekLoad (P3b) / RPE-write (P3c) of Vorm-body (Fase 3).
+- VISUEEL nog te verifiëren op /dev (incognito). Eerste actie nieuwe chat: **bevestig 1b + check-in + 3a-skin**: dag-detail zonder groene banner/Garmin-verwachting-regel, workout-kaart on-skin (zone-kleuren, geen oranje-bruin tegels), Garmin-knop secundair, Regenereer primair; check-in auto-open → Vastleggen → delta-callout.
 
 ## Visual system / aanpak
 - Beslissing: **THEME-FIRST**. `design/tokens.css` (donker, 4-tabs) = styling-bron van waarheid; volledig gemirrord in `src/Tokens.html`.
@@ -76,13 +76,14 @@ Vorm-top `ReadinessCard` (export §2a), vervangt `renderVormStatus('vorm')`→`#
 - STAP 0-recon: `renderVormStatus`/`#vorm-status`-mount, `getWellnessSignal`/`getFormScore_`-shapes, getDashboardState-assembly, `ringSvg`-kleurparam.
 
 ## Volgende stap
-1. Verifieer 1b + ochtend-check-in visueel op /dev (incognito + hard refresh). 2. Daarna: rest van Schema (WeekLoad/stale F.3, dag-detail-varianten, RPE) of Vorm-body (Fase 3: LevelCard + niveau-grafiek + metrics + conditie-balans).
+1. Verifieer 1b + check-in + 3a-skin visueel op /dev (incognito + hard refresh). 2. Daarna: WeekLoad + stale (P3b), RPE-write/skip-dispositie (P3c), of Vorm-body (Fase 3: LevelCard + niveau-grafiek + metrics + conditie-balans).
 
 ---
 
 ## Historie & engine-referentie (bruikbare historie — overleeft de restyle)
 
 ### KLAAR (done sinds bbd1a6b)
+- **Fase 3a — Schema dag-detail skin + opruiming (8c05a1f):** workout-kaart naar skin (`voorstelKaart`/`actualKaart` → `.wk-*` classes; `zoneBar(seg, mini)` kleurt via zone-tokens `--zone-1…6` op `bucket`, niet meer server-hex; multi-sessie → sunken `.wk-sub` sub-kaarten met `wk-minibar`). VERWIJDERD uit `renderDagDetail` 'vandaag'-tak: groene readiness-banner (`v.gereedheid`) + "Garmin-verwachting"-regel (`v.garminStatus.verdict`) — readiness leeft op Vorm. Knoppen: `.act-btn-2` (Garmin) teal→`--btn-secondary-*`, `.act-btn` (Regenereer) → `--btn-primary-*`. NIET toegevoegd: "Doe iets anders"-knop (WorkoutPicker = future, geen dode knop); IF-metric weggelaten (niet in model). Plan-kaart + dagstrip ongemoeid.
 - **Fase 2-kern — ochtend-check-in + readiness-bijstelling (a5d0b43):** `saveCheckin(slaap,benen,stress)` schrijft DocProp `checkin_<dISO>` (JSON {slaap,benen,stress,ts}) → herberekende readiness (zelfde shape). `getTodayCheckin_`/`checkinDelta_`/`checkinSummary_`; `CHECKIN_LEVELS` ±2/0 per vraag (slaap slecht/oké/goed · benen zwaar/oké/fris · stress hoog/normaal/laag), somdelta −6..+6 geklemd op de objectieve base-score (GEEN herweging, GEEN 5e factor). Client: `checkinSheetHtml` (overlay sheet via openDrawer, segmented controls, default neutraal), auto-open bij `checkinDone:false` (1×/load, dismissbaar), ingevuld-staat `checkinDoneHtml_` (summary + ronde +-knop + effect-callout). `state.readiness` += `checkinDone/checkinDelta/checkinSummary/checkin`.
 - **Fase 1b — Vorm ReadinessCard (6e1b7a9):** `getReadinessScore_(fs,wellness,reeks)` (Algorithm.gs) → `state.readiness {score,band,factors[],chips[]}`, objectief preset `READINESS_PRESETS` (0.30/0.30/0.25/0.15). Normalisatie: vorm-trend TSB −30→+10 + richting-nudge ±10; belasting ATL/CTL 1.5→0.8 (0.6) ⊕ ramp 10→0 (0.4); HRV deficit% −15→+5; slaap 5u→8u. Banden ≥62/48; dot ≥67/34. Client `readinessCardHtml`+`readinessRing_(score,colorVar)` vervangt `renderVormStatus`-mount `#vorm-status`; `.rc-*` CSS. Niveau-block uit Vorm-top (LevelCard = Fase 3).
 - **Fase 1a — Schema plan-kaart (8c774da server / 5ff0219 client):** buildPlanModel_→state.plan; planCardHtml (collapsible) vervangt deck-mount op Schema. Detail: zie "Nieuwe contracten".
