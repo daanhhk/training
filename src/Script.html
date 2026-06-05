@@ -39,6 +39,7 @@
     document.getElementById('loading').style.display = 'none';
     document.getElementById('bottomnav').style.display = 'flex';
     renderSchema();
+    renderWeekLoad();
     renderVorm();
     renderBeschikbaarheid();
     switchTab('schema');
@@ -167,6 +168,44 @@
         '<div class="pc-stats">' + stats + '</div>' +
       '</div>' +
     '</details>';
+  }
+
+  // ── Fase 3b — WeekLoad-kaart (deze week: gepland vs gedaan) ──
+  function wlStat_(val, lbl) {
+    return '<div class="wl-stat"><div class="wl-sv">' + val + '</div><div class="wl-sl">' + lbl + '</div></div>';
+  }
+  function renderWeekLoad(iconState) {
+    var el = document.getElementById('week-load');
+    if (!el) return;
+    var w = state.weekLoad;
+    if (!w) { el.innerHTML = ''; return; }
+    iconState = iconState || 'idle';
+    var icon = (iconState === 'busy') ? '<span class="wl-spin"></span>'
+             : (iconState === 'done') ? '<span class="wl-check">✓</span>'
+             : '↻';
+    var pct = (w.progressPct != null) ? w.progressPct : 0;
+    el.innerHTML = '<div class="wl-card">' +
+      '<div class="wl-head">' +
+        '<div class="wl-overline">Deze week</div>' +
+        '<button type="button" class="wl-refresh"' + (iconState === 'busy' ? ' disabled' : '') +
+          ' onclick="refreshWeekLoad()" aria-label="Ververs deze week">' + icon + '</button>' +
+      '</div>' +
+      '<div class="wl-stats">' + wlStat_(Math.round(w.tss), 'TSS') + wlStat_(nl(w.uren, 1), 'uren') + wlStat_(w.dagen, 'dagen') + '</div>' +
+      '<div class="wl-bar"><div class="wl-bar-fill" style="width:' + pct + '%"></div></div>' +
+      (w.stale ? '<div class="wl-stale">Plan verouderd</div>' : '') +
+    '</div>';
+  }
+  function refreshWeekLoad() {
+    renderWeekLoad('busy');
+    google.script.run
+      .withSuccessHandler(function (s) {
+        state = s;
+        renderSchema();               // plan/dagstrip/dag-detail volgen de verse actuals
+        renderWeekLoad('done');
+        setTimeout(function () { renderWeekLoad('idle'); }, 1400);
+      })
+      .withFailureHandler(function (err) { renderWeekLoad('idle'); showError(err); })
+      .refreshWeek();
   }
 
   function renderSchema() {

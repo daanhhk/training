@@ -344,6 +344,49 @@ function computeConditieMod_(ctlNow, ctlRef) {
   return Math.max(-BAND, Math.min(BAND, raw));
 }
 
+/**
+ * Fase 3b — WeekLoad: gepland-vs-gedaan voor de huidige kalenderweek.
+ * DONE tss/uren/dagen uit de Activiteiten-tab (cycling, [weekStart, +7d)) —
+ * één bron, consistent met dagstrip/dag-detail, geen extra live getActivities.
+ * Noemer = geplande week-TSS uit weekplan_<maandag> (Σ entry.tss).
+ * stale: F.3-signaal bestaat nog niet → false (TODO).
+ * @return {tss, uren, dagen, geplandTss, progressPct, stale}
+ */
+function getWeekLoad_(ss, weekStart) {
+  var wsT = stripTime_(weekStart).getTime();
+  var weT = wsT + 7 * 86400000;
+  var tss = 0, minuten = 0, dagen = {};
+  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  if (sh && sh.getLastRow() >= 2) {
+    var data = sh.getRange(2, 1, sh.getLastRow() - 1, ACT_HEADERS.length).getValues();
+    data.forEach(function (r) {
+      if (!(r[0] instanceof Date)) return;
+      if (CYCLING_TYPES.indexOf(String(r[1] || '')) < 0) return;   // alleen fiets (idx1 = Type)
+      var t = stripTime_(r[0]).getTime();
+      if (t < wsT || t >= weT) return;
+      minuten += Number(r[3]) || 0;                                // idx3 = Duur (min)
+      if (r[8] !== '' && r[8] != null) tss += Number(r[8]) || 0;   // idx8 = TSS
+      dagen[formatDate(r[0], 'yyyy-MM-dd')] = true;
+    });
+  }
+  var planTss = 0;
+  var raw = getDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), '');
+  if (raw) {
+    try {
+      var arr = JSON.parse(raw);
+      if (Array.isArray(arr)) arr.forEach(function (e) { planTss += Number(e.tss) || 0; });
+    } catch (e) {}
+  }
+  return {
+    tss: Math.round(tss),
+    uren: Math.round(minuten / 60 * 10) / 10,
+    dagen: Object.keys(dagen).length,
+    geplandTss: Math.round(planTss),
+    progressPct: planTss > 0 ? Math.max(0, Math.min(100, Math.round(tss / planTss * 100))) : null,
+    stale: false
+  };
+}
+
 // ── Hoofdgetter ──────────────────────────────────────────────────
 function getDashboardState() {
   var ss = SpreadsheetApp.getActive();
@@ -582,6 +625,7 @@ function getDashboardState() {
     // Fase 1b: readiness (read-side) — hergebruikt reeds-berekende fs/wellness/reeks
     // zodat getReadinessScore_ geen extra live getWellness-call doet.
     readiness: getReadinessScore_(fs, wellness, reeks),
+    weekLoad: getWeekLoad_(ss, weekStart),
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm,
@@ -638,4 +682,15 @@ function regenerateWeb() {
  */
 function pushWeb() {
   return pushAllPending_(SpreadsheetApp.getActive());
+}
+
+/**
+ * Fase 3b — WeekLoad refresh: re-sync de werkelijke ritten (Activiteiten-tab)
+ * en geef verse state terug. Lichter dan regenerateWeb (geen herplanning) —
+ * puur de gepland-vs-gedaan-cijfers verversen. syncActivities = web-veilig.
+ */
+function refreshWeek() {
+  try { syncActivities(); }
+  catch (e) { console.warn('refreshWeek: ' + (e && e.message ? e.message : e)); }
+  return getDashboardState();
 }

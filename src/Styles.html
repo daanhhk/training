@@ -73,6 +73,24 @@
   .wk-why ul { margin: 8px 0 0; padding-left: 18px; }
   .wk-why li { font-size: var(--fs-label); color: var(--text-secondary); margin-bottom: 4px; }
 
+  /* Fase 3b — WeekLoad-kaart (deze week, gepland vs gedaan) */
+  .wl-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: var(--card-pad); margin: 0; }
+  .wl-head { display: flex; align-items: center; gap: 10px; }
+  .wl-overline { flex: 1; font-size: var(--fs-caption); font-weight: var(--fw-caption); text-transform: uppercase; letter-spacing: var(--tracking-overline); color: var(--text-muted); }
+  .wl-refresh { flex: 0 0 auto; width: 34px; height: 34px; border-radius: var(--r-pill); background: var(--bg-elevated); border: 1px solid var(--border-strong); color: var(--accent); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .wl-refresh:disabled { cursor: default; }
+  .wl-check { color: var(--good); }
+  .wl-spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--text-muted); animation: wl-rot 0.7s linear infinite; }
+  @keyframes wl-rot { to { transform: rotate(360deg); } }
+  .wl-stats { display: flex; margin: 12px 0; background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: var(--r-md); overflow: hidden; }
+  .wl-stat { flex: 1; padding: 10px 4px; text-align: center; }
+  .wl-stat + .wl-stat { border-left: 1px solid var(--border-subtle); }
+  .wl-sv { font-family: var(--font-num); font-size: var(--fs-num-md); font-weight: var(--fw-num-md); color: var(--text-primary); }
+  .wl-sl { font-size: var(--fs-caption); color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: var(--tracking-overline); }
+  .wl-bar { height: 8px; border-radius: var(--r-pill); background: var(--bg-sunken); overflow: hidden; }
+  .wl-bar-fill { height: 100%; background: var(--accent-grad); border-radius: var(--r-pill); transition: width 300ms ease; }
+  .wl-stale { margin-top: 10px; background: var(--warn-soft); color: var(--warn); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--fs-label); }
+
   details { margin-top: 8px; }
   summary { cursor: pointer; font-weight: 600; color: var(--accent); font-size: 14px; }
   details ul { margin: 8px 0 0; padding-left: 18px; }
