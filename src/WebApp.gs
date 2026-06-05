@@ -112,6 +112,20 @@ function dashWeekplanByDate_() {
   return byDate;
 }
 
+/** Alle disposition_<dISO> snapshots → map dISO → {reason}. (Fase 3c) */
+function dashDispositionsByDate_() {
+  var props = PropertiesService.getDocumentProperties().getProperties();
+  var out = {};
+  Object.keys(props).forEach(function (k) {
+    if (k.indexOf('disposition_') !== 0) return;
+    try {
+      var o = JSON.parse(props[k]);
+      if (o && o.reason) out[k.substring('disposition_'.length)] = { reason: o.reason };
+    } catch (e) {}
+  });
+  return out;
+}
+
 /** Wellness-tab CTL/ATL/Vorm reeks (oudste→nieuwste) + stats-bron. */
 function dashVormReeks_() {
   var ss = SpreadsheetApp.getActive();
@@ -402,6 +416,7 @@ function getDashboardState() {
   var planner = readPlanner(ss);
   var actuals = dashActualsByDate_();
   var wpByDate = dashWeekplanByDate_();
+  var disposities = dashDispositionsByDate_();
   var today = stripTime_(new Date());
   var todayISO = formatDate(today, 'yyyy-MM-dd');
 
@@ -486,14 +501,19 @@ function getDashboardState() {
     else if (card.voorstel)           { status = 'gepland'; }
     else if (isFuture && plus1Avail[dISO] != null) { status = 'preview'; previewMin = plus1Avail[dISO]; }
     else                              { status = 'rust'; }
+    // Fase 3c: gedisponeerde (gemiste) dag met een voorstel en geen actual → 'gemist'.
+    var disp = disposities[dISO];
+    if (disp && card.voorstel && !actuals[dISO]) status = 'gemist';
     if (card.voorstel) {
       var seg0 = card.voorstel.segmenten[card.voorstel.segmenten.length - 1];
       kleur = seg0 ? seg0.kleur : '#90a4ae';
     } else if (status === 'preview') { kleur = '#b0bec5'; }
+    if (status === 'gemist') kleur = null;
     dagen.push({
       dateISO: dISO, weekdag: dashWeekdag_(d), kort: dashKort_(d),
       status: status, kleur: kleur,
-      voorstel: card.voorstel, actual: card.actual, previewMin: previewMin
+      voorstel: card.voorstel, actual: card.actual, previewMin: previewMin,
+      dispositie: disp || null
     });
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);  // DST-immuun
   }
@@ -692,5 +712,38 @@ function pushWeb() {
 function refreshWeek() {
   try { syncActivities(); }
   catch (e) { console.warn('refreshWeek: ' + (e && e.message ? e.message : e)); }
+  return getDashboardState();
+}
+
+/**
+ * Fase 3c-A — web-RPE: schrijf rpe_<date> (1–10). Spiegelt handleRpeCallback
+ * (TelegramBot.gs): DocProps-only, GEEN intervals-POST. Returnt verse state.
+ */
+function saveRpe(dateISO, rpe) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO))) throw new Error('saveRpe: ongeldige datum.');
+  var n = parseInt(rpe, 10);
+  if (isNaN(n) || n < 1 || n > 10) throw new Error('saveRpe: RPE moet 1–10 zijn.');
+  setDocProp('rpe_' + dateISO, String(n));
+  return getDashboardState();
+}
+
+var DISPOSITION_REASONS = ['geen_tijd', 'bewust_gerust', 'iets_anders'];
+
+/**
+ * Fase 3c-B — skip-dispositie: markeer een geplande-niet-gedane dag als gemist
+ * met een reden (DocProp disposition_<date> = {reason, ts}). reason=null wist 'm
+ * (voorstel terug). GEEN generateProposal: dat zou via debt "inhalen" en vandaag's
+ * voorstel herleven; assignWorkouts leidt resterende dagen al vers af bij de
+ * eerstvolgende regen. Returnt verse state.
+ */
+function saveDisposition(dateISO, reason) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO))) throw new Error('saveDisposition: ongeldige datum.');
+  var key = 'disposition_' + dateISO;
+  if (reason == null || reason === '') {
+    PropertiesService.getDocumentProperties().deleteProperty(key);
+  } else {
+    if (DISPOSITION_REASONS.indexOf(String(reason)) < 0) throw new Error('saveDisposition: onbekende reden.');
+    setDocProp(key, JSON.stringify({ reason: String(reason), ts: new Date().toISOString() }));
+  }
   return getDashboardState();
 }

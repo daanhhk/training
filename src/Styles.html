@@ -91,6 +91,21 @@
   .wl-bar-fill { height: 100%; background: var(--accent-grad); border-radius: var(--r-pill); transition: width 300ms ease; }
   .wl-stale { margin-top: 10px; background: var(--warn-soft); color: var(--warn); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--fs-label); }
 
+  /* Fase 3c — RPE-rating (web-write) + skip-dispositie */
+  .rpe-rate { margin-top: 12px; }
+  .rpe-label { font-size: var(--fs-caption); color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--tracking-overline); margin-bottom: 8px; }
+  .rpe-row { display: flex; gap: 4px; }
+  .rpe-btn { flex: 1; height: 34px; padding: 0; border: 1px solid var(--border-strong); background: var(--bg-sunken); color: var(--text-secondary); border-radius: var(--r-sm); font-family: var(--font-num); font-size: var(--fs-num-sm); cursor: pointer; }
+  .rpe-btn.is-on { background: var(--accent); color: var(--text-on-accent); border-color: transparent; box-shadow: 0 0 0 2px var(--accent-ring); }
+  .rpe-feedback { margin-top: 10px; background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--fs-label); }
+  .disp-afford { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+  .disp-q { font-size: var(--fs-label); color: var(--text-secondary); margin-bottom: 8px; }
+  .disp-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .disp-btn { flex: 1; min-width: 92px; height: 38px; border: 1px solid var(--btn-secondary-border); background: var(--btn-secondary-bg); color: var(--btn-secondary-text); border-radius: var(--btn-radius); font-family: var(--font-sans); font-size: var(--fs-label); cursor: pointer; }
+  .gemist-card { display: flex; align-items: center; gap: 10px; background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: var(--card-radius); padding: 14px var(--card-pad); margin-bottom: 14px; }
+  .gemist-txt { flex: 1; color: var(--text-muted); font-size: var(--fs-body); }
+  .gemist-back { flex: 0 0 auto; background: none; border: none; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-label); cursor: pointer; padding: 4px 6px; }
+
   details { margin-top: 8px; }
   summary { cursor: pointer; font-weight: 600; color: var(--accent); font-size: 14px; }
   details ul { margin: 8px 0 0; padding-left: 18px; }

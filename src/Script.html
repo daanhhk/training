@@ -101,7 +101,17 @@
       wkWhy_(v) + '</div>';
   }
 
-  function actualKaart(a) {
+  // Fase 3c-A — RpeRating 1–10 (web-write). current = opgeslagen rpe of null.
+  function rpeRatingHtml_(dateISO, current) {
+    var btns = '';
+    for (var i = 1; i <= 10; i++) {
+      btns += '<button type="button" class="rpe-btn' + (current === i ? ' is-on' : '') +
+        '" onclick="setRpe(\'' + dateISO + '\',' + i + ')">' + i + '</button>';
+    }
+    return '<div class="rpe-rate"><div class="rpe-label">RPE — hoe zwaar voelde het?</div>' +
+      '<div class="rpe-row">' + btns + '</div></div>';
+  }
+  function actualKaart(a, dateISO) {
     if (!a) return '';
     var h = '<div class="wk-card">' +
       '<div class="wk-overline wk-ok">✓ Voltooid</div>' +
@@ -110,14 +120,42 @@
         wkMetric_(uMin(a.duurMin), 'duur') +
         wkMetric_(a.tss != null ? Math.round(a.tss) : '–', 'TSS') +
         wkMetric_(a.rpe != null ? a.rpe : '–', 'RPE') +
-      '</div>';
-    if (a.mismatch != null && a.rpeVerwacht != null) {
-      var t = a.mismatch > 0 ? ('+' + nl(a.mismatch, 1) + ' zwaarder dan verwacht (~' + a.rpeVerwacht + ')')
-            : (a.mismatch < 0 ? (nl(a.mismatch, 1) + ' lichter dan verwacht') : 'precies op verwachting');
-      h += '<div class="wk-note">RPE-mismatch: ' + t + '</div>';
+      '</div>' +
+      (dateISO ? rpeRatingHtml_(dateISO, a.rpe) : '');
+    if (a.rpe != null && a.mismatch != null && a.rpeVerwacht != null) {
+      var t = a.mismatch > 0 ? ('Zwaarder dan verwacht (+' + nl(a.mismatch, 1) + ' vs ~' + a.rpeVerwacht + ')')
+            : (a.mismatch < 0 ? ('Lichter dan verwacht (' + nl(a.mismatch, 1) + ' vs ~' + a.rpeVerwacht + ')')
+            : 'Precies op verwachting');
+      h += '<div class="rpe-feedback">' + t + '</div>';
     }
     h += '</div>';
     return h;
+  }
+
+  // ── Fase 3c-B — skip-dispositie ──
+  var DISP_LABEL = { geen_tijd: 'Geen tijd', bewust_gerust: 'Bewust gerust', iets_anders: 'Iets anders gedaan' };
+  function canDispose_(d) {
+    return d && d.voorstel && !d.actual && !d.dispositie && d.status !== 'rust' &&
+           state.vandaag && d.dateISO <= state.vandaag.dateISO;
+  }
+  function dispositieAffordanceHtml_(dateISO) {
+    var btns = Object.keys(DISP_LABEL).map(function (r) {
+      return '<button type="button" class="disp-btn" onclick="setDisposition(\'' + dateISO + '\',\'' + r + '\')">' + DISP_LABEL[r] + '</button>';
+    }).join('');
+    return '<div class="disp-afford"><div class="disp-q">Niet gedaan?</div><div class="disp-row">' + btns + '</div></div>';
+  }
+  function gemistKaart_(d) {
+    var reason = (d.dispositie && d.dispositie.reason) ? (DISP_LABEL[d.dispositie.reason] || d.dispositie.reason) : '';
+    return '<div class="gemist-card">' +
+      '<div class="gemist-txt">Gemist' + (reason ? ' · ' + esc(reason) : '') + '</div>' +
+      '<button type="button" class="gemist-back" onclick="setDisposition(\'' + d.dateISO + '\',null)">Terug</button>' +
+    '</div>';
+  }
+  function setRpe(dateISO, rpe) {
+    google.script.run.withSuccessHandler(function (s) { state = s; renderSchema(); }).withFailureHandler(showError).saveRpe(dateISO, rpe);
+  }
+  function setDisposition(dateISO, reason) {
+    google.script.run.withSuccessHandler(function (s) { state = s; renderSchema(); renderWeekLoad(); }).withFailureHandler(showError).saveDisposition(dateISO, reason);
   }
 
   // ── Schema (Vandaag + Kalender samengevoegd) ──
@@ -219,6 +257,7 @@
       var mark = '';
       if (d.status === 'voltooid') mark = '✓';
       else if (d.status === 'vandaag') mark = '●';
+      else if (d.status === 'gemist') mark = '<span style="color:var(--text-muted)">×</span>';
       else if (d.status === 'rust') mark = '·';
       else if (d.status === 'preview') mark = '~';
       var dot = d.kleur ? '<div class="dot" style="background:' + d.kleur + '"></div>' : '<div class="dot" style="background:transparent"></div>';
@@ -333,24 +372,28 @@
     if (!d) { el.innerHTML = ''; return; }
     var h = '<div class="muted" style="text-transform:capitalize;margin-bottom:6px">' + esc(d.weekdag) + ' ' + esc(d.kort) + '</div>';
 
-    if (d.status === 'vandaag') {
+    if (d.status === 'gemist') {
+      h += gemistKaart_(d);
+    } else if (d.status === 'vandaag') {
       // Schema = puur trainingsgericht; readiness/Garmin-verwachting leven op Vorm.
       var v = state.vandaag;
       if (v.status === 'rust') {
         h += '<div class="card"><h3>Rustdag</h3><div class="muted">Geen training gepland vandaag. Herstel is training.</div></div>';
       } else {
         if (v.voorstel) h += voorstelKaart(v.voorstel, { overline: 'Vandaag', today: true });
-        if (v.actual)   h += actualKaart(v.actual);
+        if (v.actual)   h += actualKaart(v.actual, d.dateISO);
         if (!v.voorstel && !v.actual) h += '<div class="card"><div class="muted">Nog geen voorstel — draai Genereer voorstel in de Sheet.</div></div>';
+        if (canDispose_(d)) h += dispositieAffordanceHtml_(d.dateISO);
       }
     } else if (d.status === 'preview') {
       h += '<div class="card"><div class="muted">Volgende week — ' +
         (d.previewMin ? '~' + d.previewMin + ' min gepland (nog niet uitgewerkt)' : 'nog niet ingepland') + '</div></div>';
     } else if (d.status === 'voltooid' && d.actual) {
-      h += actualKaart(d.actual);
+      h += actualKaart(d.actual, d.dateISO);
       if (d.voorstel) h += voorstelKaart(d.voorstel, { overline: 'Gepland' });
     } else if (d.voorstel) {
       h += voorstelKaart(d.voorstel, { overline: 'Voorstel' });
+      if (canDispose_(d)) h += dispositieAffordanceHtml_(d.dateISO);
     } else {
       h += '<div class="card"><div class="muted">Geen training deze dag.</div></div>';
     }
