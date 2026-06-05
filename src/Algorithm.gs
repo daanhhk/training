@@ -1022,6 +1022,49 @@ function rdyUren_(h) {
   return hh + 'u' + (mm < 10 ? '0' + mm : mm);
 }
 
+// ── Ochtend-check-in (Fase 2) — begrensde bijstelling op de objectieve score ──
+// Drie vragen × 3 niveaus → delta −2/0/+2; somdelta −6..+6 op de base-score.
+// GEEN herweging, GEEN 5e factor: puur een geklemde nudge + callout.
+var CHECKIN_LEVELS = {
+  slaap:  { slecht: -2, 'oké': 0, goed: 2 },
+  benen:  { zwaar: -2, 'oké': 0, fris: 2 },
+  stress: { hoog: -2, normaal: 0, laag: 2 }
+};
+var CHECKIN_QUESTIONS = [
+  { key: 'slaap',  label: 'Slaap',  opts: ['slecht', 'oké', 'goed'] },
+  { key: 'benen',  label: 'Benen',  opts: ['zwaar', 'oké', 'fris'] },
+  { key: 'stress', label: 'Stress', opts: ['hoog', 'normaal', 'laag'] }
+];
+
+/** DocProp checkin_<today> → {slaap,benen,stress} of null. */
+function getTodayCheckin_() {
+  var dISO = formatDate(stripTime_(new Date()), 'yyyy-MM-dd');
+  var raw = getDocProp('checkin_' + dISO, '');
+  if (!raw) return null;
+  try {
+    var o = JSON.parse(raw);
+    if (o && o.slaap && o.benen && o.stress) return { slaap: o.slaap, benen: o.benen, stress: o.stress };
+  } catch (e) {}
+  return null;
+}
+
+/** Som van de drie deltas, geklemd op −6..+6. Onbekend niveau → 0. */
+function checkinDelta_(checkin) {
+  if (!checkin) return 0;
+  var d = 0;
+  ['slaap', 'benen', 'stress'].forEach(function (k) {
+    var v = CHECKIN_LEVELS[k] ? CHECKIN_LEVELS[k][checkin[k]] : undefined;
+    if (typeof v === 'number') d += v;
+  });
+  return Math.max(-6, Math.min(6, d));
+}
+
+/** Leesbare samenvatting "Slaap goed · Benen oké · Stress laag". */
+function checkinSummary_(checkin) {
+  if (!checkin) return '';
+  return CHECKIN_QUESTIONS.map(function (q) { return q.label + ' ' + (checkin[q.key] || '?'); }).join(' · ');
+}
+
 /**
  * Readiness 0-100 + band + factor-breakdown + chips. Objectief-preset.
  * Args optioneel: hergebruikt reeds-berekende signalen uit getDashboardState
@@ -1094,6 +1137,10 @@ function getReadinessScore_(fs, wellness, reeks) {
   if (totW > 0) {
     score = Math.round(present.reduce(function (a, f) { return a + f.sub * f.weight; }, 0) / totW);
   }
+  // Fase 2 — ochtend-check-in: begrensde nudge op de objectieve base-score (geen herweging).
+  var checkin = getTodayCheckin_();
+  var cDelta = checkin ? checkinDelta_(checkin) : 0;
+  if (score != null && checkin) score = rdyClamp_(score + cDelta);
   var band = (score == null) ? null : (score >= 62 ? 'ready' : (score >= 48 ? 'caution' : 'rest'));
 
   var factors = raw.map(function (f) {
@@ -1110,7 +1157,27 @@ function getReadinessScore_(fs, wellness, reeks) {
   }
   if (wellness.hrvRecent != null) chips.push({ label: 'HRV ' + Math.round(wellness.hrvRecent), tone: 'muted' });
 
-  return { score: score, band: band, factors: factors, chips: chips };
+  return {
+    score: score, band: band, factors: factors, chips: chips,
+    checkinDone: !!checkin, checkinDelta: cDelta,
+    checkinSummary: checkin ? checkinSummary_(checkin) : '',
+    checkin: checkin || null   // raw {slaap,benen,stress} → client pre-select bij heropenen
+  };
+}
+
+/**
+ * Web-callable: schrijf de check-in van vandaag (DocProp checkin_<dISO>) en
+ * retourneer de HERBEREKENDE readiness (zelfde shape als state.readiness) zodat
+ * de client de kaart ververst zonder full reload.
+ */
+function saveCheckin(slaap, benen, stress) {
+  function ok(k, v) { return CHECKIN_LEVELS[k] && CHECKIN_LEVELS[k][v] !== undefined; }
+  if (!ok('slaap', slaap) || !ok('benen', benen) || !ok('stress', stress)) {
+    throw new Error('saveCheckin: ongeldige check-in-waarde.');
+  }
+  var dISO = formatDate(stripTime_(new Date()), 'yyyy-MM-dd');
+  setDocProp('checkin_' + dISO, JSON.stringify({ slaap: slaap, benen: benen, stress: stress, ts: new Date().toISOString() }));
+  return getReadinessScore_();
 }
 
 function doelKey(doel) {

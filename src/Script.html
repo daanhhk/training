@@ -3,6 +3,8 @@
   var selectedDate = null;
   var statPeriod = 'd28';
   var chartsReady = false;
+  var checkinSel = { slaap: 'oké', benen: 'oké', stress: 'normaal' };  // Fase 2 — neutrale default
+  var checkinAutoOpened = false;
 
   // NL-decimaal helper.
   function nl(n, dec) {
@@ -30,6 +32,10 @@
   function onState(s) {
     state = s;
     selectedDate = s.vandaag ? s.vandaag.dateISO : null;
+    // Fase 2 — pre-select check-in-sheet uit opgeslagen waarden (heropenen toont ze).
+    if (s.readiness && s.readiness.checkin) {
+      checkinSel = { slaap: s.readiness.checkin.slaap, benen: s.readiness.checkin.benen, stress: s.readiness.checkin.stress };
+    }
     document.getElementById('loading').style.display = 'none';
     document.getElementById('bottomnav').style.display = 'flex';
     renderSchema();
@@ -38,6 +44,7 @@
     switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
     google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); drawNiveauChart(); });
+    maybeAutoOpenCheckin();
   }
 
   // ── Zone-bar SVG — schaalt ALTIJD naar 100% breedte (viewBox 0..100,
@@ -460,13 +467,69 @@
       '</div>' +
       '<details class="rc-why"><summary>Waarom dit cijfer?</summary>' +
         '<div class="rc-factors">' + rows + '</div></details>' +
-      '<div class="rc-checkin">+ Ochtend-check-in invullen</div>' +
+      (rd.checkinDone
+        ? checkinDoneHtml_(rd)
+        : '<div class="rc-checkin" onclick="openCheckin()">+ Ochtend-check-in invullen</div>') +
     '</div>';
   }
 
   function renderVormStatus() {
     document.getElementById('vorm-status').innerHTML = readinessCardHtml(state.readiness);
   }
+
+  // ── Fase 2 — Ochtend-check-in (bottom sheet via overlay-primitive) ──
+  var CHECKIN_Q = [
+    { key: 'slaap',  label: 'Slaap',  opts: ['slecht', 'oké', 'goed'] },
+    { key: 'benen',  label: 'Benen',  opts: ['zwaar', 'oké', 'fris'] },
+    { key: 'stress', label: 'Stress', opts: ['hoog', 'normaal', 'laag'] }
+  ];
+  function checkinSheetHtml() {
+    var groups = CHECKIN_Q.map(function (q) {
+      var segs = q.opts.map(function (o) {
+        var on = (checkinSel[q.key] === o) ? ' is-on' : '';
+        return '<button type="button" class="ci-seg' + on + '" data-val="' + o + '" onclick="checkinPick(\'' + q.key + '\',\'' + o + '\')">' + o + '</button>';
+      }).join('');
+      return '<div class="ci-group"><div class="ci-label">' + q.label + '</div>' +
+        '<div class="ci-segs" data-ci-row="' + q.key + '">' + segs + '</div></div>';
+    }).join('');
+    return '<div class="ci-title">Ochtend-check-in</div>' + groups +
+      '<button type="button" class="ci-save" onclick="submitCheckin()">Vastleggen</button>';
+  }
+  function openCheckin() { openDrawer({ variant: 'sheet', html: checkinSheetHtml() }); }
+  function checkinPick(key, val) {
+    checkinSel[key] = val;
+    document.querySelectorAll('[data-ci-row="' + key + '"] .ci-seg').forEach(function (b) {
+      b.classList.toggle('is-on', b.getAttribute('data-val') === val);
+    });
+  }
+  function submitCheckin() {
+    var btn = document.querySelector('.ci-save');
+    if (btn) { btn.disabled = true; btn.textContent = 'Bezig…'; }
+    google.script.run
+      .withSuccessHandler(function (rd) { state.readiness = rd; closeDrawer(); renderVormStatus(); })
+      .withFailureHandler(function (err) { if (btn) { btn.disabled = false; btn.textContent = 'Vastleggen'; } showError(err); })
+      .saveCheckin(checkinSel.slaap, checkinSel.benen, checkinSel.stress);
+  }
+  function maybeAutoOpenCheckin() {
+    if (checkinAutoOpened) return;
+    if (state.readiness && state.readiness.checkinDone === false) {
+      checkinAutoOpened = true;
+      setTimeout(openCheckin, 400);   // na de eerste render; dismissbaar via scrim/Esc
+    }
+  }
+  // ReadinessCard-onderkant in ingevuld-staat: samenvatting + ronde +-knop + effect-callout.
+  function checkinDoneHtml_(rd) {
+    var d = rd.checkinDelta || 0;
+    var effect = (d === 0) ? 'Check-in: geen effect op je score'
+      : 'Check-in: ' + (d > 0 ? '+' + d : d) + ' op je score';
+    return '<div class="rc-done">' +
+      '<div class="rc-done-row">' +
+        '<span class="rc-done-sum">' + esc(rd.checkinSummary || '') + '</span>' +
+        '<button type="button" class="rc-done-add" onclick="openCheckin()" aria-label="Check-in aanpassen">+</button>' +
+      '</div>' +
+      '<div class="rc-effect">' + esc(effect) + '</div></div>';
+  }
+  window.openCheckin = openCheckin;
   function toggleUitleg(sfx) {
     var el = document.getElementById('vorm-uitleg-' + sfx);
     if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';

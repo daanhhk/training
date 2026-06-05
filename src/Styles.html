@@ -132,7 +132,23 @@
   .rc-flabel { flex: 1; font-size: var(--fs-label); color: var(--text-secondary); }
   .rc-fdot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: var(--r-pill); }
   .rc-fval { flex: 0 0 auto; font-family: var(--font-num); font-size: var(--fs-num-sm); color: var(--text-primary); }
-  .rc-checkin { margin-top: var(--s-4); border: 1px dashed var(--border-strong); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--text-muted); text-align: center; padding: 12px; font-size: var(--fs-label); }
+  .rc-checkin { margin-top: var(--s-4); border: 1px dashed var(--border-strong); border-radius: var(--r-sm); background: var(--bg-sunken); color: var(--text-muted); text-align: center; padding: 12px; font-size: var(--fs-label); cursor: pointer; }
+
+  /* Fase 2 — ReadinessCard ingevuld-staat */
+  .rc-done { margin-top: var(--s-4); }
+  .rc-done-row { display: flex; align-items: center; gap: var(--s-3); }
+  .rc-done-sum { flex: 1; font-size: var(--fs-label); color: var(--text-secondary); }
+  .rc-done-add { flex: 0 0 auto; width: 32px; height: 32px; border-radius: var(--r-pill); border: none; cursor: pointer; background: var(--accent-soft); color: var(--accent); font-size: 20px; line-height: 1; }
+  .rc-effect { margin-top: 8px; background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--fs-label); }
+
+  /* Fase 2 — Ochtend-check-in sheet */
+  .ci-title { font-size: var(--fs-h1); font-weight: var(--fw-h1); color: var(--text-primary); margin: 4px 0 var(--s-4); }
+  .ci-group { margin-bottom: var(--s-4); }
+  .ci-label { font-size: var(--fs-label); font-weight: var(--fw-label); color: var(--text-secondary); margin-bottom: 8px; }
+  .ci-segs { display: flex; gap: 4px; background: var(--segment-track-bg); border-radius: var(--r-md); padding: 4px; }
+  .ci-seg { flex: 1; border: none; cursor: pointer; background: transparent; color: var(--segment-text); font-family: var(--font-sans); font-size: var(--fs-label); font-weight: var(--fw-label); padding: 9px 4px; border-radius: var(--r-sm); text-transform: capitalize; }
+  .ci-seg.is-on { background: var(--segment-active-bg); color: var(--segment-active-text); box-shadow: var(--segment-active-shadow); }
+  .ci-save { width: 100%; height: var(--btn-height); margin-top: var(--s-2); border: none; cursor: pointer; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-family: var(--font-sans); font-size: var(--fs-body); font-weight: 600; }
 
   /* Vorm status-graphic — swipeable deck */
   .status-wrap {
