@@ -5,8 +5,8 @@ Bron van waarheid voor de projectstand. Conventies + architectuur-detail + code-
 ## STAND (leidend)
 INTERACTIEVE HtmlService web-app. /dev:
 https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSIW-J/dev
-- **DONKERE SKIN IS LIVE.** 4 tabs (Schema/Vorm/Trainingen/Niveau). Fase 0 compleet, Fase 1a compleet. Volgende = Fase 1b (readiness-kaart op Vorm).
-- 1a VISUEEL nog te verifiëren op /dev. Eerste actie nieuwe chat: bevestig 1a (Schema-plan-kaart: dicht = overline+titel+mode-chip+chevron; open = fase-timeline + A/B-pills + stat-rij), daarna 1b.
+- **DONKERE SKIN IS LIVE.** 4 tabs (Schema/Vorm/Trainingen/Niveau). Fase 0, 1a, **1b (ReadinessCard) en Fase 2-kern (ochtend-check-in + readiness-bijstelling) compleet.** Volgende = rest van Schema (WeekLoad/dag-detail, F.2) of Vorm-body (Fase 3).
+- VISUEEL nog te verifiëren op /dev. Eerste actie nieuwe chat: **bevestig 1b + check-in** (incognito): geen check-in vandaag → sheet opent auto; Vastleggen → samenvatting + delta-callout + ronde +-knop; score schuift met de delta; band herkleurt bij grenskruising.
 
 ## Visual system / aanpak
 - Beslissing: **THEME-FIRST**. `design/tokens.css` (donker, 4-tabs) = styling-bron van waarheid; volledig gemirrord in `src/Tokens.html`.
@@ -27,10 +27,10 @@ https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSI
 ## Bouw-roadmap (volgorde)
 Verticale plakken: UI + Apps Script-handler + Sheet-range per feature. Elke fase = bruikbaar increment.
 - **Fase 0 Fundament — DONE.** skin-flip (tokens geserveerd + alias-bridge + IBM Plex + ring→tokens), 4-tab-shell (Trainingen/Niveau lege containers), herbruikbare overlay (sheet/drawer).
-- **Fase 1 Status-deck & plan herstructurering — 1a DONE / 1b NEXT.**
+- **Fase 1 Status-deck & plan herstructurering — 1a DONE / 1b DONE.**
   - **1a DONE:** Schema-plan-kaart (PeriodTimeline, countdown verhuisd hierheen); deck VERWIJDERD van Schema (design: Schema heeft geen deck).
-  - **1b NEXT:** Vorm-prime → readiness-kaart (`ReadinessCard`, export §2a) op Vorm-top; vervangt de oude deck op Vorm.
-- **Fase 2 Rest van Schema:** availability F.1b, WeekLoad + stale (F.3), dag-detail-varianten, WorkoutPicker/override, RPE, rust/niet-beschikbaar + toch-trainen (F.2), multi-sessie, edge states. (Ochtend-check-in-sheet hoort hier — write-side, overlay-primitive.)
+  - **1b DONE:** readiness-kaart (`ReadinessCard`, export §2a) op Vorm-top; `getReadinessScore_` (objectief preset) → `state.readiness`; vervangt de oude deck-mount.
+- **Fase 2 — ochtend-check-in DONE; rest van Schema open.** DONE: check-in-sheet + readiness-bijstelling (±2-model). Open: WeekLoad + stale (F.3), dag-detail-varianten, WorkoutPicker/override, RPE, rust/niet-beschikbaar + toch-trainen (F.2), multi-sessie, edge states.
 - **Fase 3 Rest van Vorm:** level-kaart + niveau-grafiek + metrics + conditie-balans; **+ chart/legenda tokeniseren** (off-palette leftovers, zie contracten).
 - **Fase 4 Trainingen:** bibliotheek drill-down + Inplannen.
 - **Fase 5 Instellingen-drawer** (CRUD; gebruikt overlay drawer-variant). Naar voren te halen indien nodig.
@@ -69,20 +69,22 @@ Per-user Sheet, geen centrale backend, Apps Script. Elke server-actie = handler 
 **Readiness-data (server, read-side — 1b-input):** `getFormScore_`→`{date,ctl,atl,form,ramp,label}`. `state.vorm.huidig`=`{vorm,vormZone,ctl,atl,ramp}` (WebApp.gs:471) + `vorm.macroFase/ftp/rampBuildMin`. `getWellnessSignal` (Algorithm.gs:888)→`{hrvBaseline(28d),hrvRecent(3d),sleepLastNight,sleepAvg3,hrvDeficit%}`. Wellness-tab (Algorithm.gs:900): A=Datum B=RHR C=HRV D=Slaap; baselines computed; cadans `getWellness(30)` bij `syncAll`. **Check-in (ochtend, benen/stress/slaap) = AFWEZIG** (future); `rpeAvondCheck` (Telegram) = avond-RPE, los.
 **Plan-kaart (1a, live):** `buildPlanModel_(macro, settings)` (Doel.gs) → `state.plan` (WebApp.gs, na `mode`) = `{modeLabel, eventName, wekenTot, dagenTot, currentPhaseKey, currentPhaseLabel, phases:[{key,label,state}], events:[{naam,prio,type,dagenTot}], volume:{label,value}|null}`. Hergebruikt `bepaalFaseVoorDatum_(weekStart)`→`{fase∈Base/Build/Peak/Taper/Recovery, wekenTotEvent, eventDriven, eventName, eventDate}`, `computeMacroPhase(start,today)`→`{week,fase∈Base/Build/Peak/Test,isTestWeek}`, `getAllEvents_`, `getVolumeTargets()[fase]=[min,max]u/wk`. NL-labels Basis/Build/Peak/Taper. `planCardHtml(plan)` (Script.html, `<details>`, default dicht); CSS in Styles.html. Edge: Test→Taper-bucket(idx3), Recovery→alle-4-past (geen current-marker) — herzien als 't leeg oogt.
 
-## 1b — bouwspec (NEXT, na visuele 1a-verificatie)
+## 1b — bouwspec (DONE — contracten in KLAAR hieronder)
 Vorm-top `ReadinessCard` (export §2a), vervangt `renderVormStatus('vorm')`→`#vorm-status`-mount.
 - **Server** `getReadinessScore_` (combineert `getWellnessSignal`+`getFormScore_`) → `{score 0–100, band(ready/caution/rest), factors:[{key,label,value0-100,status:good/warn/muted}], chips:[{label,tone}]}`. Gewichten als named constant (presets objectief/gebalanceerd/subjectief; default objectief = 0,30/0,30/0,25/0,15). Normaliseer per factor (vorm-trend uit form/TSB, belasting uit ramp/ATL-CTL, HRV uit hrvDeficit/baseline, slaap uit sleepAvg3/need). Expose via getDashboardState (bv. `state.readiness`).
 - **Client** `readinessCardHtml`: overline "Status · vandaag"; `ringSvg` gekleurd naar band (`--readiness-ready/caution/rest`, track `--readiness-ring-track`, center `--font-num`); verdict + chips ("Vorm +n" `--fresh/--fresh-soft`, "HRV n" `--text-muted`); "Waarom dit cijfer?"-expander → factor-lijst met status-dots. Onder: gestippelde "+ Ochtend-check-in invullen"-prompt — capture is TOEKOMST. niveau-block valt uit Vorm-top (herbouw = Fase 3).
 - STAP 0-recon: `renderVormStatus`/`#vorm-status`-mount, `getWellnessSignal`/`getFormScore_`-shapes, getDashboardState-assembly, `ringSvg`-kleurparam.
 
 ## Volgende stap
-1. Verifieer 1a visueel op /dev (Schema-plan-kaart). 2. Bouw Fase 1b (readiness-kaart) per bouwspec hierboven.
+1. Verifieer 1b + ochtend-check-in visueel op /dev (incognito + hard refresh). 2. Daarna: rest van Schema (WeekLoad/stale F.3, dag-detail-varianten, RPE) of Vorm-body (Fase 3: LevelCard + niveau-grafiek + metrics + conditie-balans).
 
 ---
 
 ## Historie & engine-referentie (bruikbare historie — overleeft de restyle)
 
 ### KLAAR (done sinds bbd1a6b)
+- **Fase 2-kern — ochtend-check-in + readiness-bijstelling (a5d0b43):** `saveCheckin(slaap,benen,stress)` schrijft DocProp `checkin_<dISO>` (JSON {slaap,benen,stress,ts}) → herberekende readiness (zelfde shape). `getTodayCheckin_`/`checkinDelta_`/`checkinSummary_`; `CHECKIN_LEVELS` ±2/0 per vraag (slaap slecht/oké/goed · benen zwaar/oké/fris · stress hoog/normaal/laag), somdelta −6..+6 geklemd op de objectieve base-score (GEEN herweging, GEEN 5e factor). Client: `checkinSheetHtml` (overlay sheet via openDrawer, segmented controls, default neutraal), auto-open bij `checkinDone:false` (1×/load, dismissbaar), ingevuld-staat `checkinDoneHtml_` (summary + ronde +-knop + effect-callout). `state.readiness` += `checkinDone/checkinDelta/checkinSummary/checkin`.
+- **Fase 1b — Vorm ReadinessCard (6e1b7a9):** `getReadinessScore_(fs,wellness,reeks)` (Algorithm.gs) → `state.readiness {score,band,factors[],chips[]}`, objectief preset `READINESS_PRESETS` (0.30/0.30/0.25/0.15). Normalisatie: vorm-trend TSB −30→+10 + richting-nudge ±10; belasting ATL/CTL 1.5→0.8 (0.6) ⊕ ramp 10→0 (0.4); HRV deficit% −15→+5; slaap 5u→8u. Banden ≥62/48; dot ≥67/34. Client `readinessCardHtml`+`readinessRing_(score,colorVar)` vervangt `renderVormStatus`-mount `#vorm-status`; `.rc-*` CSS. Niveau-block uit Vorm-top (LevelCard = Fase 3).
 - **Fase 1a — Schema plan-kaart (8c774da server / 5ff0219 client):** buildPlanModel_→state.plan; planCardHtml (collapsible) vervangt deck-mount op Schema. Detail: zie "Nieuwe contracten".
 - **Fase 0b — 4-tab-shell + overlay (3fb917f / ad31aa9):** Trainingen/Niveau containers, switchTab 4-tabs; window.openDrawer/closeDrawer (sheet/drawer) via src/Drawer.html.
 - **Fase 0a — dark skin-flip (48ba640):** src/Tokens.html + src/Alias.html, IBM Plex, ring→tokens.
