@@ -47,10 +47,11 @@
     maybeAutoOpenCheckin();
   }
 
-  // ── Zone-bar SVG — schaalt ALTIJD naar 100% breedte (viewBox 0..100,
-  //    preserveAspectRatio none). Korte blokken krijgen een min-breedte,
-  //    daarna renormaliseren we zodat de som exact 100 blijft (geen overflow).
-  function zoneBar(segmenten) {
+  // ── Zone-bar SVG — schaalt ALTIJD naar 100% breedte; kleuren via zone-tokens
+  //    (bucket → --zone-1…6) i.p.v. de server-hex. mini = compacte variant.
+  var ZONE_VAR = { rust: '--zone-1', z2: '--zone-2', low: '--zone-2', tempo: '--zone-3',
+                   high: '--zone-4', drempel: '--zone-4', anaeroob: '--zone-6', anaerobic: '--zone-6' };
+  function zoneBar(segmenten, mini) {
     if (!segmenten || !segmenten.length) return '<div class="muted">Geen structuur beschikbaar.</div>';
     var W = 100, H = 100, MINW = 1.4;
     var totMin = segmenten.reduce(function (a, b) { return a + b.minuten; }, 0) || 1;
@@ -59,63 +60,60 @@
     var x = 0, parts = '';
     segmenten.forEach(function (sg, i) {
       var w = (raw[i] / sum) * W;           // renormaliseer naar exact 100
-      var h = sg.hoogtePct, y = H - h;
-      parts += '<rect x="' + x.toFixed(2) + '" y="' + y + '" width="' + w.toFixed(2) + '" height="' + h + '" fill="' + sg.kleur + '" rx="0.6"></rect>';
+      var hh = sg.hoogtePct, y = H - hh;
+      var col = 'var(' + (ZONE_VAR[sg.bucket] || '--zone-2') + ')';
+      parts += '<rect x="' + x.toFixed(2) + '" y="' + y + '" width="' + w.toFixed(2) + '" height="' + hh + '" style="fill:' + col + '" rx="0.6"></rect>';
       x += w;
     });
-    return '<svg class="zonebar" viewBox="0 0 100 100" preserveAspectRatio="none">' + parts + '</svg>';
+    return '<svg class="' + (mini ? 'wk-minibar' : 'wk-zonebar') + '" viewBox="0 0 100 100" preserveAspectRatio="none">' + parts + '</svg>';
   }
 
-  function voorstelKaart(v) {
+  function wkMetric_(val, lbl) {
+    return '<div class="wk-metric"><div class="wk-mv">' + val + '</div><div class="wk-ml">' + lbl + '</div></div>';
+  }
+  function wkWhy_(v) {
+    if (!v.waarom || !v.waarom.length) return '';
+    var li = v.waarom.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('');
+    return '<details class="wk-why"><summary>Waarom deze training?</summary><ul>' + li + '</ul></details>';
+  }
+
+  // Skin §1d — workout-kaart. opts {overline, today}. Meerdere sessies → sunken sub-kaarten.
+  function voorstelKaart(v, opts) {
     if (!v) return '';
-    // v2c-pendel: multi-session → losse kaart per sessie (elk eigen zonebar).
+    opts = opts || {};
+    var ol = '<div class="wk-overline' + (opts.today ? ' wk-today' : '') + '">' + esc(opts.overline || 'Voorstel') + '</div>';
+    var name = '<div class="wk-name">' + esc(v.titel) + '</div>';
     if (v.sessies && v.sessies.length > 1) {
-      return v.sessies.map(sessieKaart_).join('');
+      var subs = v.sessies.map(function (s) {
+        return '<div class="wk-sub">' +
+          '<div class="wk-sub-name">' + esc(s.titel || 'Sessie') + '</div>' +
+          zoneBar(s.segmenten, true) +
+          '<div class="wk-metrics">' + wkMetric_(uMin(s.duurMin), 'duur') + wkMetric_(Math.round(s.tss || 0), 'TSS') + '</div>' +
+          (s.eindopmerking ? '<div class="wk-note">' + esc(s.eindopmerking) + '</div>' : '') +
+        '</div>';
+      }).join('');
+      return '<div class="wk-card">' + ol + name + subs + wkWhy_(v) + '</div>';
     }
-    var h = '<div class="card"><h3>' + esc(v.titel) + '</h3>';
-    h += zoneBar(v.segmenten);
-    h += '<div class="metrics">';
-    h += '<div class="metric"><div class="v">' + uMin(v.duurMin) + '</div><div class="l">duur</div></div>';
-    h += '<div class="metric"><div class="v">' + Math.round(v.tss || 0) + '</div><div class="l">TSS</div></div>';
-    h += '<div class="metric"><div class="v">' + esc(v.type || '–') + '</div><div class="l">type</div></div>';
-    h += '</div>';
-    if (v.reden) {
-      h += '<div class="muted">' + esc(v.reden) + '</div>';  // v2c: waarom-deze-training regel
-    }
-    if (v.waarom && v.waarom.length) {
-      h += '<details><summary>Waarom deze training?</summary><ul>';
-      v.waarom.forEach(function (w) { h += '<li>' + esc(w) + '</li>'; });
-      h += '</ul></details>';
-    }
-    h += '</div>';
-    return h;
-  }
-
-  // v2c-pendel: één losse sessie-kaart (titel + eigen zonebar + duur/TSS + note).
-  function sessieKaart_(s) {
-    if (!s) return '';
-    var h = '<div class="card"><h3>' + esc(s.titel || 'Sessie') + '</h3>';
-    h += zoneBar(s.segmenten);
-    h += '<div class="metrics">';
-    h += '<div class="metric"><div class="v">' + uMin(s.duurMin) + '</div><div class="l">duur</div></div>';
-    h += '<div class="metric"><div class="v">' + Math.round(s.tss || 0) + '</div><div class="l">TSS</div></div>';
-    h += '</div>';
-    if (s.eindopmerking) h += '<div class="muted">' + esc(s.eindopmerking) + '</div>';
-    h += '</div>';
-    return h;
+    return '<div class="wk-card">' + ol + name + zoneBar(v.segmenten) +
+      '<div class="wk-metrics">' + wkMetric_(uMin(v.duurMin), 'duur') + wkMetric_(Math.round(v.tss || 0), 'TSS') + '</div>' +
+      (v.reden ? '<div class="wk-note">' + esc(v.reden) + '</div>' : '') +
+      wkWhy_(v) + '</div>';
   }
 
   function actualKaart(a) {
     if (!a) return '';
-    var h = '<div class="card"><h3>✅ ' + esc(a.naam) + '</h3><div class="metrics">';
-    h += '<div class="metric"><div class="v">' + uMin(a.duurMin) + '</div><div class="l">duur</div></div>';
-    h += '<div class="metric"><div class="v">' + (a.tss != null ? Math.round(a.tss) : '–') + '</div><div class="l">TSS</div></div>';
-    h += '<div class="metric"><div class="v">' + (a.rpe != null ? a.rpe : '–') + '</div><div class="l">RPE</div></div>';
-    h += '</div>';
+    var h = '<div class="wk-card">' +
+      '<div class="wk-overline wk-ok">✓ Voltooid</div>' +
+      '<div class="wk-name">' + esc(a.naam) + '</div>' +
+      '<div class="wk-metrics">' +
+        wkMetric_(uMin(a.duurMin), 'duur') +
+        wkMetric_(a.tss != null ? Math.round(a.tss) : '–', 'TSS') +
+        wkMetric_(a.rpe != null ? a.rpe : '–', 'RPE') +
+      '</div>';
     if (a.mismatch != null && a.rpeVerwacht != null) {
       var t = a.mismatch > 0 ? ('+' + nl(a.mismatch, 1) + ' zwaarder dan verwacht (~' + a.rpeVerwacht + ')')
             : (a.mismatch < 0 ? (nl(a.mismatch, 1) + ' lichter dan verwacht') : 'precies op verwachting');
-      h += '<div class="muted">RPE-mismatch: ' + t + '</div>';
+      h += '<div class="wk-note">RPE-mismatch: ' + t + '</div>';
     }
     h += '</div>';
     return h;
@@ -297,18 +295,12 @@
     var h = '<div class="muted" style="text-transform:capitalize;margin-bottom:6px">' + esc(d.weekdag) + ' ' + esc(d.kort) + '</div>';
 
     if (d.status === 'vandaag') {
-      // Rijke vandaag-inhoud uit state.vandaag (status-graphic staat al bovenaan).
+      // Schema = puur trainingsgericht; readiness/Garmin-verwachting leven op Vorm.
       var v = state.vandaag;
-      var g = v.gereedheid, cls = 'b-' + (g.signaal === 'normal' ? 'normaal' : g.signaal);
-      h += '<div class="banner ' + cls + '">' +
-        (g.signaal === 'normal' ? '✅ Gereedheid normaal' : '⚠️ ' + esc(g.label || g.signaal)) +
-        (g.vorm != null ? ' · Vorm ' + g.vorm + ' (' + esc(g.vormZone) + ')' : '') + '</div>';
-      h += '<div class="card"><div class="muted">Garmin-verwachting</div><div class="accent" style="font-weight:700">' +
-        esc(v.garminStatus.verdict) + '</div></div>';
       if (v.status === 'rust') {
         h += '<div class="card"><h3>Rustdag</h3><div class="muted">Geen training gepland vandaag. Herstel is training.</div></div>';
       } else {
-        if (v.voorstel) h += voorstelKaart(v.voorstel);
+        if (v.voorstel) h += voorstelKaart(v.voorstel, { overline: 'Vandaag', today: true });
         if (v.actual)   h += actualKaart(v.actual);
         if (!v.voorstel && !v.actual) h += '<div class="card"><div class="muted">Nog geen voorstel — draai Genereer voorstel in de Sheet.</div></div>';
       }
@@ -317,9 +309,9 @@
         (d.previewMin ? '~' + d.previewMin + ' min gepland (nog niet uitgewerkt)' : 'nog niet ingepland') + '</div></div>';
     } else if (d.status === 'voltooid' && d.actual) {
       h += actualKaart(d.actual);
-      if (d.voorstel) h += voorstelKaart(d.voorstel);
+      if (d.voorstel) h += voorstelKaart(d.voorstel, { overline: 'Gepland' });
     } else if (d.voorstel) {
-      h += voorstelKaart(d.voorstel);
+      h += voorstelKaart(d.voorstel, { overline: 'Voorstel' });
     } else {
       h += '<div class="card"><div class="muted">Geen training deze dag.</div></div>';
     }
