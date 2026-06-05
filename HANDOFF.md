@@ -75,6 +75,14 @@ Vorm-top `ReadinessCard` (export §2a), vervangt `renderVormStatus('vorm')`→`#
 - **Client** `readinessCardHtml`: overline "Status · vandaag"; `ringSvg` gekleurd naar band (`--readiness-ready/caution/rest`, track `--readiness-ring-track`, center `--font-num`); verdict + chips ("Vorm +n" `--fresh/--fresh-soft`, "HRV n" `--text-muted`); "Waarom dit cijfer?"-expander → factor-lijst met status-dots. Onder: gestippelde "+ Ochtend-check-in invullen"-prompt — capture is TOEKOMST. niveau-block valt uit Vorm-top (herbouw = Fase 3).
 - STAP 0-recon: `renderVormStatus`/`#vorm-status`-mount, `getWellnessSignal`/`getFormScore_`-shapes, getDashboardState-assembly, `ringSvg`-kleurparam.
 
+## Open punten / tech-debt (post Fase 3c)
+- **VISUELE VERIFICATIE OPENSTAAND** voor 1b + check-in + 3a/3b/3c — de Claude Code-agent had geen gekoppelde browser, dus alle pushes zijn logisch geverifieerd + `clasp`-compile, NIET visueel op /dev. Daan: incognito + hard refresh-pass.
+- **WeekLoad `stale`** = hardcoded `false` (F.3-signaal bestaat nog niet) — implementeren wanneer er een "plan verouderd"-detectie is.
+- **"Doe iets anders" / WorkoutPicker** bewust NIET gebouwd in 3a (geen backing, geen dode knop) — future.
+- **Dispositie-besluit:** `saveDisposition` doet bewust géén `generateProposal` (read-side overlay) om "inhalen" via debt te vermijden. Herzien als inhalen ooit wél gewenst is.
+- **Off-palette chart-hex** (Vorm-grafiek lijn/legenda `#5B5BD6` e.a. + niveau-grafiek) → tokeniseren in Fase 3.
+- **Garmin-push** nog week-niveau (geen per-dag `GarminSync`-knop) → Fase 6.
+
 ## Volgende stap
 1. Verifieer 1b + check-in + 3a/3b/3c visueel op /dev (incognito + hard refresh). 2. Daarna: Vorm-body (Fase 3-design: LevelCard + niveau-grafiek + metrics + conditie-balans) of Trainingen-bibliotheek (Fase 4).
 
