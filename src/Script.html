@@ -90,7 +90,9 @@
   }
 
   // §1d-extra's: zone-badge (primaire zone), ZoneLegend, inklapbare Blokstructuur, IF-metric.
-  var ZONE_LABEL = { rust: 'Z1', z2: 'Z2', low: 'Z2', tempo: 'Z3', high: 'Z4', drempel: 'Z4', anaeroob: 'Z5+', anaerobic: 'Z5+' };
+  // Labels = zone-NAMEN (niet Z-nummers) → coherent met badgeHtml_/INTENT_BADGE: zelfde
+  // naam per --zone-token (1 Herstel · 2 Duur · 3 Tempo · 4 Drempel · 6 VO2max).
+  var ZONE_LABEL = { rust: 'Herstel', z2: 'Duur', low: 'Duur', tempo: 'Tempo', high: 'Drempel', drempel: 'Drempel', anaeroob: 'VO2max', anaerobic: 'VO2max' };
   // Primaire zone = zwaarste bucket met SIGNIFICANTE duur (≥ max(8min, 12% totaal),
   // rust uitgesloten). "Lange Z2" → Z2 (kort piek-blokje telt niet); interval-workout
   // → de interval-zone (niet de Z2-recovery die in minuten domineert).
@@ -114,7 +116,7 @@
     var b = primaryBucket_(segs);
     if (!b) return '';
     var z = ZONE_VAR[b] || '--zone-2';
-    return '<span class="zbadge" style="color:var(' + z + ');border-color:var(' + z + ')">' + (ZONE_LABEL[b] || 'Z2') + '</span>';
+    return '<span class="zbadge" style="color:var(' + z + ');border-color:var(' + z + ')">' + (ZONE_LABEL[b] || 'Duur') + '</span>';
   }
   // §1d-badge = workout-INTENT-categorie (mock toont "VO2max"), niet de piek/duur-bucket.
   // Namen uit de mock; kleuren 1-op-1 uit de --zone-*-coupling. Onbekend type → fallback zoneBadge_.
@@ -147,7 +149,7 @@
     segs.forEach(function (s) {
       if (seen[s.bucket]) return; seen[s.bucket] = true;
       var z = ZONE_VAR[s.bucket] || '--zone-2';
-      items.push('<span class="zleg-item"><span class="zleg-dot" style="background:var(' + z + ')"></span>' + (ZONE_LABEL[s.bucket] || 'Z2') + '</span>');
+      items.push('<span class="zleg-item"><span class="zleg-dot" style="background:var(' + z + ')"></span>' + (ZONE_LABEL[s.bucket] || 'Duur') + '</span>');
     });
     return '<div class="zleg">' + items.join('') + '</div>';
   }
@@ -155,7 +157,7 @@
     if (!segs || !segs.length) return '';
     var rows = segs.map(function (s) {
       var z = ZONE_VAR[s.bucket] || '--zone-2';
-      return '<div class="blok-row"><span class="blok-zone" style="color:var(' + z + ')">' + (ZONE_LABEL[s.bucket] || 'Z2') + '</span><span class="blok-min">' + uMin(s.minuten) + '</span></div>';
+      return '<div class="blok-row"><span class="blok-zone" style="color:var(' + z + ')">' + (ZONE_LABEL[s.bucket] || 'Duur') + '</span><span class="blok-min">' + uMin(s.minuten) + '</span></div>';
     }).join('');
     return '<div class="bloklist">' + rows + '</div>';
   }
