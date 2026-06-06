@@ -730,7 +730,7 @@
 
   // Fase 3 deel 2 — niveau-trend venster-toggle (1M/6M/12M/Alles) + value/delta-header.
   // Client-display: slicet de bestaande maand-reeks (geen server-aggregatie).
-  var NIVEAU_WINDOWS = [{ k: '1m', l: '1M', n: 1 }, { k: '6m', l: '6M', n: 6 }, { k: '12m', l: '12M', n: 12 }, { k: 'alles', l: 'Alles', n: null }];
+  var NIVEAU_WINDOWS = [{ k: '1m', l: '1M', n: 2 }, { k: '6m', l: '6M', n: 7 }, { k: '12m', l: '12M', n: 13 }, { k: 'alles', l: 'Alles', n: null }];
   var niveauWindow = 'alles';
   function niveauReeksWindow_() {
     var reeks = (state.vorm && state.vorm.niveauReeks) ? state.vorm.niveauReeks : [];
@@ -741,18 +741,28 @@
   function renderNiveauHead_() {
     var el = document.getElementById('niveau-head');
     if (!el) return;
+    var full = (state.vorm && state.vorm.niveauReeks) ? state.vorm.niveauReeks : [];
+    var nonNull = full.filter(function (p) { return p.niveau != null; });
+    // Empty/te-kort (< 2 punten): value "—", geen toggle.
+    if (nonNull.length < 2) {
+      el.innerHTML = '<div class="nh-row"><div class="nh-val nh-empty">—<span class="nh-unit">niveau</span></div></div>';
+      return;
+    }
     var pts = niveauReeksWindow_().filter(function (p) { return p.niveau != null; });
     var cur = pts.length ? pts[pts.length - 1].niveau : null;
     var first = pts.length ? pts[0].niveau : null;
     var delta = (cur != null && first != null) ? Math.round((cur - first) * 10) / 10 : null;
-    var deltaHtml = (delta != null && pts.length > 1)
-      ? '<span class="nh-delta ' + (delta >= 0 ? 'nh-up' : 'nh-down') + '">' + (delta >= 0 ? '+' : '') + nl(delta, 1) + '</span>'
-      : '';
+    var deltaHtml = '';
+    if (delta != null && pts.length > 1) {
+      if (delta > 0)      deltaHtml = '<span class="nh-delta nh-up">+' + nl(delta, 1) + ' ↑</span>';
+      else if (delta < 0) deltaHtml = '<span class="nh-delta nh-down">' + nl(delta, 1) + ' ↓</span>';
+      else                deltaHtml = '<span class="nh-delta">±0,0</span>';
+    }
     var segs = NIVEAU_WINDOWS.map(function (w) {
       return '<button type="button" data-nw="' + w.k + '"' + (w.k === niveauWindow ? ' class="active"' : '') +
         ' onclick="setNiveauWindow(\'' + w.k + '\')">' + w.l + '</button>';
     }).join('');
-    el.innerHTML = '<div class="nh-row"><div class="nh-val">' + (cur != null ? nl(cur, 1) : '–') +
+    el.innerHTML = '<div class="nh-row"><div class="nh-val">' + nl(cur, 1) +
       '<span class="nh-unit">niveau</span></div>' + deltaHtml + '</div>' +
       '<div class="seg">' + segs + '</div>';
   }
@@ -762,19 +772,29 @@
     drawNiveauChart();
   }
 
-  // 2c: niveau-per-maand trend. Eén reeks, auto-zoom Y op databereik,
-  // interpolateNulls voor maanden zonder power-data.
+  // §2c: niveau-per-maand trend — AreaChart (accent-area 26% + 2,5px lijn + "nu"-punt).
+  // Venster via niveauReeksWindow_; auto-zoom Y; interpolateNulls voor lege maanden.
+  // Google Charts-limieten (best-effort): area is flat 26% (geen gradient-fade naar 0);
+  // lijn-caps niet rond instelbaar; "nu"-punt krijgt fill maar geen stroke-ring.
   function drawNiveauChart() {
     if (!chartsReady || !state || !state.vorm || !state.vorm.niveauReeks) return;
-    var reeks = niveauReeksWindow_();
     var el = document.getElementById('niveau-chart');
-    if (!reeks.length) { el.innerHTML = '<div class="muted">Geen niveau-data.</div>'; return; }
+    if (!el) return;
+    if (state.vorm.niveauReeks.filter(function (p) { return p.niveau != null; }).length < 2) {
+      el.innerHTML = '<div class="muted">Nog te weinig niveau-data.</div>'; return;
+    }
+    var reeks = niveauReeksWindow_();
+    var lastIdx = -1;
+    reeks.forEach(function (p, i) { if (p.niveau != null) lastIdx = i; });
+    var puntStyle = 'point { size: 5; fill-color: ' + cssColor_('var(--accent)') + '; }';
+
     var dt = new google.visualization.DataTable();
     dt.addColumn('string', 'Maand');
     dt.addColumn('number', 'Niveau');
     dt.addColumn({ type: 'string', role: 'tooltip' });
+    dt.addColumn({ type: 'string', role: 'style' });
     var mn = Infinity, mx = -Infinity;
-    reeks.forEach(function (p) {
+    reeks.forEach(function (p, i) {
       var tip = null;
       if (p.niveau != null) {
         tip = nlMaandLabel_(p.maand) + ': ' + p.niveau.toFixed(1).replace('.', ',');
@@ -782,18 +802,20 @@
         if (p.niveau < mn) mn = p.niveau;
         if (p.niveau > mx) mx = p.niveau;
       }
-      dt.addRow([nlMaandLabel_(p.maand), p.niveau, tip]);
+      dt.addRow([nlMaandLabel_(p.maand), p.niveau, tip, (i === lastIdx) ? puntStyle : null]);
     });
     var opts = {
       legend: { position: 'none' },
       chartArea: { width: '85%', height: '70%' },
-      colors: [cssColor_('var(--chart-line)')], curveType: 'function', interpolateNulls: true,
-      hAxis: { textStyle: { fontSize: 9 }, gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
-      vAxis: { gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
+      colors: [cssColor_('var(--chart-line)')],
+      curveType: 'function', interpolateNulls: true,
+      lineWidth: 2.5, pointSize: 0, areaOpacity: 0.26,
+      hAxis: { textStyle: { fontSize: 9, color: cssColor_('var(--text-secondary)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
+      vAxis: { textStyle: { color: cssColor_('var(--chart-axis)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
       backgroundColor: 'transparent'
     };
     if (mn !== Infinity) opts.vAxis.viewWindow = { min: Math.floor(mn - 1), max: Math.ceil(mx + 1) };
-    new google.visualization.LineChart(el).draw(dt, opts);
+    new google.visualization.AreaChart(el).draw(dt, opts);
   }
 
   // Vorm-zone-strip: Google Charts kan geen horizontale y-range-banden
