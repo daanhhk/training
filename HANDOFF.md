@@ -22,7 +22,7 @@ https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSI
   - **3 presets** `objectief / gebalanceerd / subjectief` (objectief = default; de andere twee + benen/stress = toekomst, post-check-in).
 - **Vol model (post-check-in, TOEKOMST):** voegt Benen + Stress in (subjectief, uit ochtend-check-in) en herberekent; gebalanceerd/subjectief schuiven richting slaap-zwaar (Garmin-achtig). Check-in-capture = future write-side (gebruikt de overlay-primitive uit Fase 0b).
 - Ontbrekende factor → wegvallen + herschalen (geen harde nul). **HRV + slaap bevestigd aanwezig** in deze gebruiker's intervals.icu.
-- "Waarom dit cijfer": per factor 0–100 + status-dot (good ≥70 / warn 45–69 / muted <45, tunebaar).
+- "Waarom dit cijfer": per factor 0–100 + status-dot. **LIVE-drempel (`getReadinessScore_`): good ≥67 / warn 34–66 / muted <34.** (De pré-build ≥70/45–69/<45 is niet geïmplementeerd.)
 
 ## Bouw-roadmap (volgorde)
 Verticale plakken: UI + Apps Script-handler + Sheet-range per feature. Elke fase = bruikbaar increment.
@@ -52,7 +52,7 @@ Verticale plakken: UI + Apps Script-handler + Sheet-range per feature. Elke fase
 - Schema-top = **plan-kaart** (`planCardHtml(state.plan)`); deck weg van Schema.
 - Vorm-top = nog de **oude** `statusGraphicHtml('vorm')`-deck → 1b vervangt dit door de readiness-kaart.
 - Overlay-primitive aanwezig (`window.openDrawer/closeDrawer`), nog geen UI-trigger.
-- Off-palette leftovers: Vorm-grafiek hardcoded hex (`#5B5BD6` Script.html:473 chart-lijn / :512 legenda + licht-thema-legenda-hex) + grijze chart-staven `#e2e8f0` → **Fase 3**; teal "Push naar Garmin"-knop → **Fase 6**.
+- Off-palette leftovers: **Vorm/niveau chart-hex getokeniseerd in Fase 3 deel 1** (gridlines waren `#eef2f7`, niet `#e2e8f0`; PMC-lijnen + formZone-banden → tokens via `cssColor_`). Resterend: teal "Push naar Garmin"-knop → **Fase 6**.
 - Alles via `google.script.run`.
 
 ## Architectuur
@@ -82,17 +82,18 @@ Vorm-top `ReadinessCard` (export §2a), vervangt `renderVormStatus('vorm')`→`#
 - **WeekLoad `stale`** = hardcoded `false` (F.3-signaal bestaat nog niet) — implementeren wanneer er een "plan verouderd"-detectie is.
 - **"Doe iets anders" / WorkoutPicker** bewust NIET gebouwd in 3a (geen backing, geen dode knop) — future.
 - **Dispositie-besluit:** `saveDisposition` doet bewust géén `generateProposal` (read-side overlay) om "inhalen" via debt te vermijden. Herzien als inhalen ooit wél gewenst is.
-- **Off-palette chart-hex** (Vorm-grafiek lijn/legenda `#5B5BD6` e.a. + niveau-grafiek) → tokeniseren in Fase 3.
+- **Fase 3 deel 2 (uitgesteld):** §2c niveau-grafiek segmented `1M/6M/12M/Alles` + value/delta-header; §2e conditie-balans balans/driehoek-picker; her-skin legacy `.metric`-tegels (`vorm-huidig`/`vorm-stats`) naar de 3a-skin.
 - **Garmin-push** nog week-niveau (geen per-dag `GarminSync`-knop) → Fase 6.
 
 ## Volgende stap
-1. Verifieer 1b + check-in + 3a/3b/3c visueel op /dev (incognito + hard refresh). 2. Daarna: Vorm-body (Fase 3-design: LevelCard + niveau-grafiek + metrics + conditie-balans) of Trainingen-bibliotheek (Fase 4).
+1. Verifieer Fase 3 deel 1 (LevelCard/MetricRow/chart-tokens/body-volgorde) + eerdere fases visueel op /dev (incognito). 2. Daarna: Fase 3 deel 2 (niveau-grafiek-segments + value/delta, conditie-balans-picker, re-skin legacy metric-tegels) of Trainingen-bibliotheek (Fase 4).
 
 ---
 
 ## Historie & engine-referentie (bruikbare historie — overleeft de restyle)
 
 ### KLAAR (done sinds bbd1a6b)
+- **Fase 3 deel 1 — Vorm LevelCard + MetricRow + chart-tokenisatie (e8fbbb1 tokens / 2d2f356 feat):** `levelCardHtml(state)` (niveau/50 + chip `beginLabel` + W/kg + `--accent-grad`-balk + `niveauDelta`; rc-skin; mount `#vorm-level` onder ReadinessCard) + `metricRowHtml(state)` (FTP/Gewicht/Week-TSS uit `state.ftp`/`gewicht`/`weekLoad.tss`; 3a-skin; `#vorm-metrics`). Body herschikt naar export §Vorm: ReadinessCard → LevelCard → niveau-grafiek → MetricRow → conditie-balans (cluster intern ongewijzigd verplaatst; section-kop hernoemd "Trend & details"→"Conditie-balans"). Chart-hex getokeniseerd via `cssColor_(expr)` (Google Charts kent geen CSS-vars → probe-resolve): trend-lijnen → nieuwe `--chart-fitness/fatigue/form` (COMPONENTS-laag, beide token-bestanden), niveau-lijn → `--chart-line`, grid → `--chart-grid`, baseline → `--chart-axis`; `drawVormStrip` banden/strokes/legenda → `--info/good/accent/danger-soft` + `--text-*` via `style="fill:var()"`. Geen nieuwe server-calc → geen gate-case. NB: dot-drempel live = **67/34**.
 - **Test-gate — runSelfTest (5f71045):** `src/SelfTest.gs` (COMMITTED). Pure-engine asserts: `tssFromZoneMinutes_`, `checkinDelta_`/`CHECKIN_LEVELS`, `rdyClamp_`, `computeNiveau_` (incl. clamp 0/50 + null), `computeMacroPhase` (Base/Build/Peak/Test + isTestWeek op week-offsets), `getReadinessScore_` factor-dots op de **LIVE drempel 67/34** + missing-factor-rescale (geen harde nul) + band↔score-consistentie (62/48, check-in-robuust), `READINESS_PRESETS`. GEEN side-effects (alleen fixtures + constanten-reads). Uitgesloten want gekoppeld: `bepaalFaseVoorDatum_` (leest Events-tab + Settings; Taper/Recovery-edges). `runSelfTest()` → Logger + `{passed,failed,failures[]}`. NB: dot-drempel **67/34** is live; de "≥70/45" in de readiness-formule-sectie is de oude pré-build-spec.
 - **Fase 3c — web-RPE + skip-dispositie (8b2d735):** `saveRpe(dateISO, rpe)` schrijft `rpe_<date>` (1–10) — spiegelt `handleRpeCallback` (DocProps-only, GÉÉN intervals-POST). Client `rpeRatingHtml_` (1–10 knoppen op `actualKaart`, gekozen = `--accent` + `--accent-ring`) → `setRpe`; mismatch → `.rpe-feedback` (`--accent-soft`). `saveDisposition(dateISO, reason∈{geen_tijd,bewust_gerust,iets_anders})` schrijft `disposition_<date>` {reason,ts}; `null` wist (voorstel terug). **GÉÉN generateProposal** bij disponeren (zou via debt "inhalen" + vandaag's voorstel herleven) — read-side overlay: `dashDispositionsByDate_` → dag-status `'gemist'` als dispositie ÉN voorstel ÉN geen actual. Client: affordance "Niet gedaan?" (≤vandaag, gepland, geen actual/rust, niet gedisponeerd), `gemistKaart_` (+ "Terug"), dagstrip-`×`-marker (`--text-muted`).
 - **Fase 3b — WeekLoad-kaart (6ff4b47):** `getWeekLoad_(ss, weekStart)` → `state.weekLoad {tss, uren, dagen, geplandTss, progressPct, stale}`. DONE tss/uren/dagen uit Activiteiten-tab (cycling, venster [weekStart,+7d); idx1 Type / idx3 Duur / idx8 TSS), noemer = Σ `weekplan_<maandag>` entry.tss. `stale=false` (F.3-signaal bestaat nog niet, TODO). Client `renderWeekLoad(iconState)` op mount `#week-load` (Index.html, tussen plan-kaart en dagstrip): overline + icon-refresh (idle ↻ / busy spin / done ✓), stat-rij + progress-bar (`--accent-grad`) + stale-banner. Refresh → nieuwe web-fn `refreshWeek()` = `syncActivities()` + verse state (lichter dan regenerateWeb, géén herplanning).
