@@ -411,7 +411,8 @@ function getWeekLoad_(ss, weekStart) {
     dagen: Object.keys(dagen).length,
     geplandTss: Math.round(planTss),
     progressPct: planTss > 0 ? Math.max(0, Math.min(100, Math.round(tss / planTss * 100))) : null,
-    stale: false
+    stale: getDocProp('avail_dirty', '') === '1',
+    lastSync: getDocProp('last_sync', '') || null
   };
 }
 
@@ -687,6 +688,7 @@ function saveAvailability(updates) {
   sh.getRange(3, 1, 7, 1).setValues(trainCol);   // A3:A9 Train?
   sh.getRange(3, 4, 7, 1).setValues(minCol);     // D3:D9 Minuten
   sh.getRange(3, 5, 7, 1).setValues(typeCol);    // E3:E9 Dagtype
+  setDocProp('avail_dirty', '1');   // pass 2: plan verouderd t.o.v. nieuwe beschikbaarheid → stale-banner
   return getDashboardState();
 }
 
@@ -698,6 +700,7 @@ function saveAvailability(updates) {
 function regenerateWeb() {
   try { generateProposal(); }
   catch (e) { console.warn('regenerateWeb: ' + (e && e.message ? e.message : e)); }
+  setDocProp('avail_dirty', '');   // pass 2: plan vers geregenereerd (incl. syncAll-actuals) → niet meer verouderd
   return getDashboardState();
 }
 

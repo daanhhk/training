@@ -87,6 +87,9 @@
   .blok-row + .blok-row { border-top: 1px solid var(--border-subtle); }
   .blok-zone { font-family: var(--font-num); font-weight: var(--fw-num-sm); }
   .blok-min { color: var(--text-secondary); font-family: var(--font-num); }
+  .wk-blokhint { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 4px; font-size: var(--fs-caption); color: var(--text-muted); }
+  .wk-chev { transition: transform 200ms ease; }
+  .wk-blocks[open] .wk-chev { transform: rotate(180deg); }
 
   /* Fase 3b — WeekLoad-kaart (deze week, gepland vs gedaan) */
   .wl-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: var(--card-pad); margin: 0; }
@@ -105,6 +108,7 @@
   .wl-bar { height: 8px; border-radius: var(--r-pill); background: var(--bg-sunken); overflow: hidden; }
   .wl-bar-fill { height: 100%; background: var(--accent-grad); border-radius: var(--r-pill); transition: width 300ms ease; }
   .wl-stale { margin-top: 10px; background: var(--warn-soft); color: var(--warn); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--fs-label); }
+  .wl-sync { margin-top: 8px; font-size: var(--fs-caption); color: var(--text-muted); }
 
   /* Fase 3c — RPE-rating (web-write) + skip-dispositie */
   .rpe-rate { margin-top: 12px; }

@@ -91,10 +91,23 @@
 
   // §1d-extra's: zone-badge (primaire zone), ZoneLegend, inklapbare Blokstructuur, IF-metric.
   var ZONE_LABEL = { rust: 'Z1', z2: 'Z2', low: 'Z2', tempo: 'Z3', high: 'Z4', drempel: 'Z4', anaeroob: 'Z5+', anaerobic: 'Z5+' };
+  // Primaire zone = zwaarste bucket met SIGNIFICANTE duur (≥ max(8min, 12% totaal),
+  // rust uitgesloten). "Lange Z2" → Z2 (kort piek-blokje telt niet); interval-workout
+  // → de interval-zone (niet de Z2-recovery die in minuten domineert).
   function primaryBucket_(segs) {
     if (!segs || !segs.length) return null;
-    var best = segs[0];
-    segs.forEach(function (s) { if ((s.hoogtePct || 0) > (best.hoogtePct || 0)) best = s; });
+    var total = 0, by = {};
+    segs.forEach(function (s) {
+      var m = s.minuten || 0; total += m;
+      if (!by[s.bucket]) by[s.bucket] = { bucket: s.bucket, min: 0, h: s.hoogtePct || 0 };
+      by[s.bucket].min += m;
+    });
+    var thresh = Math.max(8, total * 0.12);
+    var cand = Object.keys(by).map(function (k) { return by[k]; });
+    var sig = cand.filter(function (b) { return b.min >= thresh && b.bucket !== 'rust'; });
+    if (!sig.length) sig = cand;
+    var best = sig[0];
+    sig.forEach(function (b) { if (b.h > best.h || (b.h === best.h && b.min > best.min)) best = b; });
     return best.bucket;
   }
   function zoneBadge_(segs) {
@@ -123,7 +136,8 @@
   }
   // ZoneBar + ZoneLegend (klikbaar) → klapt de Blokstructuur uit/in (INTERACTIONS §1d).
   function zoneBlock_(segs) {
-    return '<details class="wk-blocks"><summary>' + zoneBar(segs) + zoneLegend_(segs) + '</summary>' + blokLijst_(segs) + '</details>';
+    return '<details class="wk-blocks"><summary>' + zoneBar(segs) + zoneLegend_(segs) +
+      '<div class="wk-blokhint">Blokstructuur <span class="wk-chev">⌄</span></div></summary>' + blokLijst_(segs) + '</details>';
   }
   // IF-proxy uit TSS + duur: IF = √(TSS / (uur × 100)). Client-display, geen server-calc.
   function ifProxy_(tss, durMin) {
@@ -288,20 +302,22 @@
       '</div>' +
       '<div class="wl-stats">' + wlStat_(Math.round(w.tss), 'TSS') + wlStat_(nl(w.uren, 1), 'uren') + wlStat_(w.dagen, 'dagen') + '</div>' +
       '<div class="wl-bar"><div class="wl-bar-fill" style="width:' + pct + '%"></div></div>' +
-      (w.stale ? '<div class="wl-stale">Plan verouderd</div>' : '') +
+      (w.stale ? '<div class="wl-stale">Je plan is verouderd t.o.v. je beschikbaarheid — werk bij</div>' : '') +
+      (w.lastSync ? '<div class="wl-sync">Laatst gesynct · ' + esc(w.lastSync) + '</div>' : '') +
     '</div>';
   }
+  // ↻ = weekplan-regen (sync-actuals + herplan in één, via regenerateWeb) per INTERACTIONS §1b.
   function refreshWeekLoad() {
     renderWeekLoad('busy');
     google.script.run
       .withSuccessHandler(function (s) {
         state = s;
-        renderSchema();               // plan/dagstrip/dag-detail volgen de verse actuals
+        renderSchema();               // plan/dagstrip/dag-detail volgen de verse regen + actuals
         renderWeekLoad('done');
         setTimeout(function () { renderWeekLoad('idle'); }, 1400);
       })
       .withFailureHandler(function (err) { renderWeekLoad('idle'); showError(err); })
-      .refreshWeek();
+      .regenerateWeb();
   }
 
   // Dagstrip-dots: zone-getokeniseerd (bucket → --zone-*); 2 dots bij dubbele sessie.
@@ -351,16 +367,7 @@
     renderDagDetail();
   }
 
-  // ── v2b-A: regenerate + push ──
-  function regenWeek() {
-    var b = document.getElementById('btn-regen');
-    if (b) { b.disabled = true; b.textContent = 'Bezig…'; }
-    setActStatus('');
-    google.script.run
-      .withSuccessHandler(function (s) { onState(s); resetActBtns(); setActStatus('✅ Voorstel bijgewerkt'); })
-      .withFailureHandler(function (err) { showError(err); resetActBtns(); })
-      .regenerateWeb();
-  }
+  // ── Push naar Garmin (week-niveau; per-dag GarminSync = pass 6). Regen = de ↻ op WeekLoad. ──
   function pushGarmin() {
     var b = document.getElementById('btn-push');
     if (b) { b.disabled = true; b.textContent = 'Bezig…'; }
@@ -379,7 +386,6 @@
   }
   function setActStatus(t) { var e = document.getElementById('act-status'); if (e) e.textContent = t; }
   function resetActBtns() {
-    var r = document.getElementById('btn-regen'); if (r) { r.disabled = false; r.textContent = 'Regenereer voorstel'; }
     var p = document.getElementById('btn-push'); if (p) { p.disabled = false; p.textContent = 'Push naar Garmin'; }
   }
 
