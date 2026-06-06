@@ -120,6 +120,21 @@
   .lc-bar { height: 8px; border-radius: var(--r-pill); background: var(--bg-sunken); overflow: hidden; margin-top: 10px; }
   .lc-bar-fill { height: 100%; background: var(--accent-grad); border-radius: var(--r-pill); }
 
+  /* Fase 3 deel 4 — Vorm swipe-deck + LevelCard tier-chip/delta/blok-% */
+  .deck { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .deck::-webkit-scrollbar { display: none; }
+  .deck-slide { flex: 0 0 100%; scroll-snap-align: center; }
+  .deck-slide > .rc-card { margin-bottom: 0; }
+  .deck-dots { display: flex; justify-content: center; gap: 6px; margin: 8px 0 14px; }
+  .deck-dot { width: 7px; height: 7px; padding: 0; border: none; border-radius: var(--r-pill); background: var(--border-strong); cursor: pointer; }
+  .deck-dot.active { background: var(--accent); }
+  .lc-chip { display: inline-flex; align-items: center; gap: 6px; }
+  .lc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .lc-delta-line { font-family: var(--font-num); font-size: var(--fs-num-sm); font-weight: var(--fw-num-sm); margin-top: 8px; }
+  .lc-delta-line.lc-up { color: var(--good); }
+  .lc-delta-line.lc-down { color: var(--bad); }
+  .lc-blok { font-size: var(--fs-label); color: var(--text-secondary); margin-top: 4px; }
+
   /* Fase 3 deel 2 — niveau-trend header + segmented venster-toggle */
   .nh-row { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 4px; }
   .nh-val { font-family: var(--font-num); font-size: var(--fs-num-md); font-weight: var(--fw-num-md); color: var(--text-primary); }

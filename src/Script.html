@@ -621,23 +621,36 @@
   }
 
   // ── Vorm: trend & details ──
-  // Fase 3 deel 1 — LevelCard (export §2b), op de rc-skin, onder de ReadinessCard.
+  // niveauReeks-delta (laatste − eerste non-null) — ZELFDE bron als de Alles-window
+  // van de niveau-grafiek (renderNiveauHead_), zodat LevelCard ↔ grafiek consistent zijn.
+  function niveauReeksDelta_() {
+    var reeks = (state.vorm && state.vorm.niveauReeks) ? state.vorm.niveauReeks : [];
+    var pts = reeks.filter(function (p) { return p.niveau != null; });
+    if (pts.length < 2) return null;
+    return Math.round((pts[pts.length - 1].niveau - pts[0].niveau) * 10) / 10;
+  }
+
+  // Fase 3 deel 1+4 — LevelCard (export §2b): niveau-tier-chip + reconciled delta + blok-%.
   function levelCardHtml(s) {
     if (s.niveau == null) return '<div class="rc-card muted">Geen niveau-data.</div>';
     var max = 50;
     var pct = Math.max(0, Math.min(100, s.niveau / max * 100));
-    var chip = s.beginLabel ? '<span class="lc-chip">sinds ' + esc(s.beginLabel) + '</span>' : '';
+    var chip = s.niveauTier ? '<span class="lc-chip"><span class="lc-dot"></span>' + esc(s.niveauTier) + '</span>' : '';
     var wkg = (s.wkg != null) ? nl(s.wkg, 2) + ' W/kg' : '–';
-    var delta = (s.niveauDelta != null)
-      ? '<span class="lc-delta ' + (s.niveauDelta >= 0 ? 'lc-up' : 'lc-down') + '">' +
-          (s.niveauDelta >= 0 ? '+' : '') + nl(s.niveauDelta, 1) + '</span>'
+    var d = niveauReeksDelta_();
+    var deltaLine = (d != null && s.beginLabel)
+      ? '<div class="lc-delta-line ' + (d > 0 ? 'lc-up' : (d < 0 ? 'lc-down' : '')) + '">' +
+          (d >= 0 ? '+' : '') + nl(d, 1) + (d > 0 ? ' ↑' : (d < 0 ? ' ↓' : '')) + ' sinds ' + esc(s.beginLabel) + '</div>'
       : '';
+    var blok = (s.voortgangPct != null)
+      ? '<div class="lc-blok">' + nl(s.voortgangPct, 0) + '% van je blok behaald</div>'
+      : '<div class="lc-blok muted">blok net gestart</div>';
     return '<div class="rc-card">' +
       '<div class="lc-head"><div class="rc-overline">Niveau</div>' + chip + '</div>' +
-      '<div class="lc-row"><div class="lc-num">' + Math.round(s.niveau) +
-        '<span class="lc-max">/ ' + max + '</span></div>' + delta + '</div>' +
+      '<div class="lc-row"><div class="lc-num">' + Math.round(s.niveau) + '<span class="lc-max">/ ' + max + '</span></div></div>' +
       '<div class="lc-wkg">' + wkg + '</div>' +
       '<div class="lc-bar"><div class="lc-bar-fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+      deltaLine + blok +
     '</div>';
   }
 
@@ -843,9 +856,26 @@
   window.openDrawer = openDrawer;
   window.closeDrawer = closeDrawer;
 
+  // Fase 3 deel 4 — Vorm swipe-deck: active dot volgt de scroll-positie.
+  function syncDeckDots_() {
+    var deck = document.getElementById('vorm-deck');
+    var dots = document.getElementById('vorm-deck-dots');
+    if (!deck || !dots) return;
+    var idx = Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth));
+    for (var i = 0; i < dots.children.length; i++) dots.children[i].classList.toggle('active', i === idx);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); });
+    });
+    var vDeck = document.getElementById('vorm-deck');
+    if (vDeck) vDeck.addEventListener('scroll', syncDeckDots_);
+    document.querySelectorAll('#vorm-deck-dots .deck-dot').forEach(function (dot) {
+      dot.addEventListener('click', function () {
+        var dk = document.getElementById('vorm-deck');
+        dk.scrollTo({ left: parseInt(dot.getAttribute('data-slide'), 10) * dk.clientWidth, behavior: 'smooth' });
+      });
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && document.getElementById('overlay-panel').classList.contains('is-open')) closeDrawer();
