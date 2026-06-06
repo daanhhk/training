@@ -56,6 +56,30 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
   voorkomt stale dubbelingen.
 - Taal: NL met Daan; English voor code/commits/logging; NL voor UI-strings.
 
+## Design — bron van waarheid
+
+**Claude Design is de ENIGE bron voor visueel design.** In de repo (`design/`):
+`tokens.css` (styling-tokens), `FTP-Coach-export.md` (per-tab layout +
+componenten + states), `DESIGN.md` (visuele taal), `screenshots/`, en
+`INTERACTIONS.md` (interactie-gedrag — **nog niet in de repo**; gedrag komt
+zolang uit HANDOFF.md + `FTP-Coach-export.md`). `tokens.css` is verbatim
+gemirrord in `src/Tokens.html` (= wat live geserveerd wordt).
+
+- **Het ONTWERP is leidend.** Bestaande functies bouwen we erin; bij een
+  live-vs-design-conflict wint het ontwerp.
+- **UI-build-loop** (UI-specifieke STAP 0-recon — zie Werkwijze): lees vóór de
+  build de relevante `FTP-Coach-export.md §X` + `tokens.css`
+  (+ `INTERACTIONS.md §X` indien aanwezig), reconcileer de implementatie
+  ertegen, en meld de afwijkingen (kleur / token / layout / gedrag) VÓÓR je
+  bouwt. Bouw naar de exacte ontwerp-token-namen/-waarden + -gedrag: verzin
+  geen waarden en overrule het ontwerp niet.
+- **Token-discipline:** `design/tokens.css` ↔ `src/Tokens.html` = styling-bron;
+  GEEN off-palette hex in de UI. Google Charts kent geen CSS-vars → resolve
+  tokens op draw-tijd via `cssColor_` (CSS-var → concrete kleur).
+- **Self-heal:** corrigeer stale feiten (verschoven regels, achterhaalde
+  hex/token, ingetrokken invarianten) die je tijdens een taak in HANDOFF.md of
+  CLAUDE.md tegenkomt.
+
 ## Conventies (HARD-EARNED — niet zelf herontdekken)
 
 ### NL-locale Google Sheets formules (bij ELKE setFormula-write)
@@ -198,10 +222,10 @@ Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
 
 ## Invarianten / niet aanraken
 
-- **Fragiele status-CSS** (Styles.html): `.status-card { flex:0 0 100%;
-  scroll-snap-align:center; display:flex; gap:12px; }` + scroll-container
-  `.status-wrap` — NIET wijzigen. (Let op: er is GEEN `.status-deck`-class,
-  ondanks oudere notities die ernaar verwijzen.)
+- **Status-deck CSS** (Styles.html `.status-card`/`.status-wrap`): SUPERSEDED
+  door de `ReadinessCard` (Fase 1b) — `statusGraphicHtml` wordt niet meer
+  gerenderd → legacy/dead CSS. Het oude "NIET wijzigen" is INGETROKKEN (zie
+  HANDOFF); opruimen = future. (Er is GEEN `.status-deck`-class.)
 - **Multi-session ONDERSTEUND (v2b-B)**: per dag 1..N sessies via
   `proposal_<dISO>[_s<n>]` + `external_id`-suffix `_s<n>` (n≥2). Sleutelformaat
   UITSLUITEND via `readDaySessions_` / `writeDaySessions_` / `deleteDaySessions_`

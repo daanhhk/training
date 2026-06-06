@@ -9,6 +9,7 @@ https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSI
 - VISUEEL nog te verifiëren op /dev (incognito). Eerste actie nieuwe chat: **bevestig 1b + check-in + 3a/3b/3c**: dag-detail on-skin (geen banner/Garmin-regel, zone-kleuren); WeekLoad tussen plan-kaart en dagstrip (refresh-icoon cyclet); RPE 1–10 tikbaar op voltooide dag (persist + mismatch-callout); "Niet gedaan?" → 3 redenen → "Gemist · reden" + dagstrip-×, "Terug" herstelt voorstel.
 
 ## Visual system / aanpak
+- **design-conventies: zie CLAUDE.md** ("Design — bron van waarheid": UI-build-loop, token-discipline, self-heal).
 - Beslissing: **THEME-FIRST**. `design/tokens.css` (donker, 4-tabs) = styling-bron van waarheid; volledig gemirrord in `src/Tokens.html`.
 - Het ONTWERP is leidend; bestaande functies bouwen we erin, en vullen aan waar nodig.
 - **`design/FTP-Coach-export.md` = de feitelijke per-tab layout-bron** (componenten + states + tokens per scherm). `design/DESIGN.md` = visuele taal (geen per-kaart-layout). **`design/INTERACTIONS.md` ONTBREEKT in de repo (404)** — gedrag komt uit deze STAND + export.md.
