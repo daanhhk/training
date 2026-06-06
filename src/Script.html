@@ -2,7 +2,7 @@
   var state = null;
   var selectedDate = null;
   var chartsReady = false;
-  var checkinSel = { slaap: 'oké', benen: 'oké', stress: 'normaal' };  // Fase 2 — neutrale default
+  var checkinSel = { slaap: null, benen: null, stress: null };  // null = nog niet beantwoord (Vastleggen disabled)
   var checkinAutoOpened = false;
 
   // NL-decimaal helper.
@@ -257,6 +257,19 @@
       .refreshWeek();
   }
 
+  // Dagstrip-dots: zone-getokeniseerd (bucket → --zone-*); 2 dots bij dubbele sessie.
+  function stripDots_(d) {
+    if (!d.voorstel || (d.status !== 'gepland' && d.status !== 'vandaag')) return '';
+    var lists = (d.voorstel.sessies && d.voorstel.sessies.length > 1)
+      ? d.voorstel.sessies.map(function (s) { return s.segmenten; })
+      : [d.voorstel.segmenten];
+    return lists.map(function (segs) {
+      var last = (segs && segs.length) ? segs[segs.length - 1] : null;
+      var z = (last && ZONE_VAR[last.bucket]) ? ZONE_VAR[last.bucket] : '--zone-2';
+      return '<span class="dot" style="background:var(' + z + ')"></span>';
+    }).join('');
+  }
+
   function renderSchema() {
     var vd = state.vandaag;
     document.getElementById('schema-datum').textContent = vd ? (vd.weekdag + ' · ' + vd.dateISO) : '';
@@ -266,18 +279,17 @@
     var strip = '';
     (state.dagen || []).forEach(function (d) {
       var mark = '';
-      if (d.status === 'voltooid') mark = '✓';
+      if (d.status === 'voltooid') mark = '<span class="m-done">✓</span>';
       else if (d.status === 'vandaag') mark = '●';
-      else if (d.status === 'gemist') mark = '<span style="color:var(--text-muted)">×</span>';
-      else if (d.status === 'rust') mark = '·';
+      else if (d.status === 'gemist') mark = '<span class="m-gemist">×</span>';
+      else if (d.status === 'rust') mark = '<span class="m-rust"></span>';   // streepje --border-strong
       else if (d.status === 'preview') mark = '~';
-      var dot = d.kleur ? '<div class="dot" style="background:' + d.kleur + '"></div>' : '<div class="dot" style="background:transparent"></div>';
       var sel = (d.dateISO === selectedDate) ? ' sel' : '';
       var wd = d.weekdag.slice(0, 2);
       strip += '<div class="chip' + sel + '" data-date="' + d.dateISO + '" onclick="selectDay(\'' + d.dateISO + '\')">' +
         '<div class="cw">' + wd + '</div>' +
         '<div class="cd">' + d.kort.replace(/^.. /, '') + '</div>' +
-        dot + '<div class="mark">' + mark + '</div></div>';
+        '<div class="dots">' + stripDots_(d) + '</div><div class="mark">' + mark + '</div></div>';
     });
     document.getElementById('dag-strip').innerHTML = strip;
     renderDagDetail();
@@ -564,10 +576,11 @@
 
   // ── Fase 2 — Ochtend-check-in (bottom sheet via overlay-primitive) ──
   var CHECKIN_Q = [
-    { key: 'slaap',  label: 'Slaap',  opts: ['slecht', 'oké', 'goed'] },
-    { key: 'benen',  label: 'Benen',  opts: ['zwaar', 'oké', 'fris'] },
-    { key: 'stress', label: 'Stress', opts: ['hoog', 'normaal', 'laag'] }
+    { key: 'slaap',  label: 'Slaap',  opts: ['goed', 'matig', 'slecht'] },
+    { key: 'benen',  label: 'Benen',  opts: ['fris', 'normaal', 'zwaar'] },
+    { key: 'stress', label: 'Stress', opts: ['laag', 'normaal', 'hoog'] }
   ];
+  function checkinAllSet_() { return !!(checkinSel.slaap && checkinSel.benen && checkinSel.stress); }
   function checkinSheetHtml() {
     var groups = CHECKIN_Q.map(function (q) {
       var segs = q.opts.map(function (o) {
@@ -577,8 +590,10 @@
       return '<div class="ci-group"><div class="ci-label">' + q.label + '</div>' +
         '<div class="ci-segs" data-ci-row="' + q.key + '">' + segs + '</div></div>';
     }).join('');
+    var later = (state.readiness && state.readiness.checkinDone) ? 'Annuleren' : 'Later';
     return '<div class="ci-title">Ochtend-check-in</div>' + groups +
-      '<button type="button" class="ci-save" onclick="submitCheckin()">Vastleggen</button>';
+      '<button type="button" class="ci-save" onclick="submitCheckin()"' + (checkinAllSet_() ? '' : ' disabled') + '>Vastleggen</button>' +
+      '<button type="button" class="ci-later" data-overlay-close>' + later + '</button>';
   }
   function openCheckin() { openDrawer({ variant: 'sheet', html: checkinSheetHtml() }); }
   function checkinPick(key, val) {
@@ -586,8 +601,11 @@
     document.querySelectorAll('[data-ci-row="' + key + '"] .ci-seg').forEach(function (b) {
       b.classList.toggle('is-on', b.getAttribute('data-val') === val);
     });
+    var save = document.querySelector('.ci-save');
+    if (save) save.disabled = !checkinAllSet_();
   }
   function submitCheckin() {
+    if (!checkinAllSet_()) return;
     var btn = document.querySelector('.ci-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Bezig…'; }
     google.script.run

@@ -1026,14 +1026,14 @@ function rdyUren_(h) {
 // Drie vragen × 3 niveaus → delta −2/0/+2; somdelta −6..+6 op de base-score.
 // GEEN herweging, GEEN 5e factor: puur een geklemde nudge + callout.
 var CHECKIN_LEVELS = {
-  slaap:  { slecht: -2, 'oké': 0, goed: 2 },
-  benen:  { zwaar: -2, 'oké': 0, fris: 2 },
-  stress: { hoog: -2, normaal: 0, laag: 2 }
+  slaap:  { goed: 2, matig: 0, slecht: -2 },
+  benen:  { fris: 2, normaal: 0, zwaar: -2 },
+  stress: { laag: 2, normaal: 0, hoog: -2 }
 };
 var CHECKIN_QUESTIONS = [
-  { key: 'slaap',  label: 'Slaap',  opts: ['slecht', 'oké', 'goed'] },
-  { key: 'benen',  label: 'Benen',  opts: ['zwaar', 'oké', 'fris'] },
-  { key: 'stress', label: 'Stress', opts: ['hoog', 'normaal', 'laag'] }
+  { key: 'slaap',  label: 'Slaap',  opts: ['goed', 'matig', 'slecht'] },
+  { key: 'benen',  label: 'Benen',  opts: ['fris', 'normaal', 'zwaar'] },
+  { key: 'stress', label: 'Stress', opts: ['laag', 'normaal', 'hoog'] }
 ];
 
 /** DocProp checkin_<today> → {slaap,benen,stress} of null. */

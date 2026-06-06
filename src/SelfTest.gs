@@ -68,9 +68,9 @@ function testTss_(ctx) {
 function testCheckinDelta_(ctx) {
   assert_(ctx, 'checkin all-worst', -6, checkinDelta_({ slaap: 'slecht', benen: 'zwaar', stress: 'hoog' }));
   assert_(ctx, 'checkin all-best', 6, checkinDelta_({ slaap: 'goed', benen: 'fris', stress: 'laag' }));
-  assert_(ctx, 'checkin neutral', 0, checkinDelta_({ slaap: 'oké', benen: 'oké', stress: 'normaal' }));
+  assert_(ctx, 'checkin neutral', 0, checkinDelta_({ slaap: 'matig', benen: 'normaal', stress: 'normaal' }));
   assert_(ctx, 'checkin null', 0, checkinDelta_(null));
-  assert_(ctx, 'checkin unknown-level', 0, checkinDelta_({ slaap: 'xyz', benen: 'oké', stress: 'normaal' }));
+  assert_(ctx, 'checkin unknown-level', 0, checkinDelta_({ slaap: 'xyz', benen: 'normaal', stress: 'normaal' }));
 }
 
 // ── rdyClamp_ (puur) — dekt "clamp base+delta binnen 0–100" ─────────

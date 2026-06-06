@@ -32,11 +32,11 @@
   .body { padding: 14px; }
 
   .card {
-    background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px;
-    box-shadow: 0 2px 10px rgba(15,23,42,0.08);
+    background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--card-radius);
+    padding: var(--card-pad); margin-bottom: 14px; box-shadow: var(--card-shadow);
   }
-  .card h3 { margin: 0 0 8px; font-size: 16px; color: var(--ink); }
-  .muted { color: var(--muted); font-size: 13px; }
+  .card h3 { margin: 0 0 8px; font-size: var(--fs-h2); color: var(--text-primary); }
+  .muted { color: var(--text-muted); font-size: 13px; }
   .accent { color: var(--accent); }
 
   .banner { border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; font-weight: 600; font-size: 14px; }
@@ -175,14 +175,19 @@
   }
   .chip {
     scroll-snap-align: center; flex: 0 0 auto; width: 60px; padding: 8px 4px;
-    background: var(--card); border-radius: 12px; text-align: center; cursor: pointer;
-    box-shadow: 0 1px 5px rgba(0,0,0,.06); border: 2px solid transparent;
+    background: var(--bg-surface); border: 2px solid var(--border-subtle); border-radius: var(--r-md);
+    text-align: center; cursor: pointer; box-shadow: var(--card-shadow);
   }
-  .chip.sel { border-color: var(--accent); }
-  .chip .cd { font-size: 11px; color: var(--muted); }
-  .chip .cw { font-size: 13px; font-weight: 700; text-transform: capitalize; color: var(--ink); }
-  .chip .dot { width: 9px; height: 9px; border-radius: 50%; margin: 5px auto 0; }
-  .chip .mark { font-size: 13px; height: 14px; }
+  .chip.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .chip.sel .cd, .chip.sel .cw { color: var(--accent); }
+  .chip .cd { font-family: var(--font-num); font-size: 11px; color: var(--text-muted); }
+  .chip .cw { font-size: 13px; font-weight: 700; text-transform: capitalize; color: var(--text-primary); }
+  .chip .dots { display: flex; justify-content: center; gap: 3px; height: 9px; margin: 5px 0 0; }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .chip .mark { font-size: 13px; height: 14px; line-height: 14px; }
+  .m-done { color: var(--text-secondary); }
+  .m-gemist { color: var(--text-muted); }
+  .m-rust { display: inline-block; width: 10px; height: 2px; border-radius: 1px; background: var(--border-strong); vertical-align: middle; }
 
   .bottomnav {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
@@ -256,6 +261,8 @@
   .ci-seg { flex: 1; border: none; cursor: pointer; background: transparent; color: var(--segment-text); font-family: var(--font-sans); font-size: var(--fs-label); font-weight: var(--fw-label); padding: 9px 4px; border-radius: var(--r-sm); text-transform: capitalize; }
   .ci-seg.is-on { background: var(--segment-active-bg); color: var(--segment-active-text); box-shadow: var(--segment-active-shadow); }
   .ci-save { width: 100%; height: var(--btn-height); margin-top: var(--s-2); border: none; cursor: pointer; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-family: var(--font-sans); font-size: var(--fs-body); font-weight: 600; }
+  .ci-save:disabled { background: var(--btn-disabled-bg); color: var(--btn-disabled-text); cursor: default; }
+  .ci-later { width: 100%; margin-top: var(--s-2); padding: 10px; border: none; cursor: pointer; border-radius: var(--btn-radius); background: transparent; color: var(--text-muted); font-family: var(--font-sans); font-size: var(--fs-label); }
 
   /* Vorm status-graphic — swipeable deck */
   .status-wrap {
@@ -279,11 +286,11 @@
   .act-btn { flex: 1; height: var(--btn-height); border: none; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-weight: 600; font-size: var(--fs-label); cursor: pointer; font-family: var(--font-sans); }
   .act-btn-2 { background: var(--btn-secondary-bg); border: 1px solid var(--btn-secondary-border); color: var(--btn-secondary-text); }
   .act-btn:disabled { opacity: .6; cursor: default; }
-  .act-status { font-size: 13px; color: var(--muted); margin-bottom: 12px; min-height: 16px; }
+  .act-status { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; min-height: 16px; }
 
   /* v2a beschikbaarheid-editor */
-  .avail-box { background: var(--card); border-radius: 16px; padding: 14px; box-shadow: 0 2px 10px rgba(15,23,42,0.08); }
-  .avail-box > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 14px; }
+  .avail-box { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--card-radius); padding: var(--card-pad); box-shadow: var(--card-shadow); }
+  .avail-box > summary { cursor: pointer; font-weight: var(--fw-h3); color: var(--accent); font-size: var(--fs-label); }
   .avail-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
   .avail-dag { flex: 1 1 auto; font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
   .avail-pendel { font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 5px; }
@@ -291,7 +298,7 @@
   .avail-min { flex: 1; }
   .avail-min-val { width: 58px; text-align: right; font-size: 13px; color: var(--ink); }
   .avail-rust { flex: 1 1 100%; font-size: 12px; color: var(--muted); font-style: italic; }
-  .avail-save { margin-top: 12px; width: 100%; padding: 10px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+  .avail-save { margin-top: 12px; width: 100%; height: var(--btn-height); border: none; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-weight: 600; cursor: pointer; }
   .avail-save:disabled { opacity: .6; cursor: default; }
   .status-left, .status-right {
     flex: 1; background: var(--card); border-radius: 16px; padding: 14px;
