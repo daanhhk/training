@@ -810,8 +810,8 @@
       colors: [cssColor_('var(--chart-line)')],
       curveType: 'function', interpolateNulls: true,
       lineWidth: 2.5, pointSize: 0, areaOpacity: 0.26,
-      hAxis: { textStyle: { fontSize: 9, color: cssColor_('var(--text-secondary)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
-      vAxis: { textStyle: { color: cssColor_('var(--chart-axis)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
+      hAxis: { textStyle: { fontSize: 9, color: cssColor_('var(--text-secondary)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, minorGridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
+      vAxis: { textStyle: { color: cssColor_('var(--chart-axis)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, minorGridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
       backgroundColor: 'transparent'
     };
     if (mn !== Infinity) opts.vAxis.viewWindow = { min: Math.floor(mn - 1), max: Math.ceil(mx + 1) };
