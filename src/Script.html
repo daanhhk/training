@@ -62,7 +62,7 @@
   // ── Zone-bar SVG — schaalt ALTIJD naar 100% breedte; kleuren via zone-tokens
   //    (bucket → --zone-1…6) i.p.v. de server-hex. mini = compacte variant.
   var ZONE_VAR = { rust: '--zone-1', z2: '--zone-2', low: '--zone-2', tempo: '--zone-3',
-                   high: '--zone-4', drempel: '--zone-4', anaeroob: '--zone-6', anaerobic: '--zone-6' };
+                   high: '--zone-4', drempel: '--zone-4', anaeroob: '--zone-5', anaerobic: '--zone-5' };
   function zoneBar(segmenten, mini) {
     if (!segmenten || !segmenten.length) return '<div class="muted">Geen structuur beschikbaar.</div>';
     var W = 100, H = 100, MINW = 1.4;
@@ -124,7 +124,7 @@
     recovery: { label: 'Herstel', z: '--zone-1' }, test: { label: 'Herstel', z: '--zone-1' },
     long_z2: { label: 'Duur', z: '--zone-2' }, pendel_z2: { label: 'Duur', z: '--zone-2' },
     fatox: { label: 'Duur', z: '--zone-2' }, combo_long_with_efforts: { label: 'Duur', z: '--zone-2' },
-    combo_z2_vo2: { label: 'VO2max', z: '--zone-6' },
+    combo_z2_vo2: { label: 'VO2max', z: '--zone-5' },
     tempo: { label: 'Tempo', z: '--zone-3' },
     sweet_spot: { label: 'Sweet Spot', z: '--zone-4' }, ss_lang: { label: 'Sweet Spot', z: '--zone-4' },
     combo_ss_sprints: { label: 'Sweet Spot', z: '--zone-4' }, pendel_conditie_intervals: { label: 'Sweet Spot', z: '--zone-4' },
@@ -133,10 +133,10 @@
     pendel_ftp_intervals: { label: 'Drempel', z: '--zone-4' },
     big_gear: { label: 'Klim', z: '--zone-4' }, bergsim: { label: 'Klim', z: '--zone-4' },
     low_cad: { label: 'Klim', z: '--zone-4' }, pendel_climb_intervals: { label: 'Klim', z: '--zone-4' },
-    vo2max: { label: 'VO2max', z: '--zone-6' }, vo2_short: { label: 'VO2max', z: '--zone-6' },
-    vo2_medium: { label: 'VO2max', z: '--zone-6' }, vo2_long: { label: 'VO2max', z: '--zone-6' },
-    vo2_3015: { label: 'VO2max', z: '--zone-6' }, microbursts: { label: 'VO2max', z: '--zone-6' },
-    pendel_vo2_intervals: { label: 'VO2max', z: '--zone-6' }
+    vo2max: { label: 'VO2max', z: '--zone-5' }, vo2_short: { label: 'VO2max', z: '--zone-5' },
+    vo2_medium: { label: 'VO2max', z: '--zone-5' }, vo2_long: { label: 'VO2max', z: '--zone-5' },
+    vo2_3015: { label: 'VO2max', z: '--zone-5' }, microbursts: { label: 'VO2max', z: '--zone-5' },
+    pendel_vo2_intervals: { label: 'VO2max', z: '--zone-5' }
   };
   function badgeHtml_(v) {
     var b = (v && v.type) ? INTENT_BADGE[v.type] : null;
