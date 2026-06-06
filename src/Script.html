@@ -483,7 +483,7 @@
       } else {
         if (v.voorstel) h += voorstelKaart(v.voorstel, { overline: 'Vandaag', today: true });
         if (v.actual)   h += actualKaart(v.actual, d.dateISO);
-        if (!v.voorstel && !v.actual) h += '<div class="card"><div class="muted">Nog geen voorstel — draai Genereer voorstel in de Sheet.</div></div>';
+        if (!v.voorstel && !v.actual) h += '<div class="card"><div class="muted">Nog geen voorstel — tik ↻ om te genereren.</div></div>';
         if (canDispose_(d)) h += dispositieAffordanceHtml_(d.dateISO);
       }
     } else if (d.status === 'preview') {
