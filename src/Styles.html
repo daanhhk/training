@@ -132,6 +132,18 @@
   .seg button { border: none; cursor: pointer; background: transparent; color: var(--segment-text); font-family: var(--font-sans); font-size: var(--fs-label); font-weight: var(--fw-label); padding: 6px 12px; border-radius: var(--r-sm); }
   .seg button.active { background: var(--segment-active-bg); color: var(--segment-active-text); box-shadow: var(--segment-active-shadow); }
 
+  /* Fase 3 deel 3 — Conditie Balans-meter */
+  .bm-sub { font-size: var(--fs-label); color: var(--text-secondary); margin-top: 2px; }
+  .bm-head { display: flex; align-items: baseline; gap: 10px; margin: 12px 0 12px; }
+  .bm-val { font-family: var(--font-num); font-size: var(--fs-num-lg); font-weight: var(--fw-num-lg); line-height: 1; }
+  .bm-chip { border-radius: var(--r-pill); padding: 3px 10px; font-size: var(--fs-caption); font-weight: var(--fw-caption); white-space: nowrap; }
+  .bm-tsb { margin-left: auto; font-size: var(--fs-caption); color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--tracking-overline); }
+  .bm-meter { position: relative; height: 14px; margin: 6px 2px 10px; }
+  .bm-track { display: block; width: 100%; height: 100%; border-radius: var(--r-pill); overflow: hidden; }
+  .bm-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 13px; height: 13px; border-radius: 50%; background: var(--fresh); box-shadow: 0 0 0 3px var(--bg-surface), 0 0 0 4px var(--fresh); }
+  .bm-labels { display: flex; justify-content: space-between; font-size: var(--fs-caption); color: var(--text-muted); }
+  .bm-empty { margin-top: 12px; }
+
   details { margin-top: 8px; }
   summary { cursor: pointer; font-weight: 600; color: var(--accent); font-size: 14px; }
   details ul { margin: 8px 0 0; padding-left: 18px; }

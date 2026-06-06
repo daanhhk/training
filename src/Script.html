@@ -1,7 +1,6 @@
 <script>
   var state = null;
   var selectedDate = null;
-  var statPeriod = 'd28';
   var chartsReady = false;
   var checkinSel = { slaap: 'oké', benen: 'oké', stress: 'normaal' };  // Fase 2 — neutrale default
   var checkinAutoOpened = false;
@@ -56,7 +55,7 @@
     renderBeschikbaarheid();
     switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
-    google.charts.setOnLoadCallback(function () { chartsReady = true; drawVormChart(); drawNiveauChart(); });
+    google.charts.setOnLoadCallback(function () { chartsReady = true; drawNiveauChart(); });
     maybeAutoOpenCheckin();
   }
 
@@ -656,69 +655,47 @@
     renderVormStatus();
     document.getElementById('vorm-level').innerHTML = levelCardHtml(state);
     document.getElementById('vorm-metrics').innerHTML = metricRowHtml(state);
-    var v = state.vorm;
-    var hu = '';
-    if (v.huidig) {
-      hu = '<div class="card"><div class="metrics">' +
-        '<div class="metric"><div class="v">' + v.huidig.vorm + '</div><div class="l">Vorm</div></div>' +
-        '<div class="metric"><div class="v">' + v.huidig.ctl + '</div><div class="l">CTL</div></div>' +
-        '<div class="metric"><div class="v">' + v.huidig.atl + '</div><div class="l">ATL</div></div>' +
-        '</div><div class="muted">' + esc(v.huidig.vormZone) +
-        (v.huidig.ramp != null ? ' · ramp ' + nl(v.huidig.ramp, 1) + '/wk' : '') +
-        (v.ftp ? ' · FTP ' + v.ftp + 'W' : '') + '</div></div>';
-    } else {
-      hu = '<div class="card muted">Geen vorm-data.</div>';
-    }
-    document.getElementById('vorm-huidig').innerHTML = hu;
-    renderVormStats();
     document.getElementById('niveau-trend-sub').textContent =
       'W/kg-niveau per maand sinds ' + (state.beginLabel || 'start');
     renderNiveauHead_();
+    renderBalans_();
   }
 
-  function renderVormStats() {
-    var s = state.vorm.stats[statPeriod] || { tss: 0, tijdMin: 0, ritten: 0 };
-    var span = state.vorm.spanDagen || 0;
-    var venster = { d7: 7, d28: 28, jaar: 365 }[statPeriod] || 0;
-    // Eerlijk degraderen: toont de Activiteiten-tab minder historie dan het
-    // gekozen venster, meld de echte dekking i.p.v. stil 28d=jaar te tonen.
-    var note = '';
-    if (venster && span && span < venster - 1) {
-      var sinds = state.vorm.eersteDatum ? state.vorm.eersteDatum.split('-').reverse().join('-') : null;
-      note = '<div class="muted" style="margin-top:var(--s-2)">Slechts ' + span + ' dagen historie' +
-        (sinds ? ' (sinds ' + sinds + ')' : '') + ' — meer nog niet gesynct.</div>';
+  // Fase 3 deel 3 — Conditie Balans-meter (3-band TSB; custom SVG-track + HTML-marker,
+  // GEEN Google Charts → de translucente -soft-banden renderen correct via var()).
+  var BM_BAND = {
+    over: { label: 'Oververmoeid', c: 'var(--bad)',   s: 'var(--bad-soft)' },
+    prod: { label: 'Productief',   c: 'var(--good)',  s: 'var(--good-soft)' },
+    fris: { label: 'Fris',         c: 'var(--fresh)', s: 'var(--fresh-soft)' }
+  };
+  function renderBalans_() {
+    var el = document.getElementById('vorm-balans');
+    if (!el) return;
+    var ov = '<div class="rc-overline">Conditie-balans</div><div class="bm-sub">vorm = fitheid − vermoeidheid</div>';
+    var h = state.vorm && state.vorm.huidig;
+    if (!h || h.vorm == null) {
+      el.innerHTML = '<div class="rc-card">' + ov + '<div class="bm-empty muted">Nog te weinig data — conditie volgt zodra je traint.</div></div>';
+      return;
     }
-    document.getElementById('vorm-stats').innerHTML =
-      '<div class="card"><div class="metrics">' +
-      '<div class="metric"><div class="v">' + s.ritten + '</div><div class="l">ritten</div></div>' +
-      '<div class="metric"><div class="v">' + uMin(s.tijdMin) + '</div><div class="l">tijd</div></div>' +
-      '<div class="metric"><div class="v">' + Math.round(s.tss) + '</div><div class="l">TSS</div></div>' +
-      '</div>' + note + '</div>';
+    var tsb = h.vorm, LO = -30, HI = 25;
+    var pct = (Math.max(LO, Math.min(HI, tsb)) - LO) / (HI - LO) * 100;       // marker-positie, geclampt
+    var key = (tsb < -10) ? 'over' : (tsb <= 5 ? 'prod' : 'fris');
+    var b = BM_BAND[key];
+    var valTxt = (tsb === 0) ? '±0' : (tsb > 0 ? '+' + tsb : '' + tsb);
+    var p1 = (-10 - LO) / (HI - LO) * 100, p2 = (5 - LO) / (HI - LO) * 100, pz = (0 - LO) / (HI - LO) * 100;
+    var track = '<svg class="bm-track" viewBox="0 0 100 10" preserveAspectRatio="none">' +
+      '<rect x="0" y="0" width="' + p1.toFixed(2) + '" height="10" style="fill:var(--bad-soft)"></rect>' +
+      '<rect x="' + p1.toFixed(2) + '" y="0" width="' + (p2 - p1).toFixed(2) + '" height="10" style="fill:var(--good-soft)"></rect>' +
+      '<rect x="' + p2.toFixed(2) + '" y="0" width="' + (100 - p2).toFixed(2) + '" height="10" style="fill:var(--fresh-soft)"></rect>' +
+      '<line x1="' + pz.toFixed(2) + '" y1="0" x2="' + pz.toFixed(2) + '" y2="10" style="stroke:var(--border-strong)" stroke-width="0.7"></line></svg>';
+    el.innerHTML = '<div class="rc-card">' + ov +
+      '<div class="bm-head"><div class="bm-val" style="color:' + b.c + '">' + valTxt + '</div>' +
+        '<span class="bm-chip" style="color:' + b.c + ';background:' + b.s + '">' + b.label + '</span>' +
+        '<span class="bm-tsb">TSB · vorm-saldo</span></div>' +
+      '<div class="bm-meter">' + track + '<div class="bm-marker" style="left:' + pct.toFixed(2) + '%"></div></div>' +
+      '<div class="bm-labels"><span>oververmoeid</span><span>productief</span><span>fris</span></div></div>';
   }
 
-  function drawVormChart() {
-    if (!chartsReady || !state || !state.vorm) return;
-    var reeks = state.vorm.reeks || [];
-    if (!reeks.length) { document.getElementById('vorm-chart').innerHTML = '<div class="muted">Geen reeks-data.</div>'; return; }
-    var dt = new google.visualization.DataTable();
-    dt.addColumn('string', 'Datum');
-    // Mensentaal-labels (technische afkorting klein tussen haakjes).
-    dt.addColumn('number', 'Fitheid (CTL)'); dt.addColumn('number', 'Vermoeidheid (ATL)'); dt.addColumn('number', 'Vorm');
-    reeks.forEach(function (r) {
-      dt.addRow([r.dateISO.slice(5), r.ctl, r.atl, r.vorm]);
-    });
-    var chart = new google.visualization.LineChart(document.getElementById('vorm-chart'));
-    chart.draw(dt, {
-      legend: { position: 'top' },
-      chartArea: { width: '85%', height: '68%' },
-      colors: [cssColor_('var(--chart-fitness)'), cssColor_('var(--chart-fatigue)'), cssColor_('var(--chart-form)')],
-      curveType: 'function',
-      hAxis: { textStyle: { fontSize: 9 }, gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
-      vAxis: { gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
-      backgroundColor: 'transparent'
-    });
-    drawVormStrip(reeks);
-  }
 
   // 'yyyy-MM' → "mmm 'jj" (NL maand-afkorting).
   var NL_MND = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
@@ -818,38 +795,6 @@
     new google.visualization.AreaChart(el).draw(dt, opts);
   }
 
-  // Vorm-zone-strip: Google Charts kan geen horizontale y-range-banden
-  // tekenen, dus de Vorm-lijn krijgt z'n betekenis via een eigen SVG-strip
-  // met subtiele zone-banden (drempels uit formZone_).
-  function drawVormStrip(reeks) {
-    var el = document.getElementById('vorm-strip');
-    if (!el) return;
-    var W = 100, H = 60, lo = -40, hi = 30;            // vaste domein-band
-    function y(v) { v = Math.max(lo, Math.min(hi, v)); return H - ((v - lo) / (hi - lo)) * H; }
-    // banden: [bovengrens-vorm, kleur] van hoog→laag
-    var banden = [
-      { top: hi, bot: 25,  kleur: 'var(--info-soft)' },    // Overgang
-      { top: 25, bot: 5,   kleur: 'var(--good-soft)' },    // Fris
-      { top: 5,  bot: -10, kleur: 'var(--bg-elevated)' },  // Grijze zone
-      { top: -10,bot: -30, kleur: 'var(--accent-soft)' },  // Optimaal
-      { top: -30,bot: lo,  kleur: 'var(--danger-soft)' }   // Hoog risico
-    ];
-    var bands = banden.map(function (b) {
-      var yt = y(b.top), yb = y(b.bot);
-      return '<rect x="0" y="' + yt.toFixed(1) + '" width="100" height="' + (yb - yt).toFixed(1) + '" style="fill:' + b.kleur + '"></rect>';
-    }).join('');
-    var n = reeks.length;
-    var pts = reeks.map(function (r, i) {
-      var x = n <= 1 ? 0 : (i / (n - 1)) * W;
-      return x.toFixed(2) + ',' + y(r.vorm).toFixed(2);
-    }).join(' ');
-    var zeroY = y(0).toFixed(1);
-    el.innerHTML = '<div class="strip-kop">Vorm in context</div>' +
-      '<svg class="vorm-strip-svg" viewBox="0 0 100 60" preserveAspectRatio="none">' + bands +
-      '<line x1="0" y1="' + zeroY + '" x2="100" y2="' + zeroY + '" style="stroke:var(--chart-axis)" stroke-width="0.4" stroke-dasharray="2 2"></line>' +
-      '<polyline points="' + pts + '" fill="none" style="stroke:var(--text-primary)" stroke-width="1.2"></polyline></svg>' +
-      '<div class="strip-legend"><span style="color:var(--info)">Overgang</span> · <span style="color:var(--good)">Fris</span> · <span style="color:var(--text-muted)">Grijs</span> · <span style="color:var(--accent)">Optimaal</span> · <span style="color:var(--bad)">Risico</span></div>';
-  }
 
   // ── Navigatie ──
   function scrollSelectedChip() {
@@ -864,7 +809,7 @@
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === name);
     });
-    if (name === 'vorm') { drawVormChart(); drawNiveauChart(); }
+    if (name === 'vorm') { drawNiveauChart(); }
     // Schema opent op vandaag: scroll de geselecteerde chip in beeld zodra
     // de container zichtbaar is (scrollIntoView werkt niet op display:none).
     if (name === 'schema') setTimeout(scrollSelectedChip, 30);
@@ -901,14 +846,6 @@
   document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); });
-    });
-    document.querySelectorAll('#period-toggle button').forEach(function (b) {
-      b.addEventListener('click', function () {
-        statPeriod = b.getAttribute('data-p');
-        document.querySelectorAll('#period-toggle button').forEach(function (x) { x.classList.remove('active'); });
-        b.classList.add('active');
-        renderVormStats();
-      });
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && document.getElementById('overlay-panel').classList.contains('is-open')) closeDrawer();
