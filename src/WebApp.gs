@@ -698,9 +698,14 @@ function saveAvailability(updates) {
  * die UI-stappen worden in web-context geslikt. Returnt verse state.
  */
 function regenerateWeb() {
+  // pass 3a: ↻ pullt EERST verse actuals + wellness + stempelt last_sync (ensureDataAndReconcile_
+  // sync't alleen-als-leeg, dus zonder dit zou een regen op een gevulde tab niks pullen). Daarna
+  // reconcileert generateProposal enkel op de verse tab (geen dubbel-netwerk).
+  try { syncAll(); }
+  catch (e) { console.warn('regenerateWeb syncAll: ' + (e && e.message ? e.message : e)); }
   try { generateProposal(); }
   catch (e) { console.warn('regenerateWeb: ' + (e && e.message ? e.message : e)); }
-  setDocProp('avail_dirty', '');   // pass 2: plan vers geregenereerd (incl. syncAll-actuals) → niet meer verouderd
+  setDocProp('avail_dirty', '');   // plan vers geregenereerd op verse data → niet meer verouderd
   return getDashboardState();
 }
 
