@@ -16,12 +16,16 @@
       <div id="loading" class="loading">Laden…</div>
       <div id="error" class="error" style="display:none"></div>
 
+      <header id="appbar" class="appbar" style="display:none">
+        <div class="appbar-brand"><span class="appbar-logo" aria-hidden="true"></span>FTP COACH</div>
+        <div class="appbar-right">
+          <span id="appbar-week" class="appbar-week">Week —</span>
+          <button class="appbar-avatar" type="button" onclick="openSettings()" aria-label="Instellingen">DK</button>
+        </div>
+      </header>
+
       <!-- SCHEMA (Vandaag + Kalender samengevoegd) -->
       <section id="tab-schema" class="tab" style="display:none">
-        <header class="hdr">
-          <div class="hdr-title">Schema</div>
-          <div id="schema-datum" class="hdr-sub"></div>
-        </header>
         <div class="body">
           <div id="schema-status"></div>
         </div>
@@ -39,9 +43,6 @@
 
       <!-- VORM -->
       <section id="tab-vorm" class="tab" style="display:none">
-        <header class="hdr">
-          <div class="hdr-title">Vorm</div>
-        </header>
         <div class="body">
           <div class="deck" id="vorm-deck">
             <div class="deck-slide" id="vorm-status"></div>

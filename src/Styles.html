@@ -23,12 +23,12 @@
   .loading, .error { padding: 40px 20px; text-align: center; color: #e2e8f0; }
   .error { color: #fca5a5; }
 
-  .hdr {
-    background: var(--header); color: #fff;
-    padding: 18px 18px 14px; position: sticky; top: 0; z-index: 5;
-  }
-  .hdr-title { font-size: 22px; font-weight: 700; }
-  .hdr-sub { font-size: 13px; color: #94a3b8; margin-top: 2px; text-transform: capitalize; }
+  .appbar { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5; background: var(--bg-app); padding: var(--s-3) var(--s-4); }
+  .appbar-brand { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-h1); font-weight: var(--fw-h1); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-primary); }
+  .appbar-logo { width: 6px; height: 22px; background: var(--accent-grad); border-radius: 1px; transform: skewX(-12deg); flex: 0 0 auto; }
+  .appbar-right { display: flex; align-items: center; gap: var(--s-3); }
+  .appbar-week { font-family: var(--font-num); font-size: var(--fs-label); color: var(--text-muted); white-space: nowrap; }
+  .appbar-avatar { width: 40px; height: 40px; border-radius: var(--r-pill); border: 1px solid var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); background: var(--bg-elevated); color: var(--text-primary); font-family: var(--font-num); font-size: var(--fs-label); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; }
   .body { padding: var(--s-4); }
 
   .card {
