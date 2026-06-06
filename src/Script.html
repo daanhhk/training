@@ -70,7 +70,7 @@
                    high: '--zone-4', drempel: '--zone-4', anaeroob: '--zone-5', anaerobic: '--zone-5' };
   function zoneBar(segmenten, mini) {
     if (!segmenten || !segmenten.length) return '<div class="muted">Geen structuur beschikbaar.</div>';
-    var W = 100, H = 100, MINW = 1.4;
+    var W = 100, H = 100, MINW = 1.4, GAP = 0.6;
     var totMin = segmenten.reduce(function (a, b) { return a + b.minuten; }, 0) || 1;
     var raw = segmenten.map(function (sg) { return Math.max(MINW, (sg.minuten / totMin) * W); });
     var sum = raw.reduce(function (a, b) { return a + b; }, 0) || 1;
@@ -78,8 +78,9 @@
     segmenten.forEach(function (sg, i) {
       var w = (raw[i] / sum) * W;           // renormaliseer naar exact 100
       var hh = sg.hoogtePct, y = H - hh;
+      var bw = Math.max(0.8, w - GAP);      // smalle gap tussen staven (mockup 424c9d)
       var col = 'var(' + (ZONE_VAR[sg.bucket] || '--zone-2') + ')';
-      parts += '<rect x="' + x.toFixed(2) + '" y="' + y + '" width="' + w.toFixed(2) + '" height="' + hh + '" style="fill:' + col + '" rx="0.6"></rect>';
+      parts += '<rect x="' + x.toFixed(2) + '" y="' + y + '" width="' + bw.toFixed(2) + '" height="' + hh + '" style="fill:' + col + '" rx="0.8"></rect>';
       x += w;
     });
     return '<svg class="' + (mini ? 'wk-minibar' : 'wk-zonebar') + '" viewBox="0 0 100 100" preserveAspectRatio="none">' + parts + '</svg>';
@@ -168,8 +169,9 @@
   }
   // ZoneBar + ZoneLegend (klikbaar) → klapt de Blokstructuur uit/in (INTERACTIONS §1d).
   function zoneBlock_(segs) {
+    var n = (segs && segs.length) ? segs.length : 0;
     return '<details class="wk-blocks"><summary>' + zoneBar(segs) + zoneLegend_(segs) +
-      '<div class="wk-blokhint">Blokstructuur <span class="wk-chev">⌄</span></div></summary>' + blokLijst_(segs) + '</details>';
+      '<div class="wk-blokhint">Blokstructuur · ' + n + ' blok' + (n === 1 ? '' : 'ken') + ' <span class="wk-chev">⌄</span></div></summary>' + blokLijst_(segs) + '</details>';
   }
   // IF-proxy uit TSS + duur: IF = √(TSS / (uur × 100)). Client-display, geen server-calc.
   function ifProxy_(tss, durMin) {
@@ -179,6 +181,16 @@
   function ifMetric_(tss, durMin) {
     var v = ifProxy_(tss, durMin);
     return wkMetric_(v != null ? nl(v, 2) : '–', 'IF');
+  }
+  // Mockup 424c9d: compacte inline-metrics "X min · IF Y · TSS Z" (vervangt de
+  // 3-koloms .wk-metrics-grid in dag-detail). Vorm-MetricRow houdt wkMetric_/.wk-metrics.
+  // Duur = rauwe minuten + " min" (uMin geeft "Xu Ym"; mockup toont "X min").
+  function inlineMetrics_(durMin, tss) {
+    var ifv = ifProxy_(tss, durMin);
+    function n_(x) { return '<span class="wk-im-n">' + x + '</span>'; }
+    return '<div class="wk-inline">' +
+      n_(Math.round(durMin || 0)) + ' min · IF ' + n_(ifv != null ? nl(ifv, 2) : '–') +
+      ' · TSS ' + n_(tss != null ? Math.round(tss) : '–') + '</div>';
   }
 
   // Skin §1d — workout-kaart. opts {overline, today}. Meerdere sessies → sunken sub-kaarten.
@@ -193,14 +205,14 @@
         return '<div class="wk-sub">' +
           '<div class="wk-sub-name">' + esc(s.titel || 'Sessie') + '</div>' +
           zoneBar(s.segmenten, true) +
-          '<div class="wk-metrics">' + wkMetric_(uMin(s.duurMin), 'duur') + ifMetric_(s.tss, s.duurMin) + wkMetric_(Math.round(s.tss || 0), 'TSS') + '</div>' +
+          inlineMetrics_(s.duurMin, s.tss) +
           (s.eindopmerking ? '<div class="wk-note">' + esc(s.eindopmerking) + '</div>' : '') +
         '</div>';
       }).join('');
       return '<div class="wk-card">' + ol + name + subs + wkWhy_(v) + '</div>';
     }
     return '<div class="wk-card">' + ol + name + zoneBlock_(v.segmenten) +
-      '<div class="wk-metrics">' + wkMetric_(uMin(v.duurMin), 'duur') + ifMetric_(v.tss, v.duurMin) + wkMetric_(Math.round(v.tss || 0), 'TSS') + '</div>' +
+      inlineMetrics_(v.duurMin, v.tss) +
       (v.reden ? '<div class="wk-note">' + esc(v.reden) + '</div>' : '') +
       wkWhy_(v) + '</div>';
   }
@@ -220,11 +232,7 @@
     var h = '<div class="wk-card">' +
       '<div class="wk-overline wk-ok">✓ Voltooid</div>' +
       '<div class="wk-name">' + esc(a.naam) + '</div>' +
-      '<div class="wk-metrics">' +
-        wkMetric_(uMin(a.duurMin), 'duur') +
-        ifMetric_(a.tss, a.duurMin) +
-        wkMetric_(a.tss != null ? Math.round(a.tss) : '–', 'TSS') +
-      '</div>' +
+      inlineMetrics_(a.duurMin, a.tss) +
       (dateISO ? rpeRatingHtml_(dateISO, a.rpe) : '');
     if (a.rpe != null && a.mismatch != null && a.rpeVerwacht != null) {
       var t = a.mismatch > 0 ? ('Zwaarder dan verwacht (+' + nl(a.mismatch, 1) + ' vs ~' + a.rpeVerwacht + ')')
