@@ -52,7 +52,6 @@
     renderSchema();
     renderWeekLoad();
     renderVorm();
-    renderBeschikbaarheid();
     switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
     google.charts.setOnLoadCallback(function () { chartsReady = true; drawNiveauChart(); });
@@ -416,56 +415,86 @@
     var p = document.getElementById('btn-push'); if (p) { p.disabled = false; p.textContent = 'Push naar Garmin'; }
   }
 
-  // ── v2a: beschikbaarheid-editor (write-pad) ──
-  function renderBeschikbaarheid() {
-    var av = state.availability || [];
-    var rows = av.map(function (d, i) {
-      var pendelOn = (d.dagtype === 'pendel');   // geen los pendel-veld → afgeleid uit bestaande dagtype
-      return '<div class="avail-row" data-idx="' + i + '">' +
-        '<label class="avail-dag"><input type="checkbox" data-av="train" data-idx="' + i + '"' + (d.train ? ' checked' : '') + ' onchange="availRowSync(' + i + ')"> ' + esc(d.dagLabel) + '</label>' +
-        '<label class="avail-pendel"><input type="checkbox" data-av="pendel" data-idx="' + i + '"' + (pendelOn ? ' checked' : '') + '> Pendel? <span class="muted">woon-werk meegeteld</span></label>' +
-        '<span class="avail-min-wrap" data-idx="' + i + '">' +
-          '<input type="range" class="avail-min" data-av="min" data-idx="' + i + '" min="0" max="600" step="5" value="' + (d.minuten || 0) + '" oninput="availMinSync(' + i + ')">' +
-          '<span class="avail-min-val" data-idx="' + i + '">' + (d.minuten || 0) + ' min</span>' +
-        '</span>' +
-        '<span class="avail-rust" data-idx="' + i + '">rustdag — herstel telt mee</span>' +
-        '</div>';
-    }).join('');
-    document.getElementById('avail-rows').innerHTML = rows;
-    for (var j = 0; j < av.length; j++) availRowSync(j);
-    var btn = document.getElementById('avail-save');
-    if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; }
-  }
+  // ── Beschikbaarheid-editor (overlay-sheet; scope dag/week → DayControls) ──
+  // Schrijft ALTIJD de volle 7-dag-array (saveAvailability); "Alleen deze dag"
+  // muteert client-side één slot. Dagtype (E) afgeleid (F-beschikbaarheid §3):
+  // pendel→'pendel', anders Za/Zo→'weekend', anders 'vrij'; nooit 'recovery'.
+  var AVAIL_MIN = 30, AVAIL_MAX = 360, AVAIL_STEP = 15;
+  var availScope = 'dag';     // 'dag' | 'week'
+  var availSel = [];          // werk-kopie van state.availability tijdens bewerken
 
-  // Train aan → slider+waarde; Train uit → "rustdag" (slider blijft in DOM, save schrijft de rij wel).
-  function availRowSync(i) {
-    var on = document.querySelector('[data-av="train"][data-idx="' + i + '"]').checked;
-    var wrap = document.querySelector('.avail-min-wrap[data-idx="' + i + '"]');
-    var rust = document.querySelector('.avail-rust[data-idx="' + i + '"]');
-    if (wrap) wrap.style.display = on ? 'flex' : 'none';
-    if (rust) rust.style.display = on ? 'none' : 'block';
+  function availDayIdx_() {   // weekdag van de geselecteerde dag → slot 0..6 (Ma..Zo)
+    var s = String(selectedDate || '').slice(0, 10);
+    var dt = s ? new Date(s + 'T00:00:00') : new Date();
+    var i = (dt.getDay() + 6) % 7;
+    return (i >= 0 && i <= 6) ? i : 0;
   }
-  function availMinSync(i) {
-    var v = document.querySelector('[data-av="min"][data-idx="' + i + '"]').value;
-    var lbl = document.querySelector('.avail-min-val[data-idx="' + i + '"]');
-    if (lbl) lbl.textContent = v + ' min';
+  function availMins_(d) {     // train-aan → klem in [30,360] (default 120); train-uit → ruw
+    var m = Number(d.minuten) || 0;
+    return d.train ? Math.min(AVAIL_MAX, Math.max(AVAIL_MIN, m || 120)) : m;
   }
-
-  function saveAvail() {
-    var updates = [];
-    for (var i = 0; i < 7; i++) {
-      var train = !!document.querySelector('[data-av="train"][data-idx="' + i + '"]').checked;
-      var minuten = Number(document.querySelector('[data-av="min"][data-idx="' + i + '"]').value) || 0;
-      var pendel = !!document.querySelector('[data-av="pendel"][data-idx="' + i + '"]').checked;
-      // dagtype client-afgeleid (E onafhankelijk van train); nooit 'recovery' (= engine-only).
-      var dagtype = pendel ? 'pendel' : ((i === 5 || i === 6) ? 'weekend' : 'vrij');
-      updates.push({ train: train, minuten: minuten, dagtype: dagtype });
+  function tglHtml_(kind, idx, on) {
+    return '<label class="tgl"><input type="checkbox"' + (on ? ' checked' : '') +
+      ' onchange="availSet' + kind + '(' + idx + ',this.checked)"><span class="tgl-track"></span><span class="tgl-thumb"></span></label>';
+  }
+  function availDayControls_(idx, d) {
+    var mins = availMins_(d);
+    return '<div class="av-day">' +
+      '<div class="av-dayname">' + esc(d.dagLabel || '') + '</div>' +
+      '<div class="av-ctl"><span class="av-ctl-lbl">Train?</span>' + tglHtml_('Train', idx, d.train) + '</div>' +
+      '<div class="av-min" data-idx="' + idx + '"' + (d.train ? '' : ' style="display:none"') + '>' +
+        '<input type="range" class="av-slider" min="' + AVAIL_MIN + '" max="' + AVAIL_MAX + '" step="' + AVAIL_STEP +
+          '" value="' + mins + '" oninput="availSetMin(' + idx + ',this.value)">' +
+        '<span class="av-minval" data-idx="' + idx + '">' + mins + ' min</span></div>' +
+      '<div class="av-ctl"><span class="av-ctl-lbl">Pendel?</span>' + tglHtml_('Pendel', idx, d.pendel) + '</div>' +
+    '</div>';
+  }
+  function availSheetHtml() {
+    var seg = '<div class="av-seg">' +
+      '<button type="button" class="av-seg-btn' + (availScope === 'dag' ? ' is-on' : '') + '" onclick="availSetScope(\'dag\')">Alleen deze dag</button>' +
+      '<button type="button" class="av-seg-btn' + (availScope === 'week' ? ' is-on' : '') + '" onclick="availSetScope(\'week\')">Hele week</button>' +
+    '</div>';
+    var body;
+    if (availScope === 'week') {
+      body = availSel.map(function (d, i) { return availDayControls_(i, d); }).join('');
+    } else {
+      var idx = availDayIdx_();
+      body = availDayControls_(idx, availSel[idx] || { train: false, minuten: 0, pendel: false, dagLabel: '' });
     }
-    var btn = document.getElementById('avail-save');
+    return '<div class="av-title">Beschikbaarheid</div>' + seg +
+      '<div class="av-body">' + body + '</div>' +
+      '<button type="button" class="av-save" onclick="saveAvailEditor()">Opslaan</button>' +
+      '<button type="button" class="av-cancel" data-overlay-close>Annuleren</button>';
+  }
+  function availRender_() {
+    var c = document.getElementById('overlay-content');
+    if (c) c.innerHTML = availSheetHtml();
+  }
+  function openAvailEditor() {
+    availSel = (state.availability || []).map(function (d) {
+      return { train: !!d.train, minuten: Number(d.minuten) || 0, pendel: (d.dagtype === 'pendel'), dagLabel: d.dagLabel };
+    });
+    availScope = 'dag';
+    openDrawer({ variant: 'sheet', html: availSheetHtml() });
+  }
+  function availSetScope(scope) { availScope = scope; availRender_(); }
+  function availSetTrain(idx, on) { if (availSel[idx]) { availSel[idx].train = on; availRender_(); } }
+  function availSetPendel(idx, on) { if (availSel[idx]) availSel[idx].pendel = on; }
+  function availSetMin(idx, v) {
+    if (availSel[idx]) availSel[idx].minuten = Number(v) || 0;
+    var lbl = document.querySelector('.av-minval[data-idx="' + idx + '"]');
+    if (lbl) lbl.textContent = (Number(v) || 0) + ' min';
+  }
+  function saveAvailEditor() {
+    var updates = availSel.map(function (d, i) {
+      var dagtype = d.pendel ? 'pendel' : ((i === 5 || i === 6) ? 'weekend' : 'vrij');
+      return { train: !!d.train, minuten: availMins_(d), dagtype: dagtype };
+    });
+    var btn = document.querySelector('.av-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Opslaan…'; }
     google.script.run
-      .withSuccessHandler(onState)
-      .withFailureHandler(function (err) { showError(err); if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } })
+      .withSuccessHandler(function (s) { closeDrawer(); onState(s); })
+      .withFailureHandler(function (err) { if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } showError(err); })
       .saveAvailability(updates);
   }
 

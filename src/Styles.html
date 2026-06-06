@@ -307,18 +307,34 @@
   .act-btn:disabled { opacity: .6; cursor: default; }
   .act-status { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; min-height: 16px; }
 
-  /* v2a beschikbaarheid-editor */
-  .avail-box { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--card-radius); padding: var(--card-pad); box-shadow: var(--card-shadow); }
-  .avail-box > summary { cursor: pointer; font-weight: var(--fw-h3); color: var(--accent); font-size: var(--fs-label); }
-  .avail-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
-  .avail-dag { flex: 1 1 auto; font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
-  .avail-pendel { font-size: 12px; color: var(--ink); display: flex; align-items: center; gap: 5px; }
-  .avail-min-wrap { flex: 1 1 100%; display: flex; align-items: center; gap: 8px; }
-  .avail-min { flex: 1; }
-  .avail-min-val { width: 58px; text-align: right; font-size: 13px; color: var(--ink); }
-  .avail-rust { flex: 1 1 100%; font-size: 12px; color: var(--muted); font-style: italic; }
-  .avail-save { margin-top: 12px; width: 100%; height: var(--btn-height); border: none; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-weight: 600; cursor: pointer; }
-  .avail-save:disabled { opacity: .6; cursor: default; }
+  /* beschikbaarheid-editor (overlay-sheet): open-knop + scope-segment + DayControls */
+  .avail-open { width: 100%; height: var(--btn-height); border: 1px solid var(--btn-secondary-border); border-radius: var(--btn-radius); background: var(--btn-secondary-bg); color: var(--btn-secondary-text); font-weight: 600; font-size: var(--fs-label); cursor: pointer; }
+  .av-title { font-size: var(--fs-h3); font-weight: var(--fw-h3); color: var(--text-primary); margin-bottom: 14px; }
+  .av-seg { display: flex; gap: 3px; background: var(--segment-track-bg); border-radius: 10px; padding: 3px; margin-bottom: 16px; }
+  .av-seg-btn { flex: 1; border: 0; background: transparent; color: var(--segment-text); font-size: var(--fs-label); font-weight: 600; padding: 9px 6px; border-radius: 8px; cursor: pointer; }
+  .av-seg-btn.is-on { background: var(--segment-active-bg); color: var(--segment-active-text); box-shadow: var(--segment-active-shadow); }
+  .av-body { display: flex; flex-direction: column; gap: 14px; }
+  .av-day { display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--bg-sunken); border-radius: var(--card-radius); }
+  .av-dayname { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: capitalize; }
+  .av-ctl { display: flex; align-items: center; justify-content: space-between; }
+  .av-ctl-lbl { font-size: 14px; color: var(--text-primary); }
+  .av-min { display: flex; align-items: center; gap: 10px; }
+  .av-minval { width: 62px; text-align: right; font-size: 13px; color: var(--text-secondary); font-family: var(--font-num); }
+  .av-save { margin-top: 18px; width: 100%; height: var(--btn-height); border: none; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-weight: 600; cursor: pointer; }
+  .av-save:disabled { opacity: .6; cursor: default; }
+  .av-cancel { margin-top: 8px; width: 100%; height: var(--btn-height); border: none; border-radius: var(--btn-radius); background: transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; }
+  /* Toggle-switch (--toggle-*) */
+  .tgl { position: relative; display: inline-block; width: var(--toggle-w); height: var(--toggle-h); flex: none; }
+  .tgl input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .tgl-track { position: absolute; inset: 0; background: var(--toggle-track-off); border-radius: 999px; transition: background .15s; }
+  .tgl input:checked + .tgl-track { background: var(--toggle-track-on); }
+  .tgl-thumb { position: absolute; top: 50%; left: 3px; width: calc(var(--toggle-h) - 6px); height: calc(var(--toggle-h) - 6px); transform: translateY(-50%); background: var(--toggle-thumb); border-radius: 50%; box-shadow: var(--toggle-thumb-shadow); transition: left .15s; }
+  .tgl input:checked ~ .tgl-thumb { left: calc(var(--toggle-w) - var(--toggle-h) + 3px); }
+  /* Range-slider (--slider-*) */
+  .av-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px; background: var(--slider-track); outline: none; }
+  .av-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: none; }
+  .av-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: none; }
+  .av-slider::-moz-range-progress { background: var(--slider-fill); height: 4px; border-radius: 999px; }
   .status-left, .status-right {
     flex: 1; background: var(--card); border-radius: 16px; padding: 14px;
     box-shadow: 0 2px 10px rgba(15,23,42,0.08); display: flex; flex-direction: column;
