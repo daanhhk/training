@@ -528,22 +528,13 @@ function getDashboardState() {
     var dt = Math.round((stripTime_(new Date(evDatum)).getTime() - today.getTime()) / 86400000);
     dagenTot = dt >= 0 ? dt : null;
   }
+  // Fase 3 deel 3: conditie-cluster (PMC/strip/volume) verwijderd → vorm-payload
+  // getrimd tot wat de Vorm-body nog leest (niveau-grafiek + Balans-meter). De
+  // reeks/stats blijven lokaal berekend (ctlRef/voortgang/readiness), maar gaan
+  // niet meer mee als payload-velden.
   var vorm = {
-    reeks: reeks,
     niveauReeks: dashNiveauReeks_(ss),
-    huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null,
-    stats: statsBundle.stats,
-    spanDagen: statsBundle.spanDagen,
-    eersteDatum: statsBundle.eersteDatum,
-    ftp: settings.ftp || null,
-    macroFase: macro.fase || null,
-    rampBuildMin: (typeof RAMP_BUILD_MIN !== 'undefined') ? RAMP_BUILD_MIN : 3,
-    garminVerdict: garminVerdict,
-    event: {
-      naam: macro.eventName || (macro.hoofdEvent && macro.hoofdEvent.naam) || null,
-      datum: evDatum ? formatDate(new Date(evDatum), 'yyyy-MM-dd') : null,
-      dagenTot: dagenTot
-    }
+    huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null
   };
 
   var gewicht = getGewicht();
@@ -648,8 +639,7 @@ function getDashboardState() {
     weekLoad: getWeekLoad_(ss, weekStart),
     vandaag: vandaag,
     dagen: dagen,
-    vorm: vorm,
-    maandTotalen: statsBundle.maandTotalen
+    vorm: vorm
   };
 }
 
