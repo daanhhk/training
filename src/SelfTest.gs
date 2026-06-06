@@ -26,6 +26,7 @@ function runSelfTest() {
   testMacroPhase_(ctx);
   testReadiness_(ctx);
   testConstants_(ctx);
+  testTier_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -149,4 +150,16 @@ function testConstants_(ctx) {
   assert_(ctx, 'checkin slaap slecht', -2, CHECKIN_LEVELS.slaap.slecht);
   assert_(ctx, 'checkin slaap goed', 2, CHECKIN_LEVELS.slaap.goed);
   assert_(ctx, 'checkin stress laag', 2, CHECKIN_LEVELS.stress.laag);
+}
+
+// ── niveauTier_ (puur) — Fase 3 deel 4 band-grenzen ─────────────────
+function testTier_(ctx) {
+  assert_(ctx, 'tier 14 Beginner', 'Beginner', niveauTier_(14));
+  assert_(ctx, 'tier 15 Gemiddeld', 'Gemiddeld', niveauTier_(15));
+  assert_(ctx, 'tier 24 Gemiddeld', 'Gemiddeld', niveauTier_(24));
+  assert_(ctx, 'tier 25 Gevorderd', 'Gevorderd', niveauTier_(25));
+  assert_(ctx, 'tier 34 Gevorderd', 'Gevorderd', niveauTier_(34));
+  assert_(ctx, 'tier 35 Vergevorderd', 'Vergevorderd', niveauTier_(35));
+  assert_(ctx, 'tier 44 Vergevorderd', 'Vergevorderd', niveauTier_(44));
+  assert_(ctx, 'tier 45 Elite', 'Elite', niveauTier_(45));
 }

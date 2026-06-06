@@ -347,6 +347,20 @@ function computeNiveau_(ftp, gewicht) {
 }
 
 /**
+ * Fase 3 deel 4 — niveau-tier-label (PUUR; getest in runSelfTest). Niveau-gebaseerd
+ * (NIET W/kg) zodat de chip nooit de balk (niveau/50) tegenspreekt.
+ * 0–14 Beginner · 15–24 Gemiddeld · 25–34 Gevorderd · 35–44 Vergevorderd · 45–50 Elite.
+ */
+function niveauTier_(niveau) {
+  if (niveau == null) return null;
+  if (niveau < 15) return 'Beginner';
+  if (niveau < 25) return 'Gemiddeld';
+  if (niveau < 35) return 'Gevorderd';
+  if (niveau < 45) return 'Vergevorderd';
+  return 'Elite';
+}
+
+/**
  * CTL-gedreven conditie-modifier op het W/kg-anker (2b-1). Band-capped op
  * ±BAND niveau-punten; dalen toegestaan (geen taper-freeze). ctlRef = CTL
  * aan het begin van het zichtbare venster. Geen data → 0.
@@ -610,6 +624,7 @@ function getDashboardState() {
     gewicht: gewicht || null,
     wkg: niv.wkg,
     niveau: niveauLevend,
+    niveauTier: niveauTier_(niveauLevend != null ? Math.round(niveauLevend) : null),
     niveauBasis: niveauBasis,
     conditieMod: conditieMod,
     ctlRef: ctlRef != null ? Math.round(ctlRef * 10) / 10 : null,
