@@ -120,7 +120,7 @@
   /* ─── Data-viz (chart + progress ring) ─────────────────────────────────── */
   --chart-line:  var(--accent);
   --chart-fill:  color-mix(in srgb, var(--accent) 12%, transparent); /* area gradient top */
-  --chart-grid:  var(--border-subtle);                               /* gridlines (dark hairline; concrete → Google Charts parse) */
+  --chart-grid:  rgba(255,255,255,0.05);                             /* gridlines 1px (subtle on dark; literal rgba → Charts parse) */
   --chart-axis:  var(--text-muted);                                  /* axis text         */
   --chart-point: var(--white);                                       /* active datapoint  */
   --chart-fitness: var(--zone-3);          /* PMC: CTL / Fitheid (teal) */
