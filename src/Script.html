@@ -116,6 +116,31 @@
     var z = ZONE_VAR[b] || '--zone-2';
     return '<span class="zbadge" style="color:var(' + z + ');border-color:var(' + z + ')">' + (ZONE_LABEL[b] || 'Z2') + '</span>';
   }
+  // §1d-badge = workout-INTENT-categorie (mock toont "VO2max"), niet de piek/duur-bucket.
+  // Namen uit de mock; kleuren 1-op-1 uit de --zone-*-coupling. Onbekend type → fallback zoneBadge_.
+  var INTENT_BADGE = {
+    recovery: { label: 'Herstel', z: '--zone-1' }, test: { label: 'Herstel', z: '--zone-1' },
+    long_z2: { label: 'Duur', z: '--zone-2' }, pendel_z2: { label: 'Duur', z: '--zone-2' },
+    fatox: { label: 'Duur', z: '--zone-2' }, combo_long_with_efforts: { label: 'Duur', z: '--zone-2' },
+    combo_z2_vo2: { label: 'VO2max', z: '--zone-6' },
+    tempo: { label: 'Tempo', z: '--zone-3' },
+    sweet_spot: { label: 'Sweet Spot', z: '--zone-4' }, ss_lang: { label: 'Sweet Spot', z: '--zone-4' },
+    combo_ss_sprints: { label: 'Sweet Spot', z: '--zone-4' }, pendel_conditie_intervals: { label: 'Sweet Spot', z: '--zone-4' },
+    pendel_trip_intervals: { label: 'Sweet Spot', z: '--zone-4' },
+    threshold: { label: 'Drempel', z: '--zone-4' }, ftp: { label: 'Drempel', z: '--zone-4' },
+    pendel_ftp_intervals: { label: 'Drempel', z: '--zone-4' },
+    big_gear: { label: 'Klim', z: '--zone-4' }, bergsim: { label: 'Klim', z: '--zone-4' },
+    low_cad: { label: 'Klim', z: '--zone-4' }, pendel_climb_intervals: { label: 'Klim', z: '--zone-4' },
+    vo2max: { label: 'VO2max', z: '--zone-6' }, vo2_short: { label: 'VO2max', z: '--zone-6' },
+    vo2_medium: { label: 'VO2max', z: '--zone-6' }, vo2_long: { label: 'VO2max', z: '--zone-6' },
+    vo2_3015: { label: 'VO2max', z: '--zone-6' }, microbursts: { label: 'VO2max', z: '--zone-6' },
+    pendel_vo2_intervals: { label: 'VO2max', z: '--zone-6' }
+  };
+  function badgeHtml_(v) {
+    var b = (v && v.type) ? INTENT_BADGE[v.type] : null;
+    if (b) return '<span class="zbadge" style="color:var(' + b.z + ');border-color:var(' + b.z + ')">' + b.label + '</span>';
+    return (v && v.segmenten) ? zoneBadge_(v.segmenten) : '';   // onbekend/ontbrekend type → primaryBucket_-fallback
+  }
   function zoneLegend_(segs) {
     if (!segs || !segs.length) return '';
     var seen = {}, items = [];
@@ -154,7 +179,7 @@
     if (!v) return '';
     opts = opts || {};
     var ol = '<div class="wk-head-row"><div class="wk-overline' + (opts.today ? ' wk-today' : '') + '">' + esc(opts.overline || 'Voorstel') + '</div>' +
-      (v.segmenten ? zoneBadge_(v.segmenten) : '') + '</div>';
+      badgeHtml_(v) + '</div>';
     var name = '<div class="wk-name">' + esc(v.titel) + '</div>';
     if (v.sessies && v.sessies.length > 1) {
       var subs = v.sessies.map(function (s) {
