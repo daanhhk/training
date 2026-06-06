@@ -89,25 +89,72 @@
     return '<details class="wk-why"><summary>Waarom deze training?</summary><ul>' + li + '</ul></details>';
   }
 
+  // §1d-extra's: zone-badge (primaire zone), ZoneLegend, inklapbare Blokstructuur, IF-metric.
+  var ZONE_LABEL = { rust: 'Z1', z2: 'Z2', low: 'Z2', tempo: 'Z3', high: 'Z4', drempel: 'Z4', anaeroob: 'Z5+', anaerobic: 'Z5+' };
+  function primaryBucket_(segs) {
+    if (!segs || !segs.length) return null;
+    var best = segs[0];
+    segs.forEach(function (s) { if ((s.hoogtePct || 0) > (best.hoogtePct || 0)) best = s; });
+    return best.bucket;
+  }
+  function zoneBadge_(segs) {
+    var b = primaryBucket_(segs);
+    if (!b) return '';
+    var z = ZONE_VAR[b] || '--zone-2';
+    return '<span class="zbadge" style="color:var(' + z + ');border-color:var(' + z + ')">' + (ZONE_LABEL[b] || 'Z2') + '</span>';
+  }
+  function zoneLegend_(segs) {
+    if (!segs || !segs.length) return '';
+    var seen = {}, items = [];
+    segs.forEach(function (s) {
+      if (seen[s.bucket]) return; seen[s.bucket] = true;
+      var z = ZONE_VAR[s.bucket] || '--zone-2';
+      items.push('<span class="zleg-item"><span class="zleg-dot" style="background:var(' + z + ')"></span>' + (ZONE_LABEL[s.bucket] || 'Z2') + '</span>');
+    });
+    return '<div class="zleg">' + items.join('') + '</div>';
+  }
+  function blokLijst_(segs) {
+    if (!segs || !segs.length) return '';
+    var rows = segs.map(function (s) {
+      var z = ZONE_VAR[s.bucket] || '--zone-2';
+      return '<div class="blok-row"><span class="blok-zone" style="color:var(' + z + ')">' + (ZONE_LABEL[s.bucket] || 'Z2') + '</span><span class="blok-min">' + uMin(s.minuten) + '</span></div>';
+    }).join('');
+    return '<div class="bloklist">' + rows + '</div>';
+  }
+  // ZoneBar + ZoneLegend (klikbaar) → klapt de Blokstructuur uit/in (INTERACTIONS §1d).
+  function zoneBlock_(segs) {
+    return '<details class="wk-blocks"><summary>' + zoneBar(segs) + zoneLegend_(segs) + '</summary>' + blokLijst_(segs) + '</details>';
+  }
+  // IF-proxy uit TSS + duur: IF = √(TSS / (uur × 100)). Client-display, geen server-calc.
+  function ifProxy_(tss, durMin) {
+    if (!tss || !durMin) return null;
+    return Math.sqrt(tss / (durMin / 60 * 100));
+  }
+  function ifMetric_(tss, durMin) {
+    var v = ifProxy_(tss, durMin);
+    return wkMetric_(v != null ? nl(v, 2) : '–', 'IF');
+  }
+
   // Skin §1d — workout-kaart. opts {overline, today}. Meerdere sessies → sunken sub-kaarten.
   function voorstelKaart(v, opts) {
     if (!v) return '';
     opts = opts || {};
-    var ol = '<div class="wk-overline' + (opts.today ? ' wk-today' : '') + '">' + esc(opts.overline || 'Voorstel') + '</div>';
+    var ol = '<div class="wk-head-row"><div class="wk-overline' + (opts.today ? ' wk-today' : '') + '">' + esc(opts.overline || 'Voorstel') + '</div>' +
+      (v.segmenten ? zoneBadge_(v.segmenten) : '') + '</div>';
     var name = '<div class="wk-name">' + esc(v.titel) + '</div>';
     if (v.sessies && v.sessies.length > 1) {
       var subs = v.sessies.map(function (s) {
         return '<div class="wk-sub">' +
           '<div class="wk-sub-name">' + esc(s.titel || 'Sessie') + '</div>' +
           zoneBar(s.segmenten, true) +
-          '<div class="wk-metrics">' + wkMetric_(uMin(s.duurMin), 'duur') + wkMetric_(Math.round(s.tss || 0), 'TSS') + '</div>' +
+          '<div class="wk-metrics">' + wkMetric_(uMin(s.duurMin), 'duur') + ifMetric_(s.tss, s.duurMin) + wkMetric_(Math.round(s.tss || 0), 'TSS') + '</div>' +
           (s.eindopmerking ? '<div class="wk-note">' + esc(s.eindopmerking) + '</div>' : '') +
         '</div>';
       }).join('');
       return '<div class="wk-card">' + ol + name + subs + wkWhy_(v) + '</div>';
     }
-    return '<div class="wk-card">' + ol + name + zoneBar(v.segmenten) +
-      '<div class="wk-metrics">' + wkMetric_(uMin(v.duurMin), 'duur') + wkMetric_(Math.round(v.tss || 0), 'TSS') + '</div>' +
+    return '<div class="wk-card">' + ol + name + zoneBlock_(v.segmenten) +
+      '<div class="wk-metrics">' + wkMetric_(uMin(v.duurMin), 'duur') + ifMetric_(v.tss, v.duurMin) + wkMetric_(Math.round(v.tss || 0), 'TSS') + '</div>' +
       (v.reden ? '<div class="wk-note">' + esc(v.reden) + '</div>' : '') +
       wkWhy_(v) + '</div>';
   }
@@ -129,8 +176,8 @@
       '<div class="wk-name">' + esc(a.naam) + '</div>' +
       '<div class="wk-metrics">' +
         wkMetric_(uMin(a.duurMin), 'duur') +
+        ifMetric_(a.tss, a.duurMin) +
         wkMetric_(a.tss != null ? Math.round(a.tss) : '–', 'TSS') +
-        wkMetric_(a.rpe != null ? a.rpe : '–', 'RPE') +
       '</div>' +
       (dateISO ? rpeRatingHtml_(dateISO, a.rpe) : '');
     if (a.rpe != null && a.mismatch != null && a.rpeVerwacht != null) {
@@ -280,10 +327,10 @@
     (state.dagen || []).forEach(function (d) {
       var mark = '';
       if (d.status === 'voltooid') mark = '<span class="m-done">✓</span>';
-      else if (d.status === 'vandaag') mark = '●';
       else if (d.status === 'gemist') mark = '<span class="m-gemist">×</span>';
-      else if (d.status === 'rust') mark = '<span class="m-rust"></span>';   // streepje --border-strong
       else if (d.status === 'preview') mark = '~';
+      else if (!d.voorstel && !d.actual) mark = '<span class="m-rust"></span>';  // rust/lege dag (incl. vandaag-rust) → streepje
+      else if (d.status === 'vandaag') mark = '●';
       var sel = (d.dateISO === selectedDate) ? ' sel' : '';
       var wd = d.weekdag.slice(0, 2);
       strip += '<div class="chip' + sel + '" data-date="' + d.dateISO + '" onclick="selectDay(\'' + d.dateISO + '\')">' +

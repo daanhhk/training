@@ -72,6 +72,21 @@
   .wk-why > summary::-webkit-details-marker { display: none; }
   .wk-why ul { margin: 8px 0 0; padding-left: 18px; }
   .wk-why li { font-size: var(--fs-label); color: var(--text-secondary); margin-bottom: 4px; }
+  /* Schema deel 2 pass 1 — §1d zone-badge / ZoneLegend / Blokstructuur */
+  .wk-head-row { display: flex; align-items: center; gap: 8px; }
+  .wk-head-row .wk-overline { flex: 1; }
+  .zbadge { flex: 0 0 auto; border: 1px solid; border-radius: var(--r-sm); padding: 1px 7px; font-family: var(--font-num); font-size: var(--fs-caption); font-weight: var(--fw-caption); }
+  .wk-blocks { margin: 4px 0; }
+  .wk-blocks > summary { list-style: none; cursor: pointer; }
+  .wk-blocks > summary::-webkit-details-marker { display: none; }
+  .zleg { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+  .zleg-item { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-caption); color: var(--text-secondary); }
+  .zleg-dot { width: 8px; height: 8px; border-radius: 2px; }
+  .bloklist { margin-top: 8px; background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: var(--r-sm); overflow: hidden; }
+  .blok-row { display: flex; justify-content: space-between; padding: 7px 12px; font-size: var(--fs-label); }
+  .blok-row + .blok-row { border-top: 1px solid var(--border-subtle); }
+  .blok-zone { font-family: var(--font-num); font-weight: var(--fw-num-sm); }
+  .blok-min { color: var(--text-secondary); font-family: var(--font-num); }
 
   /* Fase 3b — WeekLoad-kaart (deze week, gepland vs gedaan) */
   .wl-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: var(--card-pad); margin: 0; }
