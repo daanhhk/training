@@ -120,6 +120,17 @@
   .lc-bar { height: 8px; border-radius: var(--r-pill); background: var(--bg-sunken); overflow: hidden; margin-top: 10px; }
   .lc-bar-fill { height: 100%; background: var(--accent-grad); border-radius: var(--r-pill); }
 
+  /* Fase 3 deel 2 — niveau-trend header + segmented venster-toggle */
+  .nh-row { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 4px; }
+  .nh-val { font-family: var(--font-num); font-size: var(--fs-num-md); font-weight: var(--fw-num-md); color: var(--text-primary); }
+  .nh-unit { font-size: var(--fs-caption); color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--tracking-overline); margin-left: 6px; }
+  .nh-delta { font-family: var(--font-num); font-size: var(--fs-num-sm); font-weight: var(--fw-num-sm); }
+  .nh-up { color: var(--good); }
+  .nh-down { color: var(--bad); }
+  .seg { display: inline-flex; gap: 2px; background: var(--segment-track-bg); border-radius: var(--r-md); padding: 3px; margin: 4px 0 10px; }
+  .seg button { border: none; cursor: pointer; background: transparent; color: var(--segment-text); font-family: var(--font-sans); font-size: var(--fs-label); font-weight: var(--fw-label); padding: 6px 12px; border-radius: var(--r-sm); }
+  .seg button.active { background: var(--segment-active-bg); color: var(--segment-active-text); box-shadow: var(--segment-active-shadow); }
+
   details { margin-top: 8px; }
   summary { cursor: pointer; font-weight: 600; color: var(--accent); font-size: 14px; }
   details ul { margin: 8px 0 0; padding-left: 18px; }
