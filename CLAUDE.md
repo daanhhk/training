@@ -60,17 +60,17 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 
 **Claude Design is de ENIGE bron voor visueel design.** In de repo (`design/`):
 `tokens.css` (styling-tokens), `FTP-Coach-export.md` (per-tab layout +
-componenten + states), `DESIGN.md` (visuele taal), `screenshots/`, en
-`INTERACTIONS.md` (interactie-gedrag — **nog niet in de repo**; gedrag komt
-zolang uit HANDOFF.md + `FTP-Coach-export.md`). `tokens.css` is verbatim
-gemirrord in `src/Tokens.html` (= wat live geserveerd wordt).
+componenten + states), `DESIGN.md` (visuele taal), `INTERACTIONS.md`
+(interactie-contract: per-element READ/WRITE + 💻client/🌐server-gedrag), en
+`screenshots/`. `tokens.css` is verbatim gemirrord in `src/Tokens.html`
+(= wat live geserveerd wordt).
 
 - **Het ONTWERP is leidend.** Bestaande functies bouwen we erin; bij een
   live-vs-design-conflict wint het ontwerp.
 - **UI-build-loop** (UI-specifieke STAP 0-recon — zie Werkwijze): lees vóór de
-  build de relevante `FTP-Coach-export.md §X` + `tokens.css`
-  (+ `INTERACTIONS.md §X` indien aanwezig), reconcileer de implementatie
-  ertegen, en meld de afwijkingen (kleur / token / layout / gedrag) VÓÓR je
+  build de relevante `FTP-Coach-export.md §X` + `INTERACTIONS.md §X` +
+  `tokens.css`, reconcileer de implementatie ertegen, en meld de afwijkingen
+  (kleur / token / layout / gedrag) VÓÓR je
   bouwt. Bouw naar de exacte ontwerp-token-namen/-waarden + -gedrag: verzin
   geen waarden en overrule het ontwerp niet.
 - **Token-discipline:** `design/tokens.css` ↔ `src/Tokens.html` = styling-bron;
