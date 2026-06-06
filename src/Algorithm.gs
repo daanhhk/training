@@ -1043,7 +1043,15 @@ function getTodayCheckin_() {
   if (!raw) return null;
   try {
     var o = JSON.parse(raw);
-    if (o && o.slaap && o.benen && o.stress) return { slaap: o.slaap, benen: o.benen, stress: o.stress };
+    if (o && o.slaap && o.benen && o.stress) {
+      // Migreer oude labels ('oké') → nieuwe (slaap→matig, benen→normaal) zodat oude
+      // opgeslagen check-ins correct tonen + de nieuwe delta-map (CHECKIN_LEVELS) raken.
+      return {
+        slaap:  (o.slaap === 'oké') ? 'matig' : o.slaap,
+        benen:  (o.benen === 'oké') ? 'normaal' : o.benen,
+        stress: o.stress
+      };
+    }
   } catch (e) {}
   return null;
 }
