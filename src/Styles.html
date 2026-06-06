@@ -106,6 +106,20 @@
   .gemist-txt { flex: 1; color: var(--text-muted); font-size: var(--fs-body); }
   .gemist-back { flex: 0 0 auto; background: none; border: none; color: var(--accent); font-size: var(--fs-label); font-weight: var(--fw-label); cursor: pointer; padding: 4px 6px; }
 
+  /* Fase 3 deel 1 — Vorm LevelCard (export §2b; deelt de rc-card-skin) */
+  .lc-head { display: flex; align-items: center; gap: 10px; }
+  .lc-head .rc-overline { flex: 1; }
+  .lc-chip { flex: 0 0 auto; background: var(--accent-soft); color: var(--accent); border-radius: var(--r-pill); padding: 3px 10px; font-size: var(--fs-caption); font-weight: var(--fw-caption); white-space: nowrap; }
+  .lc-row { display: flex; align-items: baseline; gap: 10px; margin-top: var(--s-2); }
+  .lc-num { flex: 1; font-family: var(--font-num); font-size: var(--fs-num-lg); font-weight: var(--fw-num-lg); color: var(--text-primary); line-height: 1; }
+  .lc-max { font-size: var(--fs-num-md); color: var(--text-muted); margin-left: 4px; }
+  .lc-delta { font-family: var(--font-num); font-size: var(--fs-num-sm); font-weight: var(--fw-num-sm); }
+  .lc-up { color: var(--good); }
+  .lc-down { color: var(--bad); }
+  .lc-wkg { font-size: var(--fs-label); color: var(--text-secondary); margin-top: 4px; }
+  .lc-bar { height: 8px; border-radius: var(--r-pill); background: var(--bg-sunken); overflow: hidden; margin-top: 10px; }
+  .lc-bar-fill { height: 100%; background: var(--accent-grad); border-radius: var(--r-pill); }
+
   details { margin-top: 8px; }
   summary { cursor: pointer; font-weight: 600; color: var(--accent); font-size: 14px; }
   details ul { margin: 8px 0 0; padding-left: 18px; }

@@ -15,6 +15,18 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;' }[c]; }); }
   function uMin(m) { m = Math.round(m || 0); return Math.floor(m / 60) + 'u ' + (m % 60) + 'm'; }
 
+  // Resolveer een CSS-kleurexpressie (var()/color-mix) → concrete rgb-string.
+  // Google Charts kent geen CSS custom properties, dus tokeniseren we via een
+  // probe-element dat de cascade resolvet op draw-tijd.
+  function cssColor_(expr) {
+    var p = document.createElement('span');
+    p.style.cssText = 'color:' + expr + ';position:absolute;left:-9999px';
+    document.body.appendChild(p);
+    var c = getComputedStyle(p).color;
+    document.body.removeChild(p);
+    return c || expr;
+  }
+
   // ── Boot ──
   function loadState() {
     google.script.run
@@ -610,8 +622,40 @@
   }
 
   // ── Vorm: trend & details ──
+  // Fase 3 deel 1 — LevelCard (export §2b), op de rc-skin, onder de ReadinessCard.
+  function levelCardHtml(s) {
+    if (s.niveau == null) return '<div class="rc-card muted">Geen niveau-data.</div>';
+    var max = 50;
+    var pct = Math.max(0, Math.min(100, s.niveau / max * 100));
+    var chip = s.beginLabel ? '<span class="lc-chip">sinds ' + esc(s.beginLabel) + '</span>' : '';
+    var wkg = (s.wkg != null) ? nl(s.wkg, 2) + ' W/kg' : '–';
+    var delta = (s.niveauDelta != null)
+      ? '<span class="lc-delta ' + (s.niveauDelta >= 0 ? 'lc-up' : 'lc-down') + '">' +
+          (s.niveauDelta >= 0 ? '+' : '') + nl(s.niveauDelta, 1) + '</span>'
+      : '';
+    return '<div class="rc-card">' +
+      '<div class="lc-head"><div class="rc-overline">Niveau</div>' + chip + '</div>' +
+      '<div class="lc-row"><div class="lc-num">' + Math.round(s.niveau) +
+        '<span class="lc-max">/ ' + max + '</span></div>' + delta + '</div>' +
+      '<div class="lc-wkg">' + wkg + '</div>' +
+      '<div class="lc-bar"><div class="lc-bar-fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+    '</div>';
+  }
+
+  // Fase 3 deel 1 — MetricRow (export §2d), op de 3a-card-skin.
+  function metricRowHtml(s) {
+    var ftp = (s.ftp != null) ? s.ftp : '–';
+    var gew = (s.gewicht != null) ? nl(s.gewicht, 1) : '–';
+    var wtss = (s.weekLoad && s.weekLoad.tss != null) ? Math.round(s.weekLoad.tss) : '–';
+    return '<div class="wk-card"><div class="wk-metrics">' +
+      wkMetric_(ftp, 'FTP') + wkMetric_(gew, 'gewicht') + wkMetric_(wtss, 'week-TSS') +
+    '</div></div>';
+  }
+
   function renderVorm() {
     renderVormStatus();
+    document.getElementById('vorm-level').innerHTML = levelCardHtml(state);
+    document.getElementById('vorm-metrics').innerHTML = metricRowHtml(state);
     var v = state.vorm;
     var hu = '';
     if (v.huidig) {
@@ -640,7 +684,7 @@
     var note = '';
     if (venster && span && span < venster - 1) {
       var sinds = state.vorm.eersteDatum ? state.vorm.eersteDatum.split('-').reverse().join('-') : null;
-      note = '<div class="muted" style="margin-top:8px">Slechts ' + span + ' dagen historie' +
+      note = '<div class="muted" style="margin-top:var(--s-2)">Slechts ' + span + ' dagen historie' +
         (sinds ? ' (sinds ' + sinds + ')' : '') + ' — meer nog niet gesynct.</div>';
     }
     document.getElementById('vorm-stats').innerHTML =
@@ -666,10 +710,10 @@
     chart.draw(dt, {
       legend: { position: 'top' },
       chartArea: { width: '85%', height: '68%' },
-      colors: ['#00bfa5', '#ef6c00', '#64748b'],
+      colors: [cssColor_('var(--chart-fitness)'), cssColor_('var(--chart-fatigue)'), cssColor_('var(--chart-form)')],
       curveType: 'function',
       hAxis: { textStyle: { fontSize: 9 } },
-      vAxis: { gridlines: { color: '#eef2f7' }, baselineColor: '#cbd5e1' },
+      vAxis: { gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
       backgroundColor: 'transparent'
     });
     drawVormStrip(reeks);
@@ -708,9 +752,9 @@
     var opts = {
       legend: { position: 'none' },
       chartArea: { width: '85%', height: '70%' },
-      colors: ['#5B5BD6'], curveType: 'function', interpolateNulls: true,
+      colors: [cssColor_('var(--chart-line)')], curveType: 'function', interpolateNulls: true,
       hAxis: { textStyle: { fontSize: 9 } },
-      vAxis: { gridlines: { color: '#eef2f7' }, baselineColor: '#cbd5e1' },
+      vAxis: { gridlines: { color: cssColor_('var(--chart-grid)') }, baselineColor: cssColor_('var(--chart-axis)') },
       backgroundColor: 'transparent'
     };
     if (mn !== Infinity) opts.vAxis.viewWindow = { min: Math.floor(mn - 1), max: Math.ceil(mx + 1) };
@@ -727,15 +771,15 @@
     function y(v) { v = Math.max(lo, Math.min(hi, v)); return H - ((v - lo) / (hi - lo)) * H; }
     // banden: [bovengrens-vorm, kleur] van hoog→laag
     var banden = [
-      { top: hi, bot: 25,  kleur: '#e0f2fe' },  // Overgang
-      { top: 25, bot: 5,   kleur: '#dcfce7' },  // Fris
-      { top: 5,  bot: -10, kleur: '#f1f5f9' },  // Grijze zone
-      { top: -10,bot: -30, kleur: '#e8e8fb' },  // Optimaal
-      { top: -30,bot: lo,  kleur: '#fee2e2' }   // Hoog risico
+      { top: hi, bot: 25,  kleur: 'var(--info-soft)' },    // Overgang
+      { top: 25, bot: 5,   kleur: 'var(--good-soft)' },    // Fris
+      { top: 5,  bot: -10, kleur: 'var(--bg-elevated)' },  // Grijze zone
+      { top: -10,bot: -30, kleur: 'var(--accent-soft)' },  // Optimaal
+      { top: -30,bot: lo,  kleur: 'var(--danger-soft)' }   // Hoog risico
     ];
     var bands = banden.map(function (b) {
       var yt = y(b.top), yb = y(b.bot);
-      return '<rect x="0" y="' + yt.toFixed(1) + '" width="100" height="' + (yb - yt).toFixed(1) + '" fill="' + b.kleur + '"></rect>';
+      return '<rect x="0" y="' + yt.toFixed(1) + '" width="100" height="' + (yb - yt).toFixed(1) + '" style="fill:' + b.kleur + '"></rect>';
     }).join('');
     var n = reeks.length;
     var pts = reeks.map(function (r, i) {
@@ -745,9 +789,9 @@
     var zeroY = y(0).toFixed(1);
     el.innerHTML = '<div class="strip-kop">Vorm in context</div>' +
       '<svg class="vorm-strip-svg" viewBox="0 0 100 60" preserveAspectRatio="none">' + bands +
-      '<line x1="0" y1="' + zeroY + '" x2="100" y2="' + zeroY + '" stroke="#94a3b8" stroke-width="0.4" stroke-dasharray="2 2"></line>' +
-      '<polyline points="' + pts + '" fill="none" stroke="#334155" stroke-width="1.2"></polyline></svg>' +
-      '<div class="strip-legend"><span style="color:#0369a1">Overgang</span> · <span style="color:#15803d">Fris</span> · <span style="color:#64748b">Grijs</span> · <span style="color:#5B5BD6">Optimaal</span> · <span style="color:#b91c1c">Risico</span></div>';
+      '<line x1="0" y1="' + zeroY + '" x2="100" y2="' + zeroY + '" style="stroke:var(--chart-axis)" stroke-width="0.4" stroke-dasharray="2 2"></line>' +
+      '<polyline points="' + pts + '" fill="none" style="stroke:var(--text-primary)" stroke-width="1.2"></polyline></svg>' +
+      '<div class="strip-legend"><span style="color:var(--info)">Overgang</span> · <span style="color:var(--good)">Fris</span> · <span style="color:var(--text-muted)">Grijs</span> · <span style="color:var(--accent)">Optimaal</span> · <span style="color:var(--bad)">Risico</span></div>';
   }
 
   // ── Navigatie ──
