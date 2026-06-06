@@ -313,8 +313,8 @@
   }
 
   // ── Fase 3b — WeekLoad-kaart (deze week: gepland vs gedaan) ──
-  function wlStat_(val, lbl) {
-    return '<div class="wl-stat"><div class="wl-sv">' + val + '</div><div class="wl-sl">' + lbl + '</div></div>';
+  function wlStat_(val, denom, lbl) {
+    return '<div class="wl-stat"><div class="wl-sv">' + val + '<span class="wl-den">/' + denom + '</span></div><div class="wl-sl">' + lbl + '</div></div>';
   }
   function renderWeekLoad(iconState) {
     var el = document.getElementById('week-load');
@@ -328,11 +328,16 @@
     var pct = (w.progressPct != null) ? w.progressPct : 0;
     el.innerHTML = '<div class="wl-card">' +
       '<div class="wl-head">' +
-        '<div class="wl-overline">Deze week</div>' +
+        '<div class="wl-overline">Deze week · gepland vs gedaan</div>' +
         '<button type="button" class="wl-refresh"' + (iconState === 'busy' ? ' disabled' : '') +
           ' onclick="refreshWeekLoad()" aria-label="Ververs deze week">' + icon + '</button>' +
       '</div>' +
-      '<div class="wl-stats">' + wlStat_(Math.round(w.tss), 'TSS') + wlStat_(nl(w.uren, 1), 'uren') + wlStat_(w.dagen, 'dagen') + '</div>' +
+      '<div class="wl-stats">' +
+        wlStat_(Math.round(w.tss), (w.geplandTss != null ? w.geplandTss : '—'), 'TSS') +
+        wlStat_(w.gedaanUur || '0:00', w.geplandUur || '0:00', 'uren') +
+        wlStat_(w.dagen, (w.geplandDagen != null ? w.geplandDagen : '—'), 'dagen') +
+      '</div>' +
+      (w.progressPct != null ? '<div class="wl-prog"><span class="wl-prog-l">Voortgang</span><span class="wl-prog-r">' + w.progressPct + '% van plan</span></div>' : '') +
       '<div class="wl-bar"><div class="wl-bar-fill" style="width:' + pct + '%"></div></div>' +
       (w.stale ? '<div class="wl-stale">Je plan is verouderd t.o.v. je beschikbaarheid — werk bij</div>' : '') +
       (w.lastSync ? '<div class="wl-sync">Laatst gesynct · ' + esc(w.lastSync) + '</div>' : '') +

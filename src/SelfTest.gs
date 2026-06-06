@@ -27,6 +27,7 @@ function runSelfTest() {
   testReadiness_(ctx);
   testConstants_(ctx);
   testTier_(ctx);
+  testWeekLoad_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -162,4 +163,19 @@ function testTier_(ctx) {
   assert_(ctx, 'tier 35 Vergevorderd', 'Vergevorderd', niveauTier_(35));
   assert_(ctx, 'tier 44 Vergevorderd', 'Vergevorderd', niveauTier_(44));
   assert_(ctx, 'tier 45 Elite', 'Elite', niveauTier_(45));
+}
+
+// ── WeekLoad sliver (puur): hhmmFromMin_ + weekPlanSummary_ ──────────
+function testWeekLoad_(ctx) {
+  assert_(ctx, 'hhmm 190', '3:10', hhmmFromMin_(190));
+  assert_(ctx, 'hhmm 0', '0:00', hhmmFromMin_(0));
+  assert_(ctx, 'hhmm 300', '5:00', hhmmFromMin_(300));
+  assert_(ctx, 'hhmm 65', '1:05', hhmmFromMin_(65));
+  var s = weekPlanSummary_([{ tss: 80, minuten: 90 }, { tss: 140, minuten: 100 }, { tss: 0, minuten: 0 }]);
+  assert_(ctx, 'plan tss', 220, s.tss);
+  assert_(ctx, 'plan min', 190, s.min);
+  assert_(ctx, 'plan dagen excl-0', 2, s.dagen);
+  assert_(ctx, 'plan multi-session=1dag', 1, weekPlanSummary_([{ tss: 120, minuten: 160 }]).dagen);
+  assert_(ctx, 'plan empty tss', 0, weekPlanSummary_([]).tss);
+  assert_(ctx, 'plan empty dagen', 0, weekPlanSummary_([]).dagen);
 }

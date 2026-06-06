@@ -372,13 +372,35 @@ function computeConditieMod_(ctlNow, ctlRef) {
   return Math.max(-BAND, Math.min(BAND, raw));
 }
 
+/** Pure: minuten → "H:MM" (190 → "3:10", 0 → "0:00"). */
+function hhmmFromMin_(min) {
+  min = Math.max(0, Math.round(Number(min) || 0));
+  var h = Math.floor(min / 60), m = min % 60;
+  return h + ':' + (m < 10 ? '0' + m : '' + m);
+}
+
+/** Pure: weekplan-array → {tss, min, dagen}. Eén entry = één dag (multi-sessie
+ *  al geaggregeerd); dagen = entries met minuten>0 (rustdag telt niet mee). */
+function weekPlanSummary_(arr) {
+  var tss = 0, min = 0, dagen = 0;
+  if (Array.isArray(arr)) {
+    arr.forEach(function (e) {
+      tss += Number(e.tss) || 0;
+      var m = Number(e.minuten) || 0;
+      min += m;
+      if (m > 0) dagen++;
+    });
+  }
+  return { tss: Math.round(tss), min: Math.round(min), dagen: dagen };
+}
+
 /**
  * Fase 3b — WeekLoad: gepland-vs-gedaan voor de huidige kalenderweek.
  * DONE tss/uren/dagen uit de Activiteiten-tab (cycling, [weekStart, +7d)) —
  * één bron, consistent met dagstrip/dag-detail, geen extra live getActivities.
  * Noemer = geplande week-TSS uit weekplan_<maandag> (Σ entry.tss).
  * stale: F.3-signaal bestaat nog niet → false (TODO).
- * @return {tss, uren, dagen, geplandTss, progressPct, stale}
+ * @return {tss, gedaanUur, dagen, geplandTss, geplandUur, geplandDagen, progressPct, stale, lastSync}
  */
 function getWeekLoad_(ss, weekStart) {
   var wsT = stripTime_(weekStart).getTime();
@@ -397,20 +419,20 @@ function getWeekLoad_(ss, weekStart) {
       dagen[formatDate(r[0], 'yyyy-MM-dd')] = true;
     });
   }
-  var planTss = 0;
+  var plan = { tss: 0, min: 0, dagen: 0 };
   var raw = getDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), '');
-  if (raw) {
-    try {
-      var arr = JSON.parse(raw);
-      if (Array.isArray(arr)) arr.forEach(function (e) { planTss += Number(e.tss) || 0; });
-    } catch (e) {}
-  }
+  if (raw) { try { plan = weekPlanSummary_(JSON.parse(raw)); } catch (e) {} }
   return {
     tss: Math.round(tss),
     uren: Math.round(minuten / 60 * 10) / 10,
+    gedaanMin: Math.round(minuten),
+    gedaanUur: hhmmFromMin_(minuten),
     dagen: Object.keys(dagen).length,
-    geplandTss: Math.round(planTss),
-    progressPct: planTss > 0 ? Math.max(0, Math.min(100, Math.round(tss / planTss * 100))) : null,
+    geplandTss: plan.tss,
+    geplandMin: plan.min,
+    geplandUur: hhmmFromMin_(plan.min),
+    geplandDagen: plan.dagen,
+    progressPct: plan.tss > 0 ? Math.max(0, Math.min(100, Math.round(tss / plan.tss * 100))) : null,
     stale: getDocProp('avail_dirty', '') === '1',
     lastSync: getDocProp('last_sync', '') || null
   };
