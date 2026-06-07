@@ -126,9 +126,23 @@ function generateProposal() {
   // Types die hun template ZELF schalen naar d.minuten (zie genericLongZ2 /
   // genericCombo). Voor andere types loggen we als template > 30min afwijkt.
   var SCALABLE_TYPES = { long_z2: 1, combo_long_with_efforts: 1 };
+  // Knip-fix (a): bevries voorbije/niet-tePlannen dagen — behoud hun vorige
+  // weekplan-entry i.p.v. retroactief herbouwen met nieuwe template-minuten.
+  var prevByDate = {};
+  try {
+    var prevRaw = getDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), '');
+    if (prevRaw) {
+      var prevArr = JSON.parse(prevRaw);
+      if (Array.isArray(prevArr)) prevArr.forEach(function (e) { if (e && e.datum) prevByDate[e.datum] = e; });
+    }
+  } catch (e) {}
+  var tePlannenSet = {};
+  tePlannen.forEach(function (tp) { if (tp.datum) tePlannenSet[formatDate(tp.datum, 'yyyy-MM-dd')] = true; });
   days.forEach(function (d) {
     if (!d.train || !d.voorgesteldType || !d.datum) return;
     var dISO = formatDate(d.datum, 'yyyy-MM-dd');
+    // Niet-tePlannen (voorbij/voltooid) + vorige entry aanwezig → bevries (geen retroactieve wijziging).
+    if (!tePlannenSet[dISO] && prevByDate[dISO]) { weekplan.push(prevByDate[dISO]); return; }
 
     // v2b-B: pendel-dag expandeert naar pendelAantal sessies van pendelDuurMin;
     // overige dagen = één sessie van d.minuten (basiskey, ongewijzigd gedrag).
