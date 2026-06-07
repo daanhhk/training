@@ -65,6 +65,36 @@
   // ── Instellingen-drawer (Fase 1: profiel/trainingsprofiel/doel/koppel-status/meldingen) ──
   var settingsSel = {};
   var SET_DOEL_LABEL = { FTP: 'FTP/drempel', Conditie: 'Duurvermogen', VO2max: 'VO2max', Beklimmingen: 'Klimmen' };
+  // ── Events-CRUD (Fase 2) — werkkopie draagt verborgen velden (type/afstand/hm/klim/notitie) ──
+  var eventsSel = [];
+  var EV_PRIO_NEXT = { A: 'B', B: 'C', C: 'A' };
+  var EV_PRIO_CLASS = { A: 'ev-prio-a', B: 'ev-prio-b', C: 'ev-prio-c' };
+  function evTodayISO_() { var d = new Date(); var m = d.getMonth() + 1, dd = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (dd < 10 ? '0' + dd : dd); }
+  function eventSet(i, k, v) { if (eventsSel[i]) eventsSel[i][k] = v; }
+  function eventCycle(i) { if (eventsSel[i]) { eventsSel[i].prioriteit = EV_PRIO_NEXT[eventsSel[i].prioriteit] || 'C'; settingsRender_(); } }
+  function eventDel(i) { eventsSel.splice(i, 1); settingsRender_(); }
+  function eventAdd() {
+    if (eventsSel.length >= 10) return;
+    eventsSel.push({ datum: evTodayISO_(), naam: '', type: 'race', prioriteit: 'C', klimType: 'vlak', afstandKm: '', hm: '', notitie: '' });
+    settingsRender_();
+  }
+  function eventsSectionHtml_() {
+    var rows = eventsSel.length ? eventsSel.map(function (e, i) {
+      var pc = EV_PRIO_CLASS[e.prioriteit] || 'ev-prio-c';
+      return '<div class="ev-row">' +
+        '<div class="ev-top">' +
+          '<input type="text" class="ev-naam" value="' + esc(e.naam || '') + '" oninput="eventSet(' + i + ',\'naam\',this.value)" placeholder="Event-naam…">' +
+          '<button type="button" class="ev-del" onclick="eventDel(' + i + ')" aria-label="Verwijder">✕</button>' +
+        '</div>' +
+        '<div class="ev-bot">' +
+          '<button type="button" class="ev-prio ' + pc + '" onclick="eventCycle(' + i + ')">' + esc(e.prioriteit || 'C') + '</button>' +
+          '<input type="date" class="ev-date" value="' + esc(e.datum || '') + '" onchange="eventSet(' + i + ',\'datum\',this.value)">' +
+        '</div>' +
+      '</div>';
+    }).join('') : '<div class="ev-empty">Nog geen events</div>';
+    return '<div class="set-sec">Events</div>' + rows +
+      '<button type="button" class="ev-add" onclick="eventAdd()">+ Event toevoegen</button>';
+  }
   function setWkg_() {
     var f = Number(settingsSel.ftp) || 0, g = Number(settingsSel.gewicht) || 0;
     return (f > 0 && g > 0) ? nl(f / g, 2) + ' W/kg' : '—';
@@ -109,20 +139,31 @@
       '<div class="set-row"><span class="set-lbl">Garmin</span><span class="set-ro">' + (ks.garminLastSync ? 'Gesynct · ' + esc(ks.garminLastSync) : 'Niet gesynct') + '</span></div>' +
       '<div class="set-sec">Meldingen</div>' +
       '<div class="set-row"><span class="set-lbl">Zondag-herinnering</span>' + setTgl_('sundayReminder', s.sundayReminder === true) + '</div>' +
+      eventsSectionHtml_() +
       '<button type="button" class="set-save" onclick="saveSettingsEditor()">Opslaan</button>';
   }
   function openSettings() {
     var ks = state.settings || {};
     settingsSel = { ftp: ks.ftp, gewicht: ks.gewicht, ftpAuto: ks.ftpAuto === true, profielPreset: ks.profielPreset,
       doel: ks.doel, doelStart: ks.doelStart, doelDuur: ks.doelDuur, sundayReminder: ks.sundayReminder === true };
+    eventsSel = (state.events || []).map(function (e) {
+      return { datum: e.datum, naam: e.naam, type: e.type, prioriteit: e.prioriteit, klimType: e.klimType, afstandKm: e.afstandKm, hm: e.hm, notitie: e.notitie };
+    });
     openDrawer({ variant: 'drawer', html: settingsDrawerHtml() });
   }
   function saveSettingsEditor() {
     var btn = document.querySelector('.set-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Opslaan…'; }
+    function fail(err) { if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } showError(err); }
+    // Persisteer beide: settings → dan events → verse state (één onState).
     google.script.run
-      .withSuccessHandler(function (s) { closeDrawer(); onState(s); setActStatus('✅ Instellingen opgeslagen'); })
-      .withFailureHandler(function (err) { if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } showError(err); })
+      .withSuccessHandler(function () {
+        google.script.run
+          .withSuccessHandler(function (s) { closeDrawer(); onState(s); setActStatus('✅ Instellingen opgeslagen'); })
+          .withFailureHandler(fail)
+          .saveEvents(eventsSel);
+      })
+      .withFailureHandler(fail)
       .saveSettings(settingsSel);
   }
 

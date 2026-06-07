@@ -679,6 +679,10 @@ function getDashboardState() {
       garminLastSync: getDocProp('last_sync', '') || null,
       sundayReminder: getDocProp('sunday_reminder', '') === 'true'
     },
+    events: getAllEvents_().map(function (e) {
+      return { datum: formatDate(e.datum, 'yyyy-MM-dd'), naam: e.naam, type: e.type, prioriteit: e.prioriteit,
+               afstandKm: e.afstandKm, hm: e.hm, klimType: e.klimType, notitie: e.notitie };
+    }),
     dagtypeOptions: DAGTYPE_OPTIONS,
     // Read-only spiegel van de fase-engine (bepaalFaseVoorDatum_ @353, hergebruikt) —
     // databron voor latere [#3] takeover-UX. Geen nieuwe afleiding, geen relabeling.
@@ -820,6 +824,43 @@ function saveSettings(updates) {
   if (typeof updates.ftpAuto === 'boolean')        writeField('ftp_auto_update', 47, updates.ftpAuto, 'bool');
   if (typeof updates.sundayReminder === 'boolean') setDocProp('sunday_reminder', updates.sundayReminder ? 'true' : 'false');
   SpreadsheetApp.flush();
+  return getDashboardState();
+}
+
+/**
+ * Events-CRUD Fase 2: volledige-array write-pad (zoals saveAvailability).
+ * Schrijft rij 3..12 in de Events-tab (volle 8 kolommen — verborgen velden
+ * type/afstand/hm/klim/notitie uit de werkkopie behouden), blankt de rest,
+ * synct events_json (saveEventsToProps_) en zet avail_dirty (events wijzigen
+ * de fase/workout-selectie → regen-prompt). Datum vereist; cap 10. GEEN regen.
+ */
+function saveEvents(events) {
+  events = Array.isArray(events) ? events : [];
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(EVENTS_SHEET);
+  if (!sh) throw new Error('Tab "Events" ontbreekt.');
+  var clean = [];
+  events.forEach(function (e) {
+    if (!e || !e.datum) return;                                  // datum vereist
+    var d = new Date(String(e.datum).slice(0, 10) + 'T00:00:00');
+    if (isNaN(d.getTime())) return;
+    var prio = (EVENT_PRIO_OPTIONS.indexOf(String(e.prioriteit)) >= 0) ? String(e.prioriteit) : 'C';
+    var type = (EVENT_TYPE_OPTIONS.indexOf(String(e.type)) >= 0) ? String(e.type) : 'race';
+    clean.push([
+      d, String(e.naam || ''), type, prio,
+      (e.afstandKm === '' || e.afstandKm == null) ? '' : Number(e.afstandKm),
+      (e.hm === '' || e.hm == null) ? '' : Number(e.hm),
+      String(e.klimType || ''), String(e.notitie || '')
+    ]);
+  });
+  if (clean.length > EVENT_ROW_COUNT) clean = clean.slice(0, EVENT_ROW_COUNT);
+  var rows = clean.slice();
+  while (rows.length < EVENT_ROW_COUNT) rows.push(['', '', '', '', '', '', '', '']);   // blank de rest
+  sh.getRange(EVENT_FIRST_ROW, 1, EVENT_ROW_COUNT, EVENT_HEADERS.length).setValues(rows);
+  sh.getRange(EVENT_FIRST_ROW, 1, EVENT_ROW_COUNT, 1).setNumberFormat('yyyy-mm-dd');
+  SpreadsheetApp.flush();
+  try { saveEventsToProps_(); } catch (e) { console.warn('saveEvents props: ' + (e && e.message ? e.message : e)); }
+  setDocProp('avail_dirty', '1');   // events → fase/workouts veranderd → "werk bij"
   return getDashboardState();
 }
 
