@@ -30,6 +30,7 @@ function runSelfTest() {
   testTier_(ctx);
   testWeekLoad_(ctx);
   testTrainingLibrary_(ctx);
+  testDayOverride_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -239,4 +240,23 @@ function testTrainingLibrary_(ctx) {
       assert_(ctx, 'lib segs>0: ' + cat.key + '/' + v.variantId, true, (v.segmenten || []).length > 0);
     });
   });
+}
+
+// ── buildOverrideWorkout_ / buildFreeRideWorkout_ (puur) — day-override ──
+function testDayOverride_(ctx) {
+  var settings = { ftp: 250, lthr: 160, doel: 'FTP', doelStart: new Date(2026, 0, 5) };
+  // Vrije rit (stevig) → geldige werk-zone + TSS>0 + duur behouden.
+  var fr = buildOverrideWorkout_({ type: 'free', ritType: 'vrij', intensiteit: 'stevig', durMin: 90 }, settings, 1, 'Build', null, 0);
+  assert_(ctx, 'override free tss>0', true, fr.tss > 0);
+  assert_(ctx, 'override free duur', 90, fr.totaalMin);
+  assert_(ctx, 'override free zones', true, (fr.zones || []).length > 0);
+  // Rustige vrije rit → low-bucket → TSS < duur (IF<1).
+  var frR = buildFreeRideWorkout_({ type: 'free', ritType: 'groep', intensiteit: 'rustig', durMin: 60 }, settings);
+  assert_(ctx, 'override free rustig laag', true, frR.tss > 0 && frR.tss < frR.totaalMin);
+  // Bibliotheek-override op een specifieke variant → resolvet + TSS>0.
+  var lib = getTrainingLibrary_(settings);
+  var vo2 = lib.filter(function (c) { return c.type === 'vo2max'; })[0];
+  var wo = buildOverrideWorkout_({ type: 'library', workoutType: 'vo2max', variantId: vo2.variants[0].variantId, durMin: 75 }, settings, 1, 'Peak', null, 0);
+  assert_(ctx, 'override lib tss>0', true, wo.tss > 0);
+  assert_(ctx, 'override lib resolved', true, !!wo.naam);
 }

@@ -128,6 +128,7 @@ function generateProposal() {
 
   // DEEL 4 — persisteer per-dag workout (proposal_<datum>) + weekplan-snapshot
   var eventCtx = eventContextFrom_(macro);
+  var overrides = dashOverridesByDate_();   // day-overrides winnen bij her-plannen
   var weekplan = [];
   // Types die hun template ZELF schalen naar d.minuten (zie genericLongZ2 /
   // genericCombo). Voor andere types loggen we als template > 30min afwijkt.
@@ -145,8 +146,20 @@ function generateProposal() {
   var tePlannenSet = {};
   tePlannen.forEach(function (tp) { if (tp.datum) tePlannenSet[formatDate(tp.datum, 'yyyy-MM-dd')] = true; });
   days.forEach(function (d) {
-    if (!d.train || !d.voorgesteldType || !d.datum) return;
+    if (!d.datum) return;
     var dISO = formatDate(d.datum, 'yyyy-MM-dd');
+    // Day-override wint: bouw de handmatig gekozen workout en sla de engine-afleiding
+    // OVER (ook op een niet-train-dag → forceer de workout zonder het planner/
+    // beschikbaarheids-model te muteren). Eén proposal-key-write, geen dubbele.
+    if (overrides[dISO] && !d.gedaan) {
+      var ovWo = buildOverrideWorkout_(overrides[dISO], settings, mesoWeek, macro.macroFase, eventCtx, d.dagIdx);
+      if (ovWo) {
+        writeDaySessions_(dISO, [ovWo]);
+        weekplan.push(overrideWeekplanEntry_(dISO, overrides[dISO], ovWo));
+        return;
+      }
+    }
+    if (!d.train || !d.voorgesteldType) return;
     // Niet-tePlannen (voorbij/voltooid) + vorige entry aanwezig → bevries (geen retroactieve wijziging).
     if (!tePlannenSet[dISO] && prevByDate[dISO]) { weekplan.push(prevByDate[dISO]); return; }
 
@@ -2015,6 +2028,62 @@ function getTrainingLibrary_(settings) {
       variants: variants
     };
   });
+}
+
+// ── Day-override: bouw de gekozen workout (bibliotheek-variant óf vrije rit) ──
+// Bibliotheek: render de SPECIFIEKE variant (variantId) op de gekozen duur; valt
+// terug op buildWorkout(type) als de variant ontbreekt. Vrij/groep: synthese met
+// één steady-blok (intensiteit → %FTP-zone) zodat TSS/zones bestaan voor Garmin.
+var FREE_RIDE_PCT_  = { rustig: 65, tempo: 80, stevig: 96 };
+var FREE_RIDE_ZONE_ = { rustig: 'low', tempo: 'high', stevig: 'high' };
+
+function buildFreeRideWorkout_(ov, settings) {
+  var dur = Math.max(20, Math.round(ov.durMin || 90));
+  var pct = FREE_RIDE_PCT_[ov.intensiteit] || 65;
+  var zone = FREE_RIDE_ZONE_[ov.intensiteit] || 'low';
+  var intent = { low: 0, high: 0, anaerobic: 0 };
+  intent[zone] = dur;
+  var label = (ov.ritType === 'groep') ? 'Groepsrit' : 'Vrije rit';
+  return {
+    naam: label + ' · ' + (ov.intensiteit || 'rustig'),
+    focus: 'free', zones: [zone], totaalMin: dur, intent: intent,
+    blokken: [{ minuten: dur, zone: pctZoneBucket_(pct) }],
+    structuur: [[label, dur + ' min', wattsRange(settings.ftp, pct - 8, pct + 4), '—', 'Op gevoel rijden']],
+    tss: tssFromZoneMinutes_(intent),
+    eindopmerking: label + ' op gevoel — geen vaste blokstructuur.'
+  };
+}
+
+function buildOverrideWorkout_(ov, settings, mesoWeek, macroFase, eventCtx, dagIdx) {
+  if (!ov) return null;
+  if (ov.type === 'free') return buildFreeRideWorkout_(ov, settings);
+  var dur = Math.max(20, Math.round(ov.durMin || 60));
+  if (ov.variantId) {
+    var pool = (ov.workoutType === 'recovery') ? recoveryPool_() : getPool_(ov.workoutType);
+    var v = pool ? findVariantById_(pool, ov.variantId) : null;
+    if (v) return renderVariant_(v, settings, mesoWeek, macroFase, dur);
+  }
+  return buildWorkout(ov.workoutType, dur, settings, mesoWeek, macroFase, eventCtx, dagIdx);
+}
+
+/** Override → weekplan-entry (zelfde shape als een gewone dag; override:true-vlag). */
+function overrideWeekplanEntry_(dISO, ov, wo) {
+  var intent = ensureIntent_(wo);
+  return {
+    datum: dISO,
+    workoutType: (ov.type === 'free') ? 'free' : ov.workoutType,
+    naam: wo.naam || 'Handmatig gekozen',
+    variantId: ov.variantId || wo.variantId || null,
+    zones: wo.zones || [],
+    intent: intent,
+    blokken: wo.blokken || null,
+    structuur: wo.structuur || null,
+    tss: Math.round(wo.tss || 0),
+    minuten: Math.round(wo.totaalMin || 0),
+    reden: 'Handmatig gekozen',
+    override: true,
+    sessies: [{ naam: wo.naam || '', totaalMin: wo.totaalMin || 0, tss: Math.round(wo.tss || 0), intent: intent, eindopmerking: wo.eindopmerking || '' }]
+  };
 }
 
 /** Unieke geplande workout-types in de huidige week (voor de "In je blok"-badge). */

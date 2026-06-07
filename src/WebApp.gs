@@ -126,6 +126,20 @@ function dashDispositionsByDate_() {
   return out;
 }
 
+/** Alle override_<dISO> snapshots → map dISO → {type, workoutType, variantId, durMin, ...}. (Fase 4) */
+function dashOverridesByDate_() {
+  var props = PropertiesService.getDocumentProperties().getProperties();
+  var out = {};
+  Object.keys(props).forEach(function (k) {
+    if (k.indexOf('override_') !== 0) return;
+    try {
+      var o = JSON.parse(props[k]);
+      if (o && o.type) out[k.substring('override_'.length)] = o;
+    } catch (e) {}
+  });
+  return out;
+}
+
 /** Wellness-tab CTL/ATL/Vorm reeks (oudste→nieuwste) + stats-bron. */
 function dashVormReeks_() {
   var ss = SpreadsheetApp.getActive();
@@ -455,6 +469,7 @@ function getDashboardState() {
   var actuals = dashActualsByDate_();
   var wpByDate = dashWeekplanByDate_();
   var disposities = dashDispositionsByDate_();
+  var overrides = dashOverridesByDate_();
   var today = stripTime_(new Date());
   var todayISO = formatDate(today, 'yyyy-MM-dd');
 
@@ -551,7 +566,8 @@ function getDashboardState() {
       dateISO: dISO, weekdag: dashWeekdag_(d), kort: dashKort_(d),
       status: status, kleur: kleur,
       voorstel: card.voorstel, actual: card.actual, previewMin: previewMin,
-      dispositie: disp || null
+      dispositie: disp || null,
+      override: overrides[dISO] || null
     });
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);  // DST-immuun
   }
@@ -698,7 +714,17 @@ function getDashboardState() {
     readiness: getReadinessScore_(fs, wellness, reeks),
     // Fase 4: Trainingen-bibliotheek (read-side) + geplande types (In-je-blok-badge).
     library: getTrainingLibrary_(settings),
-    plannedTypes: weekPlannedTypes_(weekStart),
+    plannedTypes: (function () {
+      var base = weekPlannedTypes_(weekStart);
+      var wkEnd = new Date(weekStart.getTime() + 7 * 86400000);
+      Object.keys(overrides).forEach(function (dISO) {
+        var dt = stripTime_(new Date(dISO));
+        if (dt.getTime() < weekStart.getTime() || dt.getTime() >= wkEnd.getTime()) return;
+        var t = (overrides[dISO].type === 'free') ? 'free' : overrides[dISO].workoutType;
+        if (t && base.indexOf(t) < 0) base.push(t);
+      });
+      return base;
+    })(),
     weekLoad: getWeekLoad_(ss, weekStart),
     vandaag: vandaag,
     dagen: dagen,
@@ -933,5 +959,44 @@ function saveDisposition(dateISO, reason) {
     if (DISPOSITION_REASONS.indexOf(String(reason)) < 0) throw new Error('saveDisposition: onbekende reden.');
     setDocProp(key, JSON.stringify({ reason: String(reason), ts: new Date().toISOString() }));
   }
+  return getDashboardState();
+}
+
+var OVERRIDE_DUR_MIN_ = 20, OVERRIDE_DUR_MAX_ = 360;
+var FREE_RIT_TYPES_ = ['vrij', 'groep'];
+var FREE_INTENS_ = ['rustig', 'tempo', 'stevig'];
+
+/**
+ * Fase 4 — day-override: "andere training kiezen / inplannen op een dag".
+ * Spiegelt saveDisposition (DocProp override_<date>, GEEN generateProposal →
+ * directe read-side toon; de eerstvolgende regen bakt 'm in het weekplan).
+ * overrideJson = {type:'library', workoutType, variantId?, durMin}
+ *              | {type:'free', ritType:'vrij'|'groep', intensiteit:'rustig'|'tempo'|'stevig', durMin}.
+ * Returnt verse state.
+ */
+function saveDayOverride(dateISO, overrideJson) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO))) throw new Error('saveDayOverride: ongeldige datum.');
+  var ov = (typeof overrideJson === 'string') ? JSON.parse(overrideJson) : overrideJson;
+  if (!ov || (ov.type !== 'library' && ov.type !== 'free')) throw new Error('saveDayOverride: onbekend override-type.');
+  var dur = Math.round(Number(ov.durMin) || 0);
+  if (dur < OVERRIDE_DUR_MIN_ || dur > OVERRIDE_DUR_MAX_) throw new Error('saveDayOverride: duur buiten bereik.');
+  var clean;
+  if (ov.type === 'library') {
+    if (!ov.workoutType) throw new Error('saveDayOverride: workoutType ontbreekt.');
+    clean = { type: 'library', workoutType: String(ov.workoutType), variantId: ov.variantId ? String(ov.variantId) : null, durMin: dur };
+  } else {
+    var rit = (FREE_RIT_TYPES_.indexOf(ov.ritType) >= 0) ? ov.ritType : 'vrij';
+    var inten = (FREE_INTENS_.indexOf(ov.intensiteit) >= 0) ? ov.intensiteit : 'rustig';
+    clean = { type: 'free', ritType: rit, intensiteit: inten, durMin: dur };
+  }
+  clean.ts = new Date().toISOString();
+  setDocProp('override_' + dateISO, JSON.stringify(clean));
+  return getDashboardState();
+}
+
+/** Wist de day-override (terug naar het coach-voorstel). Returnt verse state. */
+function clearDayOverride(dateISO) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO))) throw new Error('clearDayOverride: ongeldige datum.');
+  PropertiesService.getDocumentProperties().deleteProperty('override_' + dateISO);
   return getDashboardState();
 }

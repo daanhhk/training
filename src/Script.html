@@ -683,7 +683,13 @@
     if (!d) { el.innerHTML = ''; return; }
     var h = '<div class="muted" style="text-transform:capitalize;margin-bottom:6px">' + esc(d.weekdag) + ' ' + esc(d.kort) + '</div>';
 
-    if (d.status === 'gemist') {
+    var ov = d.override || null;
+    var plannable = trnPlannable_(d);
+
+    if (ov && plannable) {
+      // Handmatig gekozen wint van het coach-voorstel (OverriddenDetail / FreeRideCard).
+      h += overrideKaart_(d.dateISO, ov);
+    } else if (d.status === 'gemist') {
       h += gemistKaart_(d);
     } else if (d.status === 'vandaag') {
       // Schema = puur trainingsgericht; readiness/Garmin-verwachting leven op Vorm.
@@ -708,6 +714,8 @@
     } else {
       h += '<div class="card"><div class="muted">Geen training deze dag.</div></div>';
     }
+    // §144: "Andere training kiezen" → WorkoutPicker (alleen op plannbare dagen).
+    if (plannable) h += '<button type="button" class="trn-pick-btn" onclick="openPicker(\'' + d.dateISO + '\')">Andere training kiezen</button>';
     // §102: Beschikbaarheid-knop per-dag, onder de dag-detail (opent de editor voor selectedDate).
     h += '<button id="btn-avail" class="avail-open" onclick="openAvailEditor()">Beschikbaarheid aanpassen</button>';
     el.innerHTML = h;
@@ -1199,8 +1207,10 @@
   function trnDetailHtml_(cat, v, dur) {
     var sc = trnScale_(v, dur);
     var badge = trnIsPlanned_(v.type) ? '<span class="var-badge">In je blok</span>' : '';
-    var btn = trnPlanned[v.variantId]
-      ? '<button type="button" class="trn-plan-btn" disabled>✓ Ingepland</button>'
+    var pl = trnPlanned[v.variantId];
+    var plKort = (typeof pl === 'string') ? trnDayKort_(pl) : '';
+    var btn = pl
+      ? '<button type="button" class="trn-plan-btn" disabled>✓ Ingepland' + (plKort ? ' · ' + esc(plKort) : '') + '</button>'
       : '<button type="button" class="trn-plan-btn" onclick="trnInplannen(\'' + v.variantId + '\')">Inplannen</button>';
     return '<div class="rc-card">' +
       '<div class="var-head"><span class="var-name">' + esc(v.naam) + '</span>' + badge + '</div>' +
@@ -1242,9 +1252,174 @@
     else { trnView = 'cats'; trnCatKey = null; trnDur = null; }
     trnRenderViews_();
   }
-  function trnInplannen(id) { trnPlanned[id] = true; trnRenderViews_(); }   // client-only (server-persist = vervolg-pass)
+  // Plan-doel voor de Trainingen-"Inplannen": vandaag als die plannbaar is, anders
+  // de eerstvolgende plannbare dag (train/voorstel/rust, geen actual, ≤scope).
+  function trnPlannable_(d) {
+    if (!d || !state.vandaag) return false;
+    if (d.dateISO < state.vandaag.dateISO) return false;
+    if (d.status === 'voltooid' || d.status === 'gemist' || d.status === 'preview') return false;
+    if (d.status === 'vandaag' && state.vandaag.actual) return false;
+    return true;
+  }
+  function trnNextPlannableDate_() {
+    var cand = (state.dagen || []).filter(trnPlannable_).sort(function (a, b) { return a.dateISO < b.dateISO ? -1 : 1; });
+    return cand.length ? cand[0].dateISO : (state.vandaag ? state.vandaag.dateISO : null);
+  }
+  function trnDayKort_(dISO) {
+    var d = (state.dagen || []).filter(function (x) { return x.dateISO === dISO; })[0];
+    return d ? (d.weekdag ? d.weekdag.substring(0, 2) + ' ' + d.kort : d.kort) : '';
+  }
+  function trnCatByType_(type) { var L = trnLib_(); for (var i = 0; i < L.length; i++) if (L[i].type === type) return L[i]; return null; }
+
+  // Inplannen = saveDayOverride op de eerstvolgende plannbare dag (WRITE 🌐).
+  function trnInplannen(id) {
+    var cat = trnCat_(trnCatKey), v = trnVar_(cat, id);
+    if (!cat || !v) return;
+    var target = trnNextPlannableDate_();
+    if (!target) { showError('Geen plan-dag beschikbaar.'); return; }
+    var dur = trnDur != null ? trnDur : cat.defaultDur;
+    var btn = document.querySelector('.trn-plan-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Bezig…'; }
+    google.script.run
+      .withSuccessHandler(function (s) { trnPlanned[id] = target; onState(s); switchTab('trainingen'); })
+      .withFailureHandler(function (e) { if (btn) { btn.disabled = false; btn.textContent = 'Inplannen'; } showError(e); })
+      .saveDayOverride(target, { type: 'library', workoutType: cat.type, variantId: v.variantId, durMin: dur });
+  }
   window.trnOpenCat = trnOpenCat; window.trnOpenWorkout = trnOpenWorkout; window.trnBack = trnBack;
   window.trnInplannen = trnInplannen; window.trnSliderInput = trnSliderInput;
+
+  // ════════════════════════════════════════════════════════════════
+  // DAY-OVERRIDE (Fase 4) — "andere training kiezen / inplannen op een dag".
+  // Read-side: OverriddenDetail (pin + workout) / FreeRideCard. Write via de
+  // WorkoutPicker-overlay → saveDayOverride / clearDayOverride.
+  // ════════════════════════════════════════════════════════════════
+  function freeRideCardHtml_(ov) {
+    var label = (ov.ritType === 'groep') ? 'Groepsrit' : 'Vrije rit';
+    return '<div class="var-head"><span class="var-name">' + esc(label) + '</span></div>' +
+      '<div class="fr-meta"><span class="fr-chip">' + esc(trnDurLabel_(ov.durMin || 90)) + '</span>' +
+      '<span class="fr-chip">' + esc(ov.intensiteit || 'rustig') + '</span></div>' +
+      '<div class="muted fr-note">Op gevoel — geen vaste blokstructuur.</div>';
+  }
+  function overrideKaart_(dISO, ov) {
+    var pin = '<div class="ov-pin"><span class="ov-pin-dot"></span>Handmatig gekozen</div>';
+    var body;
+    if (ov.type === 'free') {
+      body = freeRideCardHtml_(ov);
+    } else {
+      var cat = trnCatByType_(ov.workoutType), v = cat ? trnVar_(cat, ov.variantId) : null;
+      if (v) {
+        var sc = trnScale_(v, ov.durMin || cat.defaultDur);
+        body = '<div class="var-head"><span class="var-name">' + esc(v.naam) + '</span></div>' +
+          zoneBlock_(sc.segmenten, v.structuur) + inlineMetrics_(sc.durMin, sc.tss);
+      } else {
+        body = '<div class="muted">Gekozen training: ' + esc(ov.workoutType || 'training') + '</div>';
+      }
+    }
+    return '<div class="rc-card ov-card">' + pin + body +
+      '<button type="button" class="ov-clear" onclick="clearOverride(\'' + dISO + '\')">Terug naar voorstel</button></div>';
+  }
+  function clearOverride(dISO) {
+    google.script.run.withSuccessHandler(function (s) { onState(s); selectedDate = dISO; renderSchema(); renderDagDetail(); }).withFailureHandler(showError).clearDayOverride(dISO);
+  }
+
+  // ── WorkoutPicker (§143) — overlay-sheet; eigen interne navigatie ──
+  var pkDate = null, pkView = 'home', pkCatKey = null, pkVariantId = null, pkDur = null;
+  var pkFree = { ritType: 'vrij', intensiteit: 'rustig' };
+  function openPicker(dISO) {
+    pkDate = dISO; pkView = 'home'; pkCatKey = null; pkVariantId = null; pkDur = null;
+    pkFree = { ritType: 'vrij', intensiteit: 'rustig' };
+    openDrawer({ variant: 'sheet', html: pkHtml_() });
+  }
+  function pkRender_() { var el = document.getElementById('overlay-content'); if (el) el.innerHTML = pkHtml_(); }
+  function pkHeadHtml_(title, backView) {
+    return '<div class="trn-back"><button type="button" class="trn-back-btn" onclick="pkGo(\'' + backView + '\')" aria-label="Terug">‹</button>' +
+      '<div class="trn-back-title">' + esc(title) + '</div></div>';
+  }
+  function pkHtml_() {
+    if (pkView === 'home') {
+      return '<div class="ci-title">Andere training kiezen</div>' +
+        '<button type="button" class="pk-tile" onclick="pkGo(\'cats\')"><div class="pk-tile-t">Uit bibliotheek</div><div class="pk-tile-s">Categorie + variant</div></button>' +
+        '<button type="button" class="pk-tile" onclick="pkGo(\'free\')"><div class="pk-tile-t">Vrije / groepsrit</div><div class="pk-tile-s">Duur + intensiteit op gevoel</div></button>' +
+        '<button type="button" class="ci-later" data-overlay-close>Annuleren</button>';
+    }
+    if (pkView === 'free') {
+      function seg(grp, opts, cur) {
+        return opts.map(function (o) { return '<button type="button" class="ci-seg' + (cur === o ? ' is-on' : '') + '" onclick="pkFreeSet(\'' + grp + '\',\'' + o + '\')">' + o + '</button>'; }).join('');
+      }
+      var ritSeg = '<button type="button" class="ci-seg' + (pkFree.ritType === 'vrij' ? ' is-on' : '') + '" onclick="pkFreeSet(\'ritType\',\'vrij\')">Vrije rit</button>' +
+                   '<button type="button" class="ci-seg' + (pkFree.ritType === 'groep' ? ' is-on' : '') + '" onclick="pkFreeSet(\'ritType\',\'groep\')">Groepsrit</button>';
+      return pkHeadHtml_('Vrije / groepsrit', 'home') +
+        '<div class="ci-group"><div class="ci-label">Type</div><div class="ci-segs">' + ritSeg + '</div></div>' +
+        '<div class="ci-group"><div class="ci-label">Intensiteit</div><div class="ci-segs">' + seg('intensiteit', ['rustig', 'tempo', 'stevig'], pkFree.intensiteit) + '</div></div>' +
+        pkSliderHtml_(pkDur != null ? pkDur : 90) +
+        '<button type="button" class="trn-plan-btn" onclick="pkPickFree()">Kies deze rit</button>';
+    }
+    if (pkView === 'cats') return pkHeadHtml_('Kies een categorie', 'home') + pkCatsHtml_();
+    var cat = trnCat_(pkCatKey);
+    if (!cat) { pkView = 'cats'; return pkHtml_(); }
+    var dur = pkDur != null ? pkDur : cat.defaultDur;
+    var v = (pkView === 'workout') ? trnVar_(cat, pkVariantId) : null;
+    var title = v ? v.naam : cat.label;
+    var back = (pkView === 'workout') ? 'category' : 'cats';
+    var overline = (pkView === 'workout') ? '' : '<div class="trn-overline">Varianten</div>';
+    return pkHeadHtml_(title, back) + pkSliderHtml_(dur) + overline + '<div id="pk-rows">' + pkRowsHtml_() + '</div>';
+  }
+  function pkCatsHtml_() {
+    return trnLib_().map(function (c) {
+      return '<button type="button" class="cat-card" onclick="pkOpenCat(\'' + c.key + '\')">' +
+        '<span class="cat-marker" style="background:var(' + c.zoneVar + ')"></span>' +
+        '<div class="cat-body"><div class="cat-name" style="color:var(' + c.zoneVar + ')">' + esc(c.label) + '</div>' +
+        '<div class="cat-desc">' + esc(c.omschrijving) + '</div></div>' +
+        '<span class="cat-count">' + c.variants.length + '</span><span class="cat-chev">›</span></button>';
+    }).join('');
+  }
+  function pkSliderHtml_(dur) {
+    return '<div class="dur-card"><div class="dur-head"><span class="dur-lbl">Duur · structuur schaalt mee</span>' +
+      '<span class="dur-val" id="pk-dur-val">' + trnDurLabel_(dur) + '</span></div>' +
+      '<input type="range" class="dur-slider" id="pk-dur-slider" min="45" max="240" step="15" value="' + dur + '" oninput="pkSliderInput(this.value)">' +
+      '<div class="dur-minmax"><span>45 min</span><span>4 u</span></div></div>';
+  }
+  function pkRowsHtml_() {
+    var cat = trnCat_(pkCatKey); if (!cat) return '';
+    var dur = pkDur != null ? pkDur : cat.defaultDur;
+    if (pkView === 'workout') {
+      var v = trnVar_(cat, pkVariantId); if (!v) return '';
+      var sc = trnScale_(v, dur);
+      return '<div class="rc-card"><div class="var-head"><span class="var-name">' + esc(v.naam) + '</span></div>' +
+        zoneBlock_(sc.segmenten, v.structuur) + inlineMetrics_(sc.durMin, sc.tss) +
+        '<button type="button" class="trn-plan-btn" onclick="pkPickLibrary()">Kies deze workout</button></div>';
+    }
+    return cat.variants.map(function (vr) {
+      var sc2 = trnScale_(vr, dur);
+      return '<button type="button" class="var-row" onclick="pkOpenWorkout(\'' + vr.variantId + '\')">' +
+        '<div class="var-head"><span class="var-name">' + esc(vr.naam) + '</span></div>' +
+        zoneBar(sc2.segmenten, true) + inlineMetrics_(sc2.durMin, sc2.tss) + '</button>';
+    }).join('');
+  }
+  function pkGo(view) { if (view === 'free') pkDur = 90; if (view === 'cats' || view === 'home') pkDur = null; pkView = view; pkRender_(); }
+  function pkOpenCat(key) { pkCatKey = key; pkDur = null; pkView = 'category'; pkRender_(); }
+  function pkOpenWorkout(id) { pkVariantId = id; pkView = 'workout'; pkRender_(); }
+  function pkFreeSet(grp, val) { pkFree[grp] = val; pkRender_(); }
+  function pkSliderInput(val) {
+    pkDur = parseInt(val, 10);
+    var lbl = document.getElementById('pk-dur-val'); if (lbl) lbl.textContent = trnDurLabel_(pkDur);
+    var rows = document.getElementById('pk-rows'); if (rows) rows.innerHTML = pkRowsHtml_();
+  }
+  function pkSave_(ov) {
+    var btn = document.querySelector('.overlay-content .trn-plan-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Bezig…'; }
+    var dISO = pkDate;
+    google.script.run
+      .withSuccessHandler(function (s) { closeDrawer(); onState(s); selectedDate = dISO; renderSchema(); renderDagDetail(); })
+      .withFailureHandler(function (e) { if (btn) { btn.disabled = false; } showError(e); })
+      .saveDayOverride(dISO, ov);
+  }
+  function pkPickLibrary() {
+    var cat = trnCat_(pkCatKey), v = trnVar_(cat, pkVariantId); if (!cat || !v) return;
+    pkSave_({ type: 'library', workoutType: cat.type, variantId: v.variantId, durMin: (pkDur != null ? pkDur : cat.defaultDur) });
+  }
+  function pkPickFree() { pkSave_({ type: 'free', ritType: pkFree.ritType, intensiteit: pkFree.intensiteit, durMin: (pkDur != null ? pkDur : 90) }); }
+  window.clearOverride = clearOverride; window.openPicker = openPicker;
+  window.pkGo = pkGo; window.pkOpenCat = pkOpenCat; window.pkOpenWorkout = pkOpenWorkout;
+  window.pkFreeSet = pkFreeSet; window.pkSliderInput = pkSliderInput; window.pkPickLibrary = pkPickLibrary; window.pkPickFree = pkPickFree;
 
   function switchTab(name) {
     ['schema', 'vorm', 'trainingen', 'niveau'].forEach(function (t) {
