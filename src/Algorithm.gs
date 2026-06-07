@@ -1182,7 +1182,7 @@ function getReadinessScore_(fs, wellness, reeks) {
   var factors = raw.map(function (f) {
     var dot = (f.sub == null) ? 'muted' : (f.sub >= 67 ? 'good' : (f.sub >= 34 ? 'warn' : 'muted'));
     return { key: f.key, label: f.label, sub: (f.sub == null) ? null : Math.round(f.sub),
-             dot: dot, valueText: f.valueText, weight: Math.round(f.weight * 100) };
+             dot: dot, valueText: f.valueText };
   });
 
   // Chips (export §2a): Vorm ±N (fresh als >0) + HRV N (muted).

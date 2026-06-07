@@ -328,10 +328,6 @@
     if (!tss || !durMin) return null;
     return Math.sqrt(tss / (durMin / 60 * 100));
   }
-  function ifMetric_(tss, durMin) {
-    var v = ifProxy_(tss, durMin);
-    return wkMetric_(v != null ? nl(v, 2) : '–', 'IF');
-  }
   // Mockup 424c9d: compacte inline-metrics "X min · IF Y · TSS Z" (vervangt de
   // 3-koloms .wk-metrics-grid in dag-detail). Vorm-MetricRow houdt wkMetric_/.wk-metrics.
   // Duur = rauwe minuten + " min" (uMin geeft "Xu Ym"; mockup toont "X min").
