@@ -426,7 +426,9 @@
     if (!plan) return '';
     var titel = plan.currentPhaseLabel || plan.currentPhaseKey || 'Plan';
     var titleHtml;
-    if (plan.eventName && plan.wekenTot != null) {
+    if (plan.eventName && plan.dagenTot != null && plan.dagenTot < 14) {
+      titleHtml = esc(titel) + ' · nog <span class="pc-num">' + plan.dagenTot + '</span> dagen tot ' + esc(plan.eventName);
+    } else if (plan.eventName && plan.wekenTot != null) {
       titleHtml = esc(titel) + ' · nog <span class="pc-num">' + plan.wekenTot + '</span> wkn tot ' + esc(plan.eventName);
     } else if (plan.eventName) {
       titleHtml = esc(titel) + ' · ' + esc(plan.eventName);

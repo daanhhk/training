@@ -7,6 +7,10 @@
 
 var DOEL_SHEET = 'Doel';
 
+// Taper-venster voor een A-event/trip: ≤ dit aantal dagen tot het event → Taper.
+// Gemeten VANAF VANDAAG (niet vanaf de week-maandag) — zie eventFase_.
+var A_TAPER_DAGEN = 7;
+
 var DOEL_FOCUS = {
   FTP: {
     Base:  'Sweet Spot 2x20 @ 88% + lange Z2',
@@ -197,22 +201,56 @@ function pickMainEvent_(events, fromDate) {
 }
 
 /**
- * Event-driven fase-berekening. Telt terug vanaf het hoofd-event
- * (eerstvolgende A-event of trip) uit de Events-tab.
+ * Pure event-driven fase-helper — ÉÉN bron van waarheid voor de fase-mapping.
+ * Meet ALLES vanaf refDate (= vandaag voor de huidige week; zie
+ * bepaalFaseVoorDatum_ voor de ref-keuze), NIET vanaf de week-maandag.
  *
- * Fase-mapping op wekenTotEvent:
- *   >= 9   → Base
- *   5-8    → Build
- *   3-4    → Peak
- *   2      → Peak (laatste kwaliteit, nog vol volume)
- *   1 / 0  → Taper (laatste 7 dagen voor event)
+ *   Recovery: A-RACE die deze week (maandag..refDate) al plaatsvond.
+ *   Taper:    hoofd-event (A of trip) binnen A_TAPER_DAGEN (=7) dagen.
+ *   anders op wekenTot:  >= 9 Base / >= 5 Build / else Peak.
  *
- * Recovery: A-RACE die deze week al geweest is → Recovery-week.
- * Geen hoofd-event → vaste mesocyclus (fallback).
+ * @param events  array uit getAllEvents_() (Date-datum, prioriteit, type, naam)
+ * @param refDate Date — referentie-datum (meestal vandaag)
+ * @return { fase, hoofdEvent, dagenTot, wekenTot } of null (geen hoofd-event)
+ */
+function eventFase_(events, refDate) {
+  var ref = stripTime_(refDate);
+
+  // Recovery: A-race die deze week (maandag..ref) al geweest is.
+  var wkMon = weekStartDate(ref);
+  for (var i = 0; i < events.length; i++) {
+    var e = events[i];
+    var ed = stripTime_(e.datum);
+    if (e.prioriteit === 'A' && e.type === 'race' &&
+        ed.getTime() >= wkMon.getTime() && ed.getTime() <= ref.getTime()) {
+      return { fase: 'Recovery', hoofdEvent: e, dagenTot: 0, wekenTot: 0 };
+    }
+  }
+
+  var hoofd = pickMainEvent_(events, ref);
+  if (!hoofd) return null;
+
+  var hed = stripTime_(hoofd.datum);
+  var dagenTot = Math.round((hed.getTime() - ref.getTime()) / 86400000);
+  var wekenTot = Math.ceil(dagenTot / 7);
+
+  var fase;
+  if (dagenTot <= A_TAPER_DAGEN)   fase = 'Taper';
+  else if (wekenTot >= 9)          fase = 'Base';
+  else if (wekenTot >= 5)          fase = 'Build';
+  else                             fase = 'Peak';
+
+  return { fase: fase, hoofdEvent: hoofd, dagenTot: dagenTot, wekenTot: wekenTot };
+}
+
+/**
+ * Event-driven fase voor een te plannen week. Kiest de referentie-datum
+ * (vandaag voor de huidige week, anders de week-maandag) en delegeert de
+ * mapping aan eventFase_. Geen hoofd-event → vaste mesocyclus (fallback).
  *
  * @param weekStart Date — maandag van de te plannen week
- * @return { fase, week, wekenTotEvent, isTaper, isRecovery, isTestWeek,
- *           eventDriven, hoofdEvent, eventName, eventDate }
+ * @return { fase, week, wekenTotEvent, dagenTotEvent, isTaper, isRecovery,
+ *           isTestWeek, eventDriven, hoofdEvent, eventName, eventDate }
  */
 /**
  * Fase 1a: plan-card model (PeriodTimeline) voor de Schema-top. Puur afgeleid
@@ -276,7 +314,7 @@ function bepaalFaseVoorDatum_(weekStart) {
     var s = readSettings(ss);
     var m = computeMacroPhase(s.doelStart, new Date());
     var base = {
-      fase: m.fase, week: m.week, wekenTotEvent: null,
+      fase: m.fase, week: m.week, wekenTotEvent: null, dagenTotEvent: null,
       isTaper: false, isRecovery: false, isTestWeek: m.isTestWeek,
       eventDriven: false, hoofdEvent: null, eventName: null, eventDate: null
     };
@@ -286,42 +324,35 @@ function bepaalFaseVoorDatum_(weekStart) {
 
   var all = getAllEvents_();
 
-  // Recovery: A-race die deze week al plaatsvond (datum in [weekStart, vandaag])
-  for (var i = 0; i < all.length; i++) {
-    var e = all[i];
-    var ed = new Date(e.datum.getFullYear(), e.datum.getMonth(), e.datum.getDate());
-    if (e.prioriteit === 'A' && e.type === 'race' && ed >= ws && ed <= today) {
-      return {
-        fase: 'Recovery', week: null, wekenTotEvent: 0,
-        isTaper: false, isRecovery: true, isTestWeek: false,
-        eventDriven: true, hoofdEvent: e, eventName: e.naam, eventDate: e.datum
-      };
-    }
+  // Referentie-datum: VANDAAG als de te plannen week de huidige week is (de
+  // aftelling leeft vanaf vandaag, niet vanaf maandag — dit is de fix); anders
+  // de week-maandag, zodat de historische per-week fase-loop (voortgang,
+  // WebApp.gs) én de +1-week-planning vanaf hun eigen weekgrens blijven meten.
+  var ref = (today.getTime() >= ws.getTime() && today.getTime() < weekEnd.getTime()) ? today : ws;
+
+  var ef = eventFase_(all, ref);
+  if (!ef) return vasteMeso();
+
+  if (ef.fase === 'Recovery') {
+    return {
+      fase: 'Recovery', week: null, wekenTotEvent: 0, dagenTotEvent: 0,
+      isTaper: false, isRecovery: true, isTestWeek: false,
+      eventDriven: true, hoofdEvent: ef.hoofdEvent,
+      eventName: ef.hoofdEvent.naam, eventDate: ef.hoofdEvent.datum
+    };
   }
 
-  // Hoofd-event = eerstvolgende A-event of trip vanaf deze week
-  var hoofd = pickMainEvent_(all, ws);
-  if (!hoofd) return vasteMeso();
-
-  var hed = new Date(hoofd.datum.getFullYear(), hoofd.datum.getMonth(), hoofd.datum.getDate());
-  var wekenTotEvent = Math.ceil((hed - ws) / (7 * 24 * 60 * 60 * 1000));
-
-  var fase, isTaper = false;
-  if (wekenTotEvent >= 9)      fase = 'Base';
-  else if (wekenTotEvent >= 5) fase = 'Build';
-  else if (wekenTotEvent >= 2) fase = 'Peak';
-  else                          { fase = 'Taper'; isTaper = true; } // 1 of 0 (event deze week)
-
   return {
-    fase: fase,
+    fase: ef.fase,
     week: null,
-    wekenTotEvent: wekenTotEvent,
-    isTaper: isTaper,
+    wekenTotEvent: ef.wekenTot,
+    dagenTotEvent: ef.dagenTot,
+    isTaper: ef.fase === 'Taper',
     isRecovery: false,
     isTestWeek: false,
     eventDriven: true,
-    hoofdEvent: hoofd,
-    eventName: hoofd.naam,
-    eventDate: hoofd.datum
+    hoofdEvent: ef.hoofdEvent,
+    eventName: ef.hoofdEvent.naam,
+    eventDate: ef.hoofdEvent.datum
   };
 }

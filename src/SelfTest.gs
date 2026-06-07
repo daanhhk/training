@@ -24,6 +24,7 @@ function runSelfTest() {
   testClamp_(ctx);
   testNiveau_(ctx);
   testMacroPhase_(ctx);
+  testEventFase_(ctx);
   testReadiness_(ctx);
   testConstants_(ctx);
   testTier_(ctx);
@@ -105,6 +106,32 @@ function testMacroPhase_(ctx) {
   assert_(ctx, 'macro w12 test', 'Test', m12.fase);
   assert_(ctx, 'macro w12 isTest', true, m12.isTestWeek);
   assert_(ctx, 'macro w12 week-clamp', 12, m12.week);
+}
+
+// ── eventFase_ (puur) — referentie-datum vanaf vandaag + A-taper ≤7d ──
+function testEventFase_(ctx) {
+  function ev(jaar, maand0, dag, prio, type) {
+    return { datum: new Date(jaar, maand0, dag), prioriteit: prio, type: type, naam: 'X' };
+  }
+  var woe = new Date(2026, 5, 10);   // wo 10 jun 2026 (week-maandag = ma 8 jun)
+
+  // A-event op exact A_TAPER_DAGEN (7) dagen → Taper; aftelling vanaf vandaag.
+  var t7 = eventFase_([ev(2026, 5, 17, 'A', 'race')], woe);
+  assert_(ctx, 'eventFase A@7d fase', 'Taper', t7.fase);
+  assert_(ctx, 'eventFase A@7d dagen', 7, t7.dagenTot);
+
+  // A-event op 8 dagen → net buiten taper → Peak (wekenTot = 2).
+  assert_(ctx, 'eventFase A@8d fase', 'Peak', eventFase_([ev(2026, 5, 18, 'A', 'race')], woe).fase);
+
+  // Ver A-event (≥ 9 wkn) → Base.
+  assert_(ctx, 'eventFase verA fase', 'Base', eventFase_([ev(2026, 7, 15, 'A', 'race')], woe).fase);
+
+  // A-race eerder deze week (ma 8 jun, ref = do 11 jun) → Recovery.
+  var rec = eventFase_([ev(2026, 5, 8, 'A', 'race')], new Date(2026, 5, 11));
+  assert_(ctx, 'eventFase recovery fase', 'Recovery', rec.fase);
+
+  // Geen hoofd-event → null (val terug op vaste meso in bepaalFaseVoorDatum_).
+  assert_(ctx, 'eventFase geen event', null, eventFase_([], woe));
 }
 
 // ── getReadinessScore_ (factor-subs/dots puur; band via consistentie) ──
