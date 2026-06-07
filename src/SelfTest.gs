@@ -29,6 +29,7 @@ function runSelfTest() {
   testConstants_(ctx);
   testTier_(ctx);
   testWeekLoad_(ctx);
+  testTrainingLibrary_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -223,4 +224,19 @@ function testWeekLoad_(ctx) {
   assert_(ctx, 'plan multi-session=1dag', 1, weekPlanSummary_([{ tss: 120, minuten: 160 }]).dagen);
   assert_(ctx, 'plan empty tss', 0, weekPlanSummary_([]).tss);
   assert_(ctx, 'plan empty dagen', 0, weekPlanSummary_([]).dagen);
+}
+
+// ── getTrainingLibrary_ (puur) — integriteit van de Trainingen-bibliotheek ──
+function testTrainingLibrary_(ctx) {
+  var settings = { ftp: 250, lthr: 160, doel: 'FTP', doelStart: new Date(2026, 0, 5) };
+  var lib = getTrainingLibrary_(settings);
+  assert_(ctx, 'lib 6 categorieën', 6, lib.length);
+  lib.forEach(function (cat) {
+    assert_(ctx, 'lib cat niet-leeg: ' + cat.key, true, cat.variants.length > 0);
+    cat.variants.forEach(function (v) {
+      assert_(ctx, 'lib type match: ' + cat.key + '/' + v.variantId, cat.type, v.type);
+      assert_(ctx, 'lib tss>0: ' + cat.key + '/' + v.variantId, true, v.tss > 0);
+      assert_(ctx, 'lib segs>0: ' + cat.key + '/' + v.variantId, true, (v.segmenten || []).length > 0);
+    });
+  });
 }

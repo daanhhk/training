@@ -696,6 +696,9 @@ function getDashboardState() {
     // Fase 1b: readiness (read-side) — hergebruikt reeds-berekende fs/wellness/reeks
     // zodat getReadinessScore_ geen extra live getWellness-call doet.
     readiness: getReadinessScore_(fs, wellness, reeks),
+    // Fase 4: Trainingen-bibliotheek (read-side) + geplande types (In-je-blok-badge).
+    library: getTrainingLibrary_(settings),
+    plannedTypes: weekPlannedTypes_(weekStart),
     weekLoad: getWeekLoad_(ss, weekStart),
     vandaag: vandaag,
     dagen: dagen,

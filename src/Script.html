@@ -54,6 +54,7 @@
     renderSchema();
     renderWeekLoad();
     renderVorm();
+    renderTrainingen();
     switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
     google.charts.setOnLoadCallback(function () { chartsReady = true; drawNiveauChart(); });
@@ -898,7 +899,7 @@
     var btn = document.querySelector('.ci-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Bezig…'; }
     google.script.run
-      .withSuccessHandler(function (rd) { state.readiness = rd; closeDrawer(); renderVormStatus(); })
+      .withSuccessHandler(function (rd) { state.readiness = rd; closeDrawer(); renderVormStatus(); var t = document.getElementById('trn-status'); if (t) t.innerHTML = readinessCardHtml(state.readiness); })
       .withFailureHandler(function (err) { if (btn) { btn.disabled = false; btn.textContent = 'Vastleggen'; } showError(err); })
       .saveCheckin(checkinSel.slaap, checkinSel.benen, checkinSel.stress);
   }
@@ -1121,6 +1122,130 @@
     if (el) el.scrollIntoView({ inline: 'center', block: 'nearest' });
   }
 
+  // ════════════════════════════════════════════════════════════════
+  // TRAININGEN-TAB (Fase 4) — status-deck + drill-down bibliotheek.
+  // Views: cats → category → workout. De duur-slider herrekent LIVE
+  // (werk-minuten vast, extra duur → Z2 → tssFromZoneMinutes_; = engine
+  // renderVariant_-gedrag). state.library + state.plannedTypes (server).
+  // ════════════════════════════════════════════════════════════════
+  var trnView = 'cats', trnCatKey = null, trnVariantId = null, trnDur = null;
+  var trnPlanned = {};   // variantId → true (client-only "Ingepland" deze sessie)
+  var TRN_LOWBUCKETS = { rust: 1, z2: 1, low: 1 };
+
+  function trnLib_() { return (state && state.library) ? state.library : []; }
+  function trnCat_(key) { var L = trnLib_(); for (var i = 0; i < L.length; i++) if (L[i].key === key) return L[i]; return null; }
+  function trnVar_(cat, id) { if (!cat) return null; for (var i = 0; i < cat.variants.length; i++) if (cat.variants[i].variantId === id) return cat.variants[i]; return null; }
+  function trnIsPlanned_(type) { return (state.plannedTypes || []).indexOf(type) >= 0; }
+
+  // Live recompute: werk-minuten (high+anaerobic) vast, extra duur → Z2 (low).
+  // Bij de categorie-default reproduceert dit de server-waarden exact (low == intent.low).
+  function trnScale_(v, mins) {
+    var iv = v.intent || { low: 0, high: 0, anaerobic: 0 };
+    var work = (iv.high || 0) + (iv.anaerobic || 0);
+    var newLow = Math.max(10, Math.round(mins - work));
+    var dur = work + newLow;
+    var tss = Math.round(newLow * 0.7 + (iv.high || 0) * 0.95 + (iv.anaerobic || 0) * 1.05);
+    var segs = v.segmenten || [];
+    var baseLow = 0; segs.forEach(function (s) { if (TRN_LOWBUCKETS[s.bucket]) baseLow += s.minuten; });
+    var f = baseLow > 0 ? (newLow / baseLow) : 1;
+    var scaled = segs.map(function (s) {
+      return { bucket: s.bucket, hoogtePct: s.hoogtePct,
+        minuten: TRN_LOWBUCKETS[s.bucket] ? Math.max(0.5, s.minuten * f) : s.minuten };
+    });
+    return { durMin: dur, tss: tss, segmenten: scaled };
+  }
+
+  function trnDurLabel_(mins) {
+    mins = Math.round(mins);
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return h > 0 ? (h + 'u' + (m ? ' ' + (m < 10 ? '0' + m : m) : '')) : (m + ' min');
+  }
+
+  function trnCatsHtml_() {
+    var cards = trnLib_().map(function (c) {
+      return '<button type="button" class="cat-card" onclick="trnOpenCat(\'' + c.key + '\')">' +
+        '<span class="cat-marker" style="background:var(' + c.zoneVar + ')"></span>' +
+        '<div class="cat-body"><div class="cat-name" style="color:var(' + c.zoneVar + ')">' + esc(c.label) + '</div>' +
+        '<div class="cat-desc">' + esc(c.omschrijving) + '</div></div>' +
+        '<span class="cat-count">' + c.variants.length + '</span>' +
+        '<span class="cat-chev">›</span></button>';
+    }).join('');
+    return '<div class="trn-overline">Bibliotheek · per categorie</div>' + (cards || '<div class="rc-card muted">Bibliotheek nog niet geladen.</div>');
+  }
+
+  function trnBackHtml_(cat, v) {
+    return '<div class="trn-back">' +
+      '<button type="button" class="trn-back-btn" onclick="trnBack()" aria-label="Terug">‹</button>' +
+      '<div><div class="trn-back-title">' + esc(v ? v.naam : cat.label) + '</div>' +
+      '<div class="trn-back-sub">' + esc(v ? cat.label : cat.omschrijving) + '</div></div></div>';
+  }
+
+  function trnSliderHtml_(dur) {
+    return '<div class="dur-card">' +
+      '<div class="dur-head"><span class="dur-lbl">Duur · structuur schaalt mee</span>' +
+        '<span class="dur-val" id="trn-dur-val">' + trnDurLabel_(dur) + '</span></div>' +
+      '<input type="range" class="dur-slider" id="trn-dur-slider" min="45" max="240" step="15" value="' + dur + '" oninput="trnSliderInput(this.value)">' +
+      '<div class="dur-minmax"><span>45 min</span><span>4 u</span></div></div>';
+  }
+
+  function trnVarRowHtml_(cat, v, dur) {
+    var sc = trnScale_(v, dur);
+    var badge = trnIsPlanned_(v.type) ? '<span class="var-badge">In je blok</span>' : '';
+    return '<button type="button" class="var-row" onclick="trnOpenWorkout(\'' + v.variantId + '\')">' +
+      '<div class="var-head"><span class="var-name">' + esc(v.naam) + '</span>' + badge + '</div>' +
+      zoneBar(sc.segmenten, true) + inlineMetrics_(sc.durMin, sc.tss) + '</button>';
+  }
+
+  function trnDetailHtml_(cat, v, dur) {
+    var sc = trnScale_(v, dur);
+    var badge = trnIsPlanned_(v.type) ? '<span class="var-badge">In je blok</span>' : '';
+    var btn = trnPlanned[v.variantId]
+      ? '<button type="button" class="trn-plan-btn" disabled>✓ Ingepland</button>'
+      : '<button type="button" class="trn-plan-btn" onclick="trnInplannen(\'' + v.variantId + '\')">Inplannen</button>';
+    return '<div class="rc-card">' +
+      '<div class="var-head"><span class="var-name">' + esc(v.naam) + '</span>' + badge + '</div>' +
+      zoneBlock_(sc.segmenten, v.structuur) + inlineMetrics_(sc.durMin, sc.tss) + btn + '</div>';
+  }
+
+  function trnRowsHtml_() {
+    var cat = trnCat_(trnCatKey); if (!cat) return '';
+    var dur = trnDur != null ? trnDur : cat.defaultDur;
+    if (trnView === 'workout') { var v = trnVar_(cat, trnVariantId); return v ? trnDetailHtml_(cat, v, dur) : ''; }
+    return cat.variants.map(function (vr) { return trnVarRowHtml_(cat, vr, dur); }).join('');
+  }
+
+  function trnRenderViews_() {
+    var el = document.getElementById('trainingen-views'); if (!el) return;
+    var cat = trnCatKey ? trnCat_(trnCatKey) : null;
+    if (trnView === 'cats' || !cat) { trnView = 'cats'; el.innerHTML = trnCatsHtml_(); return; }
+    var dur = trnDur != null ? trnDur : cat.defaultDur;
+    var v = (trnView === 'workout') ? trnVar_(cat, trnVariantId) : null;
+    var overline = (trnView === 'workout') ? '' : '<div class="trn-overline">Varianten</div>';
+    el.innerHTML = trnBackHtml_(cat, v) + trnSliderHtml_(dur) + overline + '<div id="trn-rows">' + trnRowsHtml_() + '</div>';
+  }
+
+  function renderTrainingen() {
+    var st = document.getElementById('trn-status'); if (st) st.innerHTML = readinessCardHtml(state.readiness);
+    var lv = document.getElementById('trn-level'); if (lv) lv.innerHTML = levelCardHtml(state);
+    trnRenderViews_();
+  }
+
+  function trnSliderInput(val) {
+    trnDur = parseInt(val, 10);
+    var lbl = document.getElementById('trn-dur-val'); if (lbl) lbl.textContent = trnDurLabel_(trnDur);
+    var rows = document.getElementById('trn-rows'); if (rows) rows.innerHTML = trnRowsHtml_();
+  }
+  function trnOpenCat(key) { trnCatKey = key; trnView = 'category'; trnDur = null; trnRenderViews_(); }
+  function trnOpenWorkout(id) { trnVariantId = id; trnView = 'workout'; trnRenderViews_(); }
+  function trnBack() {
+    if (trnView === 'workout') { trnView = 'category'; trnVariantId = null; }
+    else { trnView = 'cats'; trnCatKey = null; trnDur = null; }
+    trnRenderViews_();
+  }
+  function trnInplannen(id) { trnPlanned[id] = true; trnRenderViews_(); }   // client-only (server-persist = vervolg-pass)
+  window.trnOpenCat = trnOpenCat; window.trnOpenWorkout = trnOpenWorkout; window.trnBack = trnBack;
+  window.trnInplannen = trnInplannen; window.trnSliderInput = trnSliderInput;
+
   function switchTab(name) {
     ['schema', 'vorm', 'trainingen', 'niveau'].forEach(function (t) {
       document.getElementById('tab-' + t).style.display = (t === name) ? 'block' : 'none';
@@ -1162,27 +1287,32 @@
   window.openDrawer = openDrawer;
   window.closeDrawer = closeDrawer;
 
-  // Fase 3 deel 4 — Vorm swipe-deck: active dot volgt de scroll-positie.
-  function syncDeckDots_() {
-    var deck = document.getElementById('vorm-deck');
-    var dots = document.getElementById('vorm-deck-dots');
+  // Swipe-deck (Vorm + Trainingen): active dot volgt de scroll-positie.
+  // Geparametriseerd op deck/dots-id zodat meerdere decks dezelfde sync delen.
+  function syncDeckDots_(deckId, dotsId) {
+    var deck = document.getElementById(deckId);
+    var dots = document.getElementById(dotsId);
     if (!deck || !dots) return;
     var idx = Math.round(deck.scrollLeft / Math.max(1, deck.clientWidth));
     for (var i = 0; i < dots.children.length; i++) dots.children[i].classList.toggle('active', i === idx);
+  }
+  function wireDeck_(deckId, dotsId) {
+    var deck = document.getElementById(deckId);
+    if (deck) deck.addEventListener('scroll', function () { syncDeckDots_(deckId, dotsId); });
+    document.querySelectorAll('#' + dotsId + ' .deck-dot').forEach(function (dot) {
+      dot.addEventListener('click', function () {
+        var dk = document.getElementById(deckId);
+        if (dk) dk.scrollTo({ left: parseInt(dot.getAttribute('data-slide'), 10) * dk.clientWidth, behavior: 'smooth' });
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.addEventListener('click', function () { switchTab(b.getAttribute('data-tab')); });
     });
-    var vDeck = document.getElementById('vorm-deck');
-    if (vDeck) vDeck.addEventListener('scroll', syncDeckDots_);
-    document.querySelectorAll('#vorm-deck-dots .deck-dot').forEach(function (dot) {
-      dot.addEventListener('click', function () {
-        var dk = document.getElementById('vorm-deck');
-        dk.scrollTo({ left: parseInt(dot.getAttribute('data-slide'), 10) * dk.clientWidth, behavior: 'smooth' });
-      });
-    });
+    wireDeck_('vorm-deck', 'vorm-deck-dots');
+    wireDeck_('trainingen-deck', 'trainingen-deck-dots');
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && document.getElementById('overlay-panel').classList.contains('is-open')) closeDrawer();
     });

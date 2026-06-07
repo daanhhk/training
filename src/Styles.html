@@ -152,6 +152,34 @@
   .deck-dots { display: flex; justify-content: center; gap: 6px; margin: 8px 0 14px; }
   .deck-dot { width: 7px; height: 7px; padding: 0; border: none; border-radius: var(--r-pill); background: var(--border-strong); cursor: pointer; }
   .deck-dot.active { background: var(--accent); }
+
+  /* ── Trainingen-tab (Fase 4): bibliotheek-drill-down (cats/category/workout) ── */
+  .trn-overline { font-size: var(--fs-caption); font-weight: var(--fw-caption); text-transform: uppercase; letter-spacing: var(--tracking-overline); color: var(--text-muted); margin: var(--s-2) 2px var(--s-3); }
+  .cat-card { display: flex; align-items: center; gap: var(--s-3); width: 100%; text-align: left; font-family: var(--font-sans); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: 13px var(--card-pad); margin-bottom: var(--s-3); cursor: pointer; }
+  .cat-marker { flex: 0 0 auto; width: 4px; align-self: stretch; min-height: 32px; border-radius: var(--r-pill); }
+  .cat-body { flex: 1; min-width: 0; }
+  .cat-name { font-size: var(--fs-h3); font-weight: var(--fw-h3); }
+  .cat-desc { font-size: var(--fs-label); color: var(--text-muted); margin-top: 2px; }
+  .cat-count { flex: 0 0 auto; font-family: var(--font-num); font-size: var(--fs-label); color: var(--text-muted); }
+  .cat-chev { flex: 0 0 auto; color: var(--text-muted); font-size: var(--fs-h3); line-height: 1; }
+  .trn-back { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-1) 0 var(--s-4); }
+  .trn-back-btn { flex: 0 0 auto; width: 34px; height: 34px; border-radius: var(--r-pill); border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-primary); font-size: var(--fs-h3); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .trn-back-title { font-size: var(--fs-h1); font-weight: var(--fw-h1); color: var(--text-primary); }
+  .trn-back-sub { font-size: var(--fs-label); color: var(--text-muted); margin-top: 1px; }
+  .dur-card { background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: var(--r-md); padding: 13px var(--card-pad); margin-bottom: var(--s-4); }
+  .dur-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .dur-lbl { font-size: var(--fs-caption); font-weight: var(--fw-caption); text-transform: uppercase; letter-spacing: var(--tracking-overline); color: var(--text-muted); }
+  .dur-val { font-family: var(--font-num); font-size: var(--fs-num-md); font-weight: var(--fw-num-md); color: var(--accent); }
+  .dur-slider { width: 100%; margin: 12px 0 6px; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px; background: var(--slider-track); outline: none; }
+  .dur-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: none; }
+  .dur-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: none; }
+  .dur-minmax { display: flex; justify-content: space-between; font-size: var(--fs-caption); color: var(--text-muted); }
+  .var-row { display: block; width: 100%; text-align: left; font-family: var(--font-sans); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: var(--card-pad); margin-bottom: var(--s-3); cursor: pointer; }
+  .var-head { display: flex; align-items: center; gap: var(--s-2); }
+  .var-name { flex: 1; font-size: var(--fs-h3); font-weight: var(--fw-h3); color: var(--text-primary); }
+  .var-badge { flex: 0 0 auto; background: var(--badge-good-bg); color: var(--badge-good-text); border-radius: var(--r-pill); padding: 2px 10px; font-size: var(--fs-caption); font-weight: var(--fw-caption); }
+  .trn-plan-btn { width: 100%; height: var(--btn-height); margin-top: var(--s-3); border: none; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-family: var(--font-sans); font-size: var(--fs-body); font-weight: 600; cursor: pointer; }
+  .trn-plan-btn:disabled { background: var(--btn-disabled-bg); color: var(--btn-disabled-text); cursor: default; }
   .lc-chip { display: inline-flex; align-items: center; gap: 6px; }
   .lc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .lc-delta-line { font-family: var(--font-num); font-size: var(--fs-num-sm); font-weight: var(--fw-num-sm); margin-top: 8px; }

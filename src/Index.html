@@ -60,11 +60,18 @@
         </div>
       </section>
 
-      <!-- TRAININGEN (placeholder — Fase 4) -->
-      <section id="tab-trainingen" style="display:none">
-        <div style="padding:48px 24px;text-align:center;color:var(--text-muted);font-family:var(--font-sans)">
-          <p style="font-size:var(--fs-h1);font-weight:var(--fw-h1);color:var(--text-secondary);margin:0 0 8px">Trainingen</p>
-          <p style="margin:0">Bibliotheek volgt in een latere fase.</p>
+      <!-- TRAININGEN (Fase 4) — status-deck + drill-down bibliotheek -->
+      <section id="tab-trainingen" class="tab" style="display:none">
+        <div class="body">
+          <div class="deck" id="trainingen-deck">
+            <div class="deck-slide" id="trn-status"></div>
+            <div class="deck-slide" id="trn-level"></div>
+          </div>
+          <div class="deck-dots" id="trainingen-deck-dots">
+            <span class="deck-dot active" data-slide="0"></span>
+            <span class="deck-dot" data-slide="1"></span>
+          </div>
+          <div id="trainingen-views"></div>
         </div>
       </section>
 

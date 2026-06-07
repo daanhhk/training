@@ -1955,6 +1955,83 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
   };
 }
 
+// ════════════════════════════════════════════════════════════════
+// TRAININGEN-BIBLIOTHEEK (read-side) — {categorie → varianten[]} via de
+// BESTAANDE pure builders (renderVariant_ + segmentsFromBlokken_ +
+// tssFromZoneMinutes_). Géén DocProp-state; veilig per request.
+// ════════════════════════════════════════════════════════════════
+
+// Display-categorie → engine-pool-type + design-tokens. zoneVar = marker/naam-
+// kleur uit het 6-zone-model (tr_cats.png + tokens.css). defaultDur = slider-start.
+// Sweet Spot + FTP/Drempel delen --zone-4 (amber, threshold-familie; geen aparte token).
+var TRAINING_CATS_ = [
+  { key: 'herstel',   label: 'Herstel',       type: 'recovery',   zoneVar: '--zone-1', fase: 'Base',  defaultDur: 45,  omschrijving: 'Actief herstel, heel rustig' },
+  { key: 'duur',      label: 'Duurvermogen',  type: 'long_z2',    zoneVar: '--zone-2', fase: 'Base',  defaultDur: 120, omschrijving: 'Aerobe basis · lange rustige ritten' },
+  { key: 'tempo',     label: 'Tempo',         type: 'tempo',      zoneVar: '--zone-3', fase: 'Build', defaultDur: 75,  omschrijving: 'Stevig aeroob · comfortabel-hard' },
+  { key: 'sweetspot', label: 'Sweet Spot',    type: 'sweet_spot', zoneVar: '--zone-4', fase: 'Build', defaultDur: 75,  omschrijving: 'Veel prikkel · beheersbare vermoeidheid' },
+  { key: 'ftp',       label: 'FTP / Drempel', type: 'threshold',  zoneVar: '--zone-4', fase: 'Build', defaultDur: 75,  omschrijving: 'Rond je 1-uurs vermogen' },
+  { key: 'vo2max',    label: 'VO2max',        type: 'vo2max',     zoneVar: '--zone-5', fase: 'Peak',  defaultDur: 75,  omschrijving: 'Korte, felle intervallen' }
+];
+
+// Herstel heeft geen variant-pool → kleine declaratieve set in dezelfde spec-vorm.
+function recoveryPool_() {
+  return [
+    { id: 'rec_licht', naam: 'Hersteldrit licht', zone: 'low', warmup: 5, cooldown: 5,
+      blocks: function (a) { return [{ kind: 'steady', label: 'Herstel', durMin: 35, pct: a(50) }]; },
+      tip: 'Heel licht — actief herstel, niet pushen.' },
+    { id: 'rec_los', naam: 'Benen losdraaien', zone: 'low', warmup: 5, cooldown: 5,
+      blocks: function (a) { return [{ kind: 'steady', label: 'Soepel', durMin: 20, pct: a(48) }]; },
+      tip: 'Soepel draaien op hoge cadans.' }
+  ];
+}
+
+/**
+ * Bouwt de Trainingen-bibliotheek: per categorie tot 5 varianten met ZoneBar-
+ * segmenten (+hoogtePct), blok-structuur (label/duur/watt) en zone-gewogen TSS —
+ * alles uit de bestaande builders. `intent` {low,high,anaerobic} gaat mee zodat
+ * de client de duur-slider live kan herrekenen (extra duur → Z2 → tssFromZoneMinutes_).
+ * @return [{ key,label,zoneVar,omschrijving,defaultDur,type, variants:[...] }]
+ */
+function getTrainingLibrary_(settings) {
+  return TRAINING_CATS_.map(function (cat) {
+    var pool = (cat.type === 'recovery') ? recoveryPool_() : (getPool_(cat.type) || []);
+    var variants = pool.slice(0, 5).map(function (v) {
+      var wo = renderVariant_(v, settings, 1, cat.fase, cat.defaultDur);
+      return {
+        variantId: v.id,
+        naam: v.naam,
+        type: cat.type,
+        durMin: wo.totaalMin,
+        intent: { low: wo.intent.low || 0, high: wo.intent.high || 0, anaerobic: wo.intent.anaerobic || 0 },
+        segmenten: segmentsFromBlokken_(wo.blokken) || [],
+        structuur: wo.structuur,
+        tss: wo.tss,
+        tip: v.tip || ''
+      };
+    });
+    return {
+      key: cat.key, label: cat.label, zoneVar: cat.zoneVar,
+      omschrijving: cat.omschrijving, defaultDur: cat.defaultDur, type: cat.type,
+      variants: variants
+    };
+  });
+}
+
+/** Unieke geplande workout-types in de huidige week (voor de "In je blok"-badge). */
+function weekPlannedTypes_(weekStart) {
+  var raw = getDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), '');
+  if (!raw) return [];
+  var set = {};
+  try {
+    var arr = JSON.parse(raw);
+    if (Array.isArray(arr)) arr.forEach(function (e) {
+      var t = e && (e.workoutType || e.voorgesteldType);
+      if (t) set[t] = true;
+    });
+  } catch (e) {}
+  return Object.keys(set);
+}
+
 /** Generieke pools (doel-onafhankelijk): lange Z2 + tempo. */
 function genericPools_() {
   return {
