@@ -350,6 +350,70 @@ function dashDayCard_(dISO, wpEntry, actual, rpe) {
   return { voorstel: voorstel, actual: act };
 }
 
+// ── Coach-glue (Fase 4c) — event-ctx, patroon, reële zones (lazy) ──
+/** macro → coach-event-ctx. trip = meerdaagse/endurance-reis → duur/drempel-doel. */
+function coachEventFromMacro_(macro) {
+  if (!macro || !macro.hoofdEvent) return null;
+  var ev = macro.hoofdEvent, type = ev.type || 'race';
+  return { naam: macro.eventName || ev.naam || 'je doel', type: type, isEndurance: (type === 'trip') };
+}
+
+/** Telt recente intensiteit-substituties (laatste 14 d): geplande duur/herstel
+ *  maar werkelijk intensiever (genormaliseerde IF) → patroon-signaal voor de coach. */
+function coachPatternCount_(actualsByDate, planByDate, today) {
+  var n = 0;
+  for (var i = 0; i < 14; i++) {
+    var k = formatDate(new Date(today.getTime() - i * 86400000), 'yyyy-MM-dd');
+    var a = actualsByDate[k], p = planByDate[k];
+    if (!a || !p || a.ifReal == null) continue;
+    var plI = intentFromType_(p.workoutType);
+    var acI = intentFromIF_(cfNormIf_(a.ifReal));
+    if ((plI === 'duur' || plI === 'herstel') && COACH_INTENSITY_RANK_[acI] > COACH_INTENSITY_RANK_[plI]) n++;
+  }
+  return n;
+}
+
+/** Reële power-time-in-zone (minuten, 5-bucket) voor één dag uit intervals.icu
+ *  (on-demand getActivities-match; geen schema-migratie). Null = geen zone-data. */
+function coachActualZoneMin_(dISO) {
+  var acts = [];
+  try { acts = getActivities(35) || []; } catch (e) { return null; }
+  var hit = null;
+  for (var i = 0; i < acts.length; i++) {
+    var a = acts[i];
+    if (!a.start_date_local || CYCLING_TYPES.indexOf(String(a.type || '')) < 0) continue;
+    if (formatDate(stripTime_(new Date(a.start_date_local)), 'yyyy-MM-dd') === dISO) { hit = a; break; }
+  }
+  if (!hit || !Array.isArray(hit.icu_zone_times)) return null;
+  var map = { Z1: 'rust', Z2: 'z2', Z3: 'tempo', Z4: 'drempel', Z5: 'anaeroob', Z6: 'anaeroob', Z7: 'anaeroob' };
+  var zm = { rust: 0, z2: 0, tempo: 0, drempel: 0, anaeroob: 0 }, saw = false;
+  hit.icu_zone_times.forEach(function (z) {
+    if (!z || typeof z.id !== 'string') return;
+    var bk = map[z.id]; if (!bk) return;
+    zm[bk] += (Number(z.secs) || 0) / 60; saw = true;
+  });
+  return saw ? zm : null;
+}
+
+/** FIX 2 — lazy callable: herberekent de coach voor één voltooide dag MET reële
+ *  zone-verdeling (echte Gedaan-bar + zone-gebaseerde classificatie). Null = val
+ *  terug op de IF-benadering. On-demand (client cachet per dag). */
+function getDayCoachZones(dISO) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dISO))) return null;
+  var zm = coachActualZoneMin_(dISO);
+  if (!zm) return null;
+  var wpMap = dashWeekplanByDate_(), actMap = dashActualsByDate_();
+  var wp = wpMap[dISO], actual = actMap[dISO];
+  if (!wp || !actual) return null;
+  var card = dashDayCard_(dISO, wp, actual, null);
+  if (!card.voorstel || !card.actual) return null;
+  card.actual.zoneMin = zm;
+  var macro = bepaalFaseVoorDatum_(weekStartDate(new Date()));
+  var ctx = { fase: macro.macroFase, event: coachEventFromMacro_(macro),
+              patternCount: coachPatternCount_(actMap, wpMap, stripTime_(new Date())) };
+  return coachFeedback_(card.voorstel, card.actual, ctx, false);
+}
+
 /**
  * W/kg-anker → niveau (0–50). Bewust stabiel: beweegt alleen op FTP/gewicht.
  * De taper-bewuste conditie-modifier komt pas in 2b. Pure helper.
@@ -532,6 +596,9 @@ function getDashboardState() {
     }
   } catch (e) {}
 
+  // Coach-ctx (Fase 4b/4c): event-demand + fase + patroon-teller — éénmaal per state.
+  var coachCtx = { fase: macro.macroFase, event: coachEventFromMacro_(macro), patternCount: coachPatternCount_(actuals, wpByDate, today) };
+
   var dagen = [];
   var lowerBound = stripTime_(new Date(today.getTime() - 28 * 86400000));
   // Klem ondergrens op de vroegste datum in actuals/weekplan (geen lege voorloop).
@@ -565,9 +632,10 @@ function getDashboardState() {
     } else if (status === 'preview') { kleur = '#b0bec5'; }
     if (status === 'gemist') kleur = null;
     // Fase 4b — coach-feedback op dag-niveau (voltooid: plan vs actual; gemist: plan).
+    // Doel-bewuste ctx (event + fase + patroon); reële zones lazy via getDayCoachZones.
     var coach = null;
-    if (card.voorstel && card.actual) coach = coachFeedback_(card.voorstel, card.actual, macro.macroFase, false);
-    else if (status === 'gemist')     coach = coachFeedback_(card.voorstel, null, macro.macroFase, true);
+    if (card.voorstel && card.actual) coach = coachFeedback_(card.voorstel, card.actual, coachCtx, false);
+    else if (status === 'gemist')     coach = coachFeedback_(card.voorstel, null, coachCtx, true);
     dagen.push({
       dateISO: dISO, weekdag: dashWeekdag_(d), kort: dashKort_(d),
       status: status, kleur: kleur,

@@ -495,6 +495,29 @@
       '<div class="gd-reasons">' + reasons + '</div>' + coachCallout_(c) + '</div>';
   }
 
+  // FIX 2 — lazy reële zone-verdeling: vervang de IF-benadering door echte
+  // power-time-in-zone zodra een voltooide dag bekeken wordt (gecachet per dag).
+  var coachZoneCache_ = {}, coachZoneInflight_ = {};
+  function dagByISO_(dISO) { return (state.dagen || []).filter(function (x) { return x.dateISO === dISO; })[0] || null; }
+  function maybeUpgradeCoachZones_(dISO) {
+    var cached = coachZoneCache_[dISO];
+    if (cached === 'none' || coachZoneInflight_[dISO]) return;
+    if (cached) {
+      var d0 = dagByISO_(dISO);
+      if (d0 && !(d0.coach && d0.coach.done && d0.coach.done.zonesReal)) { d0.coach = cached; renderDagDetail(); }
+      return;
+    }
+    coachZoneInflight_[dISO] = true;
+    google.script.run
+      .withSuccessHandler(function (refined) {
+        coachZoneInflight_[dISO] = false;
+        coachZoneCache_[dISO] = refined || 'none';
+        if (refined && selectedDate === dISO) { var d = dagByISO_(dISO); if (d) { d.coach = refined; renderDagDetail(); } }
+      })
+      .withFailureHandler(function () { coachZoneInflight_[dISO] = false; coachZoneCache_[dISO] = 'none'; })
+      .getDayCoachZones(dISO);
+  }
+
   // ── Schema (Vandaag + Kalender samengevoegd) ──
   // Fase 1a — Schema plan-card (PeriodTimeline). Collapsed by default (<details>).
   function planCardHtml(plan) {
@@ -801,6 +824,8 @@
     // §102: Beschikbaarheid-knop per-dag, onder de dag-detail (opent de editor voor selectedDate).
     h += '<button id="btn-avail" class="avail-open" onclick="openAvailEditor()">Beschikbaarheid aanpassen</button>';
     el.innerHTML = h;
+    // FIX 2: upgrade de Gedaan-zonebar + classificatie naar reële zones (lazy/cached).
+    if (d.coach && d.coach.done && !d.coach.done.zonesReal) maybeUpgradeCoachZones_(d.dateISO);
   }
 
   // ── Vorm: status-first ──

@@ -120,7 +120,7 @@ server-geleid.
 | Element | Doet | R/W | Effect / voorwaarden |
 | --- | --- | --- | --- |
 | **Alignment-chip** (`AlignChip`: Op plan / Licht afgeweken / Anders getraind / Niet gereden) | Toont hoe goed de uitvoering het plan volgde. | READ · 🌐 | Soort + percentage server-side bepaald (uit de geüploade activiteit). Puur lezen. |
-| **Gepland-vs-gedaan-lezing** (`Reading`: type · duur · IF · TSS · zone-verdeling) | Toont plan naast uitvoering. | READ · 🌐 | Geplande waarden uit het plan, gedane uit de activiteit (zone-verdeling Gedaan = IF/intent-benadering tot intervals.icu-time-in-zone landt). |
+| **Gepland-vs-gedaan-lezing** (`Reading`: type · duur · IF · TSS · zone-verdeling) | Toont plan naast uitvoering. | READ · 🌐 | Geplande waarden uit het plan, gedane uit de activiteit. Zone-verdeling Gedaan = reële power-time-in-zone (intervals.icu, lazy + per dag gecachet); IF/intent-benadering als fallback. IF genormaliseerd naar 0–1. |
 | **Uitvoerings-balk** (`AlignBar`, bij zelfde-intent) | Toont alignment-%. | READ · 🌐 | Server-berekend. |
 | **Impact-callout** (`CoachCallout impact`) | Legt uit wat match/afwijking/gemist betekent voor de blok-fase. | READ · 🌐 | **Server-geleid** (coach-engine); narratief, niet bewerkbaar. |
 | **Adaptatie-regel** ("Voorstel: …") | Toont wat de coach voorstelt (verplaatsen / inkorten / niets). | READ · 🌐 | **Server-geleid** (coach-engine). NB: in deze pass een VOORSTEL (uitleg); auto-executie via de override-replanner = toekomst. |

@@ -49,6 +49,52 @@ function cfIf_(tss, durMin) {
   return Math.round(Math.sqrt(tss / (durMin / 60 * 100)) * 100) / 100;
 }
 
+// FIX 1 — intervals.icu slaat IF op als PERCENTAGE (icu_intensity ≈ 77 voor IF
+// 0,77; Sync.gs:157). Normaliseer naar 0–1 voor classifier + alignment + display.
+// Reeds-0–1 (≤ 3) blijft ongemoeid. Eén bron, overal gebruikt.
+function cfNormIf_(v) {
+  if (v == null) return null;
+  return (v > 3) ? (v / 100) : v;
+}
+
+// Intensiteits-rang (voor richting van een afwijking: intensiever vs lichter).
+var COACH_INTENSITY_RANK_ = { herstel: 0, duur: 1, tempo: 2, sweetspot: 3, drempel: 4, vo2: 5, vrij: 2, onbekend: 2 };
+function coachDirection_(plIntent, acIntent) {
+  var p = COACH_INTENSITY_RANK_[plIntent], a = COACH_INTENSITY_RANK_[acIntent];
+  if (a == null || p == null) return 'ander';
+  return (a > p) ? 'intensiever' : (a < p ? 'lichter' : 'ander');
+}
+
+// FIX 2 — reële zone-verdeling → intent (zwaarste SIGNIFICANTE bucket, rust telt
+// niet). zm = {rust,z2,tempo,drempel,anaeroob} minuten. Zo wordt een Z2-zware rit
+// met een drempel-blok 'drempel' (niet vo2); een echt Z5-blok → 'vo2'.
+function coachIntentFromZones_(zm) {
+  if (!zm) return null;
+  var total = (zm.rust || 0) + (zm.z2 || 0) + (zm.tempo || 0) + (zm.drempel || 0) + (zm.anaeroob || 0);
+  if (total <= 0) return null;
+  var thresh = Math.max(8, total * 0.12);
+  if ((zm.anaeroob || 0) >= thresh) return 'vo2';
+  if ((zm.drempel || 0) >= thresh) return 'drempel';
+  if ((zm.tempo || 0) >= thresh) return 'tempo';
+  if ((zm.z2 || 0) >= thresh) return 'duur';
+  return 'herstel';
+}
+
+// FIX 2 — reële zone-minuten → zone-balk-segmenten (zone-volgorde, met track-
+// hoogte/kleur uit DASH_BUCKET_STYLE_ in WebApp.gs). Zelfde vorm als de geplande bar.
+function coachSegsFromZones_(zm) {
+  if (!zm) return null;
+  var order = ['rust', 'z2', 'tempo', 'drempel', 'anaeroob'];
+  var segs = [];
+  order.forEach(function (b) {
+    var m = Math.round(zm[b] || 0);
+    if (m <= 0) return;
+    var st = DASH_BUCKET_STYLE_[b] || DASH_BUCKET_STYLE_.z2;
+    segs.push({ minuten: m, bucket: b, kleur: st.kleur, hoogtePct: st.hoogtePct });
+  });
+  return segs.length ? segs : null;
+}
+
 // Gedaan-zoneverdeling — BENADERING uit intent-label + duur (geen sheet-zones).
 function coachActualIntent_(intent, durMin) {
   var d = Math.max(0, Math.round(durMin || 0));
@@ -73,35 +119,73 @@ function coachAlignment_(plTss, plIf, acTss, acIf) {
   return { state: 'deviated', score: Math.max(45, Math.min(82, Math.round(82 - Math.abs(1 - tssRatio) * 50 - (absIf - 0.05) * 150))) };
 }
 
-// NL coach-copy uit {state, intent, sleutelprikkel, fase}. Echte feiten ingevuld,
-// motiverend/uitleggend, geen schuld. adapt = AANPASSING-VOORSTEL (suggestie-toon).
-function coachCopy_(state, plIntent, acIntent, isKey, fase) {
-  var pl = COACH_INTENT_LABEL_[plIntent], ac = COACH_INTENT_LABEL_[acIntent] || '';
-  if (state === 'on-plan')  return { narrative: 'Sterk gereden. Je hield de ' + pl + ' strak vast — precies de prikkel die je ' + fase + '-blok nodig heeft. Zo duw je je drempel verder omhoog.', adapt: null };
-  if (state === 'deviated') return { narrative: 'Goed dat je reed. Dezelfde ' + pl + '-prikkel, alleen wat lichter dan gepland — prima op een drukke dag. De lijn blijft kloppen.', adapt: null };
+// FIX 3 — waardevolle, GEDIFFERENTIEERDE, DOEL-BEWUSTE coach-copy. Verschillende
+// dagen → verschillende, kloppende tekst uit ECHTE feiten: de richting van de
+// afwijking (intensiever/lichter/ander-type), de fase, de EVENT-demand, en een
+// PATROON-teller. ctx = {fase, event:{naam,isEndurance}|null, patternCount}.
+// adapt = suggestie ("Voorstel: …"; auto-executie = toekomst). Geen onjuiste claims.
+function coachCopy_(state, plIntent, acIntent, isKey, ctx) {
+  var pl = COACH_INTENT_LABEL_[plIntent], ac = COACH_INTENT_LABEL_[acIntent] || pl;
+  var fase = (ctx && ctx.fase) || 'Build';
+  var ev = ctx && ctx.event, pat = (ctx && ctx.patternCount) || 0;
+  var evNaam = (ev && ev.naam) ? ev.naam : 'je doel';
+  var endur = !!(ev && ev.isEndurance);
+  var dir = coachDirection_(plIntent, acIntent);
+  var plIsEndur = (plIntent === 'duur' || plIntent === 'herstel');
+
+  if (state === 'on-plan') {
+    var spec = (endur && (plIntent === 'duur' || plIntent === 'drempel'))
+      ? (' Precies de duur/drempel-prikkel die ' + evNaam + ' vraagt — zo bouw je de basis die je daar nodig hebt.')
+      : (' Precies de prikkel die je ' + fase + '-blok vraagt.');
+    return { narrative: 'Sterk uitgevoerd — je hield de ' + pl + ' strak vast.' + spec, adapt: null };
+  }
+  if (state === 'deviated') {
+    return { narrative: 'Goed dat je reed. Zelfde ' + pl + '-prikkel, ' + (dir === 'lichter' ? 'wat lichter' : 'iets anders gedoseerd') +
+      ' dan gepland — op een drukke dag prima. De lijn richting ' + evNaam + ' blijft kloppen.', adapt: null };
+  }
   if (state === 'different') {
-    return { narrative: 'Je trainde ' + ac + ' i.p.v. de geplande ' + pl + '. ' +
-      (isKey ? ('In deze ' + fase + '-fase is de ' + pl + '-prikkel de sleutel van de week — ' + ac + ' houdt je fit, maar tilt je plafond niet op. Één keer is geen probleem.')
-             : (ac + ' houdt je aerobe basis op peil; de week blijft op koers.')),
-      adapt: isKey ? ('Voorstel: verplaats de ' + pl + '-sessie naar een verse dag later deze week en houd de dag erna rustig. Zo blijft je weekbelasting op koers.') : null };
+    if (dir === 'intensiever' && endur && plIsEndur) {
+      if (pat >= 2) {
+        return { narrative: 'Je koos nu ' + pat + '× intensiteit (' + ac + ') i.p.v. de geplande duur. Voor ' + evNaam +
+          ' — lange dagen — is juist de duur/drempel-basis bepalend; herhaalde losse intensiteit ondermijnt die opbouw.',
+          adapt: 'Voorstel: houd de komende ritten bewust Z2/drempel en parkeer de losse intensiteit tot na ' + evNaam + '.' };
+      }
+      return { narrative: 'Je verving je duur-prikkel door ' + ac + '. Voor ' + evNaam + ' is duur/drempel de doel-specifieke prikkel — ' +
+        ac + ' is een leuke sessie maar tilt je ' + evNaam + '-vorm niet op. Eén keer is geen probleem.',
+        adapt: 'Voorstel: pak de gemiste duur op een verse dag later deze week op en houd ’m bewust Z2.' };
+    }
+    if (dir === 'lichter') {
+      return { narrative: 'Je trainde ' + ac + ' i.p.v. de geplande ' + pl + ' — lichter dan bedoeld. ' +
+        (isKey ? ('De ' + pl + '-sleutelprikkel van je ' + fase + '-blok bleef zo liggen.') : 'Prima als extra hersteldag.'),
+        adapt: isKey ? ('Voorstel: verplaats de ' + pl + '-sessie naar een verse dag later deze week.') : null };
+    }
+    if (dir === 'intensiever') {
+      return { narrative: 'Je trainde ' + ac + ' i.p.v. de geplande ' + pl + ' — intensiever dan bedoeld.' +
+        (isKey ? (' Dat dekt de ' + pl + '-prikkel deels, maar kost meer herstel.') : ' Geen sleutelprikkel, dus kleine impact.'), adapt: null };
+    }
+    return { narrative: 'Je trainde ' + ac + ' i.p.v. de geplande ' + pl + ' — ander type prikkel. Je week blijft op koers richting ' + evNaam + '.', adapt: null };
   }
   // missed
-  return { narrative: 'Geen punt — één gemiste sessie gooit je blok niet om. ' +
-    (isKey ? ('Wel was dit een ' + pl + '-sleutelprikkel, dus om je ' + fase + '-fase op gang te houden laat ik ’m niet helemaal vallen.')
-           : ('Het was een aanvullende sessie; je week ligt nog ruim op koers.')),
-    adapt: isKey ? ('Voorstel: een ingekorte ' + pl + ' op de eerstvolgende verse dag en de dag erna wat rustiger. Maandag start je weer fris.') : null };
+  if (isKey) {
+    return { narrative: 'Geen drama — één gemiste sessie gooit je blok niet om. Wel was dit een ' + pl + '-sleutelprikkel' +
+      (endur ? (', en richting ' + evNaam + ' telt juist de duur/drempel-opbouw') : (' van je ' + fase + '-blok')) + ', dus ik laat ’m niet vallen.',
+      adapt: 'Voorstel: een ingekorte ' + pl + ' op de eerstvolgende verse dag, de dag erna rustig. Maandag start je weer fris.' };
+  }
+  return { narrative: 'Geen punt — een aanvullende sessie gemist; je week ligt ruim op koers richting ' + evNaam + '.', adapt: null };
 }
 
 /**
  * Hoofd-ingang: coach-feedback-object voor één dag (DoneDetail / GemistDetail).
- * @param planned   voorstel-achtig {type, titel, duurMin, tss, segmenten} of null
- * @param actual    {naam, duurMin, tss, ifReal} of null
- * @param macroFase 'Base'|'Build'|'Peak'|...
- * @param isMissed  true → gemiste dag
+ * @param planned voorstel-achtig {type, titel, duurMin, tss, segmenten} of null
+ * @param actual  {naam, duurMin, tss, ifReal(%), zoneMin?{rust..anaeroob}} of null
+ * @param ctx     { fase, event:{naam,type,isEndurance}|null, patternCount } | 'Fase'-string (legacy)
+ * @param isMissed true → gemiste dag
  */
-function coachFeedback_(planned, actual, macroFase, isMissed) {
+function coachFeedback_(planned, actual, ctx, isMissed) {
   if (!planned) return null;
-  var fase = macroFase || 'Build';
+  if (typeof ctx === 'string') ctx = { fase: ctx };   // backward-compat
+  ctx = ctx || {};
+  var cc = { fase: ctx.fase || 'Build', event: ctx.event || null, patternCount: ctx.patternCount || 0 };
   var plIntent = intentFromType_(planned.type);
   var plDur = planned.duurMin || 0, plTss = planned.tss || 0;
   var plIf = cfIf_(plTss, plDur);
@@ -113,20 +197,26 @@ function coachFeedback_(planned, actual, macroFase, isMissed) {
   };
 
   if (isMissed || !actual) {
-    var cM = coachCopy_('missed', plIntent, null, isKey, fase);
+    var cM = coachCopy_('missed', plIntent, null, isKey, cc);
     return { state: 'missed', score: null, chipLabel: COACH_CHIP_LABEL_.missed, isImpact: true,
              planned: plBlock, done: null, narrative: cM.narrative, adapt: cM.adapt };
   }
 
   var acDur = actual.duurMin || 0, acTss = actual.tss || 0;
-  var acIf = (actual.ifReal != null) ? actual.ifReal : cfIf_(acTss, acDur);
+  var acIf = (actual.ifReal != null) ? cfNormIf_(actual.ifReal) : cfIf_(acTss, acDur);   // FIX 1: 0–1
   var al = coachAlignment_(plTss, plIf, acTss, acIf);
-  var acIntent = (al.state === 'different' && acIf != null) ? intentFromIF_(acIf) : plIntent;
-  var c = coachCopy_(al.state, plIntent, acIntent, isKey, fase);
+  // FIX 2: reële zones bepalen het actual-intent robuust; anders IF-benadering.
+  var zoneIntent = actual.zoneMin ? coachIntentFromZones_(actual.zoneMin) : null;
+  var acIntent;
+  if (al.state === 'different') acIntent = zoneIntent || (acIf != null ? intentFromIF_(acIf) : plIntent);
+  else                          acIntent = plIntent;       // op-plan/afgeweken = zelfde intent
+  var realSegs = actual.zoneMin ? coachSegsFromZones_(actual.zoneMin) : null;
+  var c = coachCopy_(al.state, plIntent, acIntent, isKey, cc);
   var doneBlock = {
     typeLabel: COACH_INTENT_LABEL_[acIntent], intent: acIntent,
     duurMin: acDur, tss: acTss, ifv: acIf, badgeZone: COACH_INTENT_ZONE_[acIntent],
-    segmenten: segmentsFromIntent_(coachActualIntent_(acIntent, acDur))
+    segmenten: realSegs || segmentsFromIntent_(coachActualIntent_(acIntent, acDur)),
+    zonesReal: !!realSegs
   };
   return { state: al.state, score: al.score, chipLabel: COACH_CHIP_LABEL_[al.state],
            isImpact: (al.state !== 'on-plan'),

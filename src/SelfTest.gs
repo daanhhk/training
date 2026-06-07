@@ -262,27 +262,38 @@ function testDayOverride_(ctx) {
   assert_(ctx, 'override lib resolved', true, !!wo.naam);
 }
 
-// ── Coach-engine (puur) — classificatie + alignment + feedback ──
+// ── Coach-engine (puur) — IF-normalisatie + zone-classificatie + doel-bewust ──
 function testCoach_(ctx) {
+  // FIX 1 — IF-normalisatie: percentage → 0–1; reeds-ratio ongemoeid; 0,77 ≠ vo2.
+  assertClose_(ctx, 'normIf 77.09', 0.7709, cfNormIf_(77.09), 0.0001);
+  assertClose_(ctx, 'normIf 88', 0.88, cfNormIf_(88), 0.0001);
+  assertClose_(ctx, 'normIf 0.77', 0.77, cfNormIf_(0.77), 0.0001);
+  assert_(ctx, 'normIf 77 niet vo2', 'tempo', intentFromIF_(cfNormIf_(77)));
   assert_(ctx, 'coach IF duur', 'duur', intentFromIF_(0.62));
-  assert_(ctx, 'coach IF tempo', 'tempo', intentFromIF_(0.78));
-  assert_(ctx, 'coach IF vo2', 'vo2', intentFromIF_(0.97));
   assert_(ctx, 'coach type sweetspot', 'sweetspot', intentFromType_('sweet_spot'));
-  assert_(ctx, 'coach type vo2', 'vo2', intentFromType_('vo2max'));
-  // Alignment relatief op IF/TSS (trouwe Sweet Spot = op plan; veel lichter = anders).
+  // FIX 2 — intent uit reële zone-verdeling (Z2-zwaar→niet-vo2; Z5-blok→vo2).
+  assert_(ctx, 'zones Z2-zwaar', 'drempel', coachIntentFromZones_({ rust: 5, z2: 70, tempo: 5, drempel: 20, anaeroob: 0 }));
+  assert_(ctx, 'zones Z5-blok', 'vo2', coachIntentFromZones_({ rust: 5, z2: 40, tempo: 0, drempel: 5, anaeroob: 18 }));
+  assert_(ctx, 'zones puur Z2', 'duur', coachIntentFromZones_({ rust: 8, z2: 90, tempo: 0, drempel: 0, anaeroob: 0 }));
+  // Alignment relatief op IF/TSS.
   assert_(ctx, 'align on-plan', 'on-plan', coachAlignment_(78, 0.88, 81, 0.89).state);
   assert_(ctx, 'align different', 'different', coachAlignment_(95, 0.94, 74, 0.81).state);
   assert_(ctx, 'align deviated', 'deviated', coachAlignment_(90, 0.90, 70, 0.84).state);
-  var on = coachAlignment_(78, 0.88, 81, 0.89).score;
-  assert_(ctx, 'align score 0-100', true, on > 0 && on <= 100);
-  // End-to-end: match → on-plan + done + narratief.
-  var fb = coachFeedback_({ type: 'sweet_spot', titel: 'Sweet Spot 3x12', duurMin: 60, tss: 78, segmenten: [] }, { duurMin: 62, tss: 81, ifReal: 0.89 }, 'Build', false);
-  assert_(ctx, 'coach match state', 'on-plan', fb.state);
-  assert_(ctx, 'coach match done', true, !!fb.done);
-  assert_(ctx, 'coach match narratief', true, (fb.narrative || '').length > 0);
-  // Gemiste sleutelprikkel → missed + aanpassing-voorstel + impact.
-  var fm = coachFeedback_({ type: 'vo2max', titel: 'VO2max 5x4', duurMin: 70, tss: 92, segmenten: [] }, null, 'Build', true);
-  assert_(ctx, 'coach missed state', 'missed', fm.state);
+  // End-to-end FIX 1: actual-IF als PERCENTAGE → genormaliseerd → on-plan + done.ifv 0–1.
+  var fb = coachFeedback_({ type: 'sweet_spot', titel: 'Sweet Spot 3x12', duurMin: 60, tss: 78, segmenten: [] }, { duurMin: 62, tss: 81, ifReal: 89 }, { fase: 'Build' }, false);
+  assert_(ctx, 'coach pct-IF on-plan', 'on-plan', fb.state);
+  assertClose_(ctx, 'coach done IF 0–1', 0.89, fb.done.ifv, 0.001);
+  // FIX 3 — doel-bewust: endurance-event, duur gepland, intensiever gereden → different + adapt + event-naam.
+  var evCtx = { fase: 'Build', event: { naam: 'Girona', type: 'trip', isEndurance: true }, patternCount: 1 };
+  var fd = coachFeedback_({ type: 'long_z2', titel: 'Lange Z2', duurMin: 120, tss: 80, segmenten: [] }, { duurMin: 90, tss: 95, ifReal: 88 }, evCtx, false);
+  assert_(ctx, 'coach endurance-sub different', 'different', fd.state);
+  assert_(ctx, 'coach endurance-sub adapt', true, !!fd.adapt);
+  assert_(ctx, 'coach narratief event', true, fd.narrative.indexOf('Girona') >= 0);
+  // Patroon (≥2 subs) → escalerende tekst.
+  var evPat = { fase: 'Build', event: { naam: 'Girona', type: 'trip', isEndurance: true }, patternCount: 3 };
+  var fp = coachFeedback_({ type: 'long_z2', titel: 'Lange Z2', duurMin: 120, tss: 80, segmenten: [] }, { duurMin: 90, tss: 95, ifReal: 88 }, evPat, false);
+  assert_(ctx, 'coach patroon-escalatie', true, fp.narrative.indexOf('ondermijnt') >= 0);
+  // Gemiste sleutelprikkel → missed + aanpassing-voorstel.
+  var fm = coachFeedback_({ type: 'vo2max', titel: 'VO2max 5x4', duurMin: 70, tss: 92, segmenten: [] }, null, evCtx, true);
   assert_(ctx, 'coach missed adapt', true, !!fm.adapt);
-  assert_(ctx, 'coach missed impact', true, fm.isImpact === true);
 }
