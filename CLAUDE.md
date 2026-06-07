@@ -233,9 +233,6 @@ Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
   door de `ReadinessCard` (Fase 1b) — `statusGraphicHtml` wordt niet meer
   gerenderd → legacy/dead CSS. Het oude "NIET wijzigen" is INGETROKKEN (zie
   HANDOFF); opruimen = future. (Er is GEEN `.status-deck`-class.)
-- **Dead-code (opruim-kandidaten, onschadelijk):** `ifMetric_` (wees na de
-  inline-metrics), de `.wk-sub .wk-metrics`-CSS-regel, `.chart-caption`-CSS, en
-  het ongebruikte `weight`-veld in de readiness-factors-payload.
 - **Geaccepteerde render-limiet:** de niveau-grafiek (`drawNiveauChart`) toont
   het actieve punt zónder stroke-rand — Google Charts kan dat niet; bewust zo.
 - **Multi-session ONDERSTEUND (v2b-B)**: per dag 1..N sessies via
@@ -253,6 +250,21 @@ Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
 - `doPost` (Telegram) moet ALTIJD HTTP 200 returnen (anders Telegram
   retry-loop); secret als `?s=` query-param want Apps Script geeft custom
   headers niet door aan doPost.
+- **Taper-prio-model** (Doel.gs — meet event-nabijheid VANAF VANDAAG, niet de
+  week-maandag). `eventFase_(events, refDate)` = de ENIGE bron voor de fase-mapping
+  → `{ fase, macroFase, hoofdEvent, taperEvent, taperVenster, dagenTot, wekenTot }`.
+  Constanten `A_TAPER_DAGEN=7` / `B_TAPER_DAGEN=3` / **C nooit**. `macroFase`
+  (Base ≥9wk / Build ≥5 / else Peak) = periodisering van 't A/trip-hoofdevent, LOS
+  van de taper. Taper-overlay: A/trip ≤7d → venster 7; anders dichtstbijzijnde B ≤3d
+  → venster 3; `fase = Recovery > Taper(taperEvent≠null) > macroFase`. Een near-B
+  drijft de taper maar NOOIT de macro. **Per-dag-gating in `assignWorkouts`** via
+  `taperCtx={datum,venster,isTrip}`: een dag tapert ALLEEN 0..venster dagen vóór 't
+  taper-event — anders (en post-event) normale toewijzing volgens de onderliggende
+  `macroFase` (die ook naar `buildWorkout` gaat; taper-workouts blijven type-gedreven).
+  `bepaalFaseVoorDatum_` kiest ref = vandaag voor de huidige week, anders de
+  week-maandag (historische voortgang-loop WebApp.gs + +1-planning blijven per
+  weekgrens meten). NB: een near-B zet `fase='Taper'` → de plan-card-kop leest "Taper"
+  terwijl `macroFase` de echte periode is (kaart-refinement = future).
 - **Trip-event key-type volgorde** (`keyIntensity`): Taper → Recovery →
   `climbTypeWorkout_` (Build/Peak) → trip (`long_z2`) → doel-tak. De trip-tak
   staat NOOIT vóór Recovery of climb.
