@@ -561,6 +561,8 @@
     } else {
       h += '<div class="card"><div class="muted">Geen training deze dag.</div></div>';
     }
+    // §102: Beschikbaarheid-knop per-dag, onder de dag-detail (opent de editor voor selectedDate).
+    h += '<button id="btn-avail" class="avail-open" onclick="openAvailEditor()">Beschikbaarheid aanpassen</button>';
     el.innerHTML = h;
   }
 
@@ -793,7 +795,6 @@
   function levelCardHtml(s) {
     if (s.niveau == null) return '<div class="rc-card muted">Geen niveau-data.</div>';
     var max = 50;
-    var pct = Math.max(0, Math.min(100, s.niveau / max * 100));
     var chip = s.niveauTier ? '<span class="lc-chip"><span class="lc-dot"></span>' + esc(s.niveauTier) + '</span>' : '';
     var wkg = (s.wkg != null) ? nl(s.wkg, 2) + ' W/kg' : '–';
     var d = niveauReeksDelta_();
@@ -801,15 +802,17 @@
       ? '<div class="lc-delta-line ' + (d > 0 ? 'lc-up' : (d < 0 ? 'lc-down' : '')) + '">' +
           (d >= 0 ? '+' : '') + nl(d, 1) + (d > 0 ? ' ↑' : (d < 0 ? ' ↓' : '')) + ' sinds ' + esc(s.beginLabel) + '</div>'
       : '';
-    var blok = (s.voortgangPct != null)
-      ? '<div class="lc-blok">' + nl(s.voortgangPct, 0) + '% van je blok behaald</div>'
+    // §2b/INTERACTIONS §194: de balk = BLOK-voortgang (niet niveau/50); niveau blijft het getal.
+    var blokPct = (s.voortgangPct != null) ? Math.max(0, Math.min(100, s.voortgangPct)) : null;
+    var blokBar = (blokPct != null)
+      ? '<div class="lc-bar"><div class="lc-bar-fill" style="width:' + blokPct.toFixed(0) + '%"></div></div>' +
+        '<div class="lc-blok">' + nl(s.voortgangPct, 0) + '% van je blok behaald</div>'
       : '<div class="lc-blok muted">blok net gestart</div>';
     return '<div class="rc-card">' +
       '<div class="lc-head"><div class="rc-overline">Niveau</div>' + chip + '</div>' +
       '<div class="lc-row"><div class="lc-num">' + Math.round(s.niveau) + '<span class="lc-max">/ ' + max + '</span></div></div>' +
       '<div class="lc-wkg">' + wkg + '</div>' +
-      '<div class="lc-bar"><div class="lc-bar-fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
-      deltaLine + blok +
+      blokBar + deltaLine +
     '</div>';
   }
 
