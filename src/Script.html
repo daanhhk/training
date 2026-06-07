@@ -62,7 +62,69 @@
 
   // Globale app-header: ISO-kalenderweek (client, pure date) + settings-stub.
   function isoWeek_(d) { d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); var dn = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - dn + 3); var f = new Date(Date.UTC(d.getUTCFullYear(), 0, 4)); return 1 + Math.round(((d - f) / 86400000 - 3 + ((f.getUTCDay() + 6) % 7)) / 7); }
-  function openSettings() { /* Fase 5 — Instellingen-drawer (nog niet gebouwd). No-op; knop blijft visueel actief. */ }
+  // ── Instellingen-drawer (Fase 1: profiel/trainingsprofiel/doel/koppel-status/meldingen) ──
+  var settingsSel = {};
+  var SET_DOEL_LABEL = { FTP: 'FTP/drempel', Conditie: 'Duurvermogen', VO2max: 'VO2max', Beklimmingen: 'Klimmen' };
+  function setWkg_() {
+    var f = Number(settingsSel.ftp) || 0, g = Number(settingsSel.gewicht) || 0;
+    return (f > 0 && g > 0) ? nl(f / g, 2) + ' W/kg' : '—';
+  }
+  function settingsSet(k, v) {
+    settingsSel[k] = v;
+    if (k === 'ftp' || k === 'gewicht') { var w = document.getElementById('set-wkg'); if (w) w.textContent = setWkg_(); }
+  }
+  function settingsSetBool(k, v) { settingsSel[k] = v; }
+  function settingsSetDoel(v) { settingsSel.doel = v; settingsRender_(); }
+  function settingsRender_() { var c = document.getElementById('overlay-content'); if (c) c.innerHTML = settingsDrawerHtml(); }
+  function setTgl_(k, on) {
+    return '<label class="tgl"><input type="checkbox"' + (on ? ' checked' : '') +
+      ' onchange="settingsSetBool(\'' + k + '\',this.checked)"><span class="tgl-track"></span><span class="tgl-thumb"></span></label>';
+  }
+  function settingsDrawerHtml() {
+    var s = settingsSel, ks = state.settings || {};
+    var doelTiles = (ks.doelOpties || []).map(function (d) {
+      return '<button type="button" class="set-tile' + (s.doel === d ? ' is-on' : '') + '" onclick="settingsSetDoel(\'' + d + '\')">' + esc(SET_DOEL_LABEL[d] || d) + '</button>';
+    }).join('');
+    var presetOpts = (ks.profielOpties || []).map(function (p) {
+      return '<option value="' + esc(p) + '"' + (s.profielPreset === p ? ' selected' : '') + '>' + esc(p) + '</option>';
+    }).join('');
+    return '<div class="set-head"><div class="set-title">Instellingen</div>' +
+        '<button type="button" class="set-close" data-overlay-close aria-label="Sluiten">✕</button></div>' +
+      '<div class="set-sec">Profiel</div>' +
+      '<div class="set-row"><span class="set-lbl">Naam</span><span class="set-ro">' + esc(ks.naam || '—') + '</span></div>' +
+      '<div class="set-row"><span class="set-lbl">FTP</span><span class="set-ctl"><input type="number" class="set-input" value="' + (s.ftp != null ? s.ftp : '') + '" oninput="settingsSet(\'ftp\',this.value)"><span class="set-unit">W</span></span></div>' +
+      '<div class="set-row"><span class="set-lbl">Gewicht</span><span class="set-ctl"><input type="number" step="0.1" class="set-input" value="' + (s.gewicht != null ? s.gewicht : '') + '" oninput="settingsSet(\'gewicht\',this.value)"><span class="set-unit">kg</span></span></div>' +
+      '<div class="set-row"><span class="set-lbl">W/kg</span><span class="set-ro" id="set-wkg">' + setWkg_() + '</span></div>' +
+      '<div class="set-row"><span class="set-lbl">FTP automatisch bijwerken</span>' + setTgl_('ftpAuto', s.ftpAuto === true) + '</div>' +
+      '<div class="set-sec">Trainingsprofiel</div>' +
+      '<div class="set-row"><span class="set-lbl">Volume-profiel</span><select class="set-select" onchange="settingsSet(\'profielPreset\',this.value)">' + presetOpts + '</select></div>' +
+      '<div class="set-sec">Doel &amp; blok</div>' +
+      '<div class="set-tiles">' + doelTiles + '</div>' +
+      '<div class="set-row"><span class="set-lbl">Startdatum blok</span><input type="date" class="set-input set-date" value="' + (s.doelStart || '') + '" onchange="settingsSet(\'doelStart\',this.value)"></div>' +
+      '<div class="set-row"><span class="set-lbl">Duur</span><span class="set-ctl"><input type="number" class="set-input" value="' + (s.doelDuur != null ? s.doelDuur : '') + '" oninput="settingsSet(\'doelDuur\',this.value)"><span class="set-unit">weken</span></span></div>' +
+      '<div class="set-sec">Koppelingen</div>' +
+      '<div class="set-row"><span class="set-lbl">intervals.icu</span><span class="set-badge' + (ks.gekoppeld ? ' is-on' : '') + '">' + (ks.gekoppeld ? 'Gekoppeld' : 'Niet gekoppeld') + '</span></div>' +
+      (ks.athleteId ? '<div class="set-row"><span class="set-lbl">Athlete-ID</span><span class="set-ro">' + esc(ks.athleteId) + '</span></div>' : '') +
+      '<div class="set-row"><span class="set-lbl">API-key</span><span class="set-ro">••••••••</span></div>' +
+      '<div class="set-row"><span class="set-lbl">Garmin</span><span class="set-ro">' + (ks.garminLastSync ? 'Gesynct · ' + esc(ks.garminLastSync) : 'Niet gesynct') + '</span></div>' +
+      '<div class="set-sec">Meldingen</div>' +
+      '<div class="set-row"><span class="set-lbl">Zondag-herinnering</span>' + setTgl_('sundayReminder', s.sundayReminder === true) + '</div>' +
+      '<button type="button" class="set-save" onclick="saveSettingsEditor()">Opslaan</button>';
+  }
+  function openSettings() {
+    var ks = state.settings || {};
+    settingsSel = { ftp: ks.ftp, gewicht: ks.gewicht, ftpAuto: ks.ftpAuto === true, profielPreset: ks.profielPreset,
+      doel: ks.doel, doelStart: ks.doelStart, doelDuur: ks.doelDuur, sundayReminder: ks.sundayReminder === true };
+    openDrawer({ variant: 'drawer', html: settingsDrawerHtml() });
+  }
+  function saveSettingsEditor() {
+    var btn = document.querySelector('.set-save');
+    if (btn) { btn.disabled = true; btn.textContent = 'Opslaan…'; }
+    google.script.run
+      .withSuccessHandler(function (s) { closeDrawer(); onState(s); setActStatus('✅ Instellingen opgeslagen'); })
+      .withFailureHandler(function (err) { if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } showError(err); })
+      .saveSettings(settingsSel);
+  }
 
   // ── Zone-bar SVG — schaalt ALTIJD naar 100% breedte; kleuren via zone-tokens
   //    (bucket → --zone-1…6) i.p.v. de server-hex. mini = compacte variant.

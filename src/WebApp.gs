@@ -663,6 +663,22 @@ function getDashboardState() {
       return { train: p.train === true, minuten: p.minuten || 0, dagtype: p.type || '', dagLabel: p.dag };
     }),
     availabilityPlus1: readAvailabilityPlus1_(ss),
+    settings: {
+      naam: 'Daan',
+      ftp: settings.ftp,
+      gewicht: loadSettingValue('gewicht'),
+      ftpAuto: loadSettingValue('ftp_auto_update') === true,
+      profielPreset: loadSettingValue('profiel_preset'),
+      profielOpties: PROFIEL_PRESET_OPTIONS,
+      doel: settings.doel,
+      doelOpties: DOEL_OPTIONS,
+      doelStart: settings.doelStart ? formatDate(settings.doelStart, 'yyyy-MM-dd') : null,
+      doelDuur: settings.doelDuur,
+      gekoppeld: !!settings.athleteId,
+      athleteId: settings.athleteId || null,
+      garminLastSync: getDocProp('last_sync', '') || null,
+      sundayReminder: getDocProp('sunday_reminder', '') === 'true'
+    },
     dagtypeOptions: DAGTYPE_OPTIONS,
     // Read-only spiegel van de fase-engine (bepaalFaseVoorDatum_ @353, hergebruikt) —
     // databron voor latere [#3] takeover-UX. Geen nieuwe afleiding, geen relabeling.
@@ -765,6 +781,46 @@ function saveAvailabilityPlus1(updates) {
   sh.getRange(3, 4, 7, 1).setValues(minCol);     // D3:D9 Minuten
   sh.getRange(3, 5, 7, 1).setValues(typeCol);    // E3:E9 Dagtype
   return getDashboardState();   // BEWUST geen avail_dirty: +1-edit raakt de huidige week niet
+}
+
+/**
+ * Instellingen-drawer Fase 1: web-write-pad. Schrijft elk meegegeven veld naar
+ * de Sheet-cel (readSettings leest de Sheet) ÉN de DocProp (loadSettingValue/
+ * persistence). GEEN API-key-write (security). Zondag-herinnering heeft geen
+ * Sheet-rij → DocProp 'sunday_reminder'. Returnt verse getDashboardState.
+ */
+function saveSettings(updates) {
+  updates = updates || {};
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(SETTINGS_SHEET);
+  function writeField(prop, row, value, kind) {
+    var docVal = (kind === 'date') ? formatDate(value, 'yyyy-MM-dd')
+               : (kind === 'bool') ? (value ? 'true' : 'false') : String(value);
+    setDocProp(prop, docVal);
+    if (sh && row) {
+      var cell = sh.getRange(row, 2);
+      if (kind === 'bool')      cell.setValue(value === true);
+      else if (kind === 'num')  cell.setValue(Number(value));
+      else if (kind === 'date') cell.setValue(value).setNumberFormat('dd-MM-yyyy');
+      else                      cell.setValue(String(value));
+    }
+  }
+  if (updates.ftp != null && !isNaN(Number(updates.ftp)))         writeField('ftp', 3, Number(updates.ftp), 'num');
+  if (updates.gewicht != null && !isNaN(Number(updates.gewicht))) writeField('gewicht', 42, Number(updates.gewicht), 'num');
+  if (updates.profielPreset != null && PROFIEL_PRESET_OPTIONS.indexOf(String(updates.profielPreset)) >= 0)
+    writeField('profiel_preset', 43, String(updates.profielPreset), 'str');
+  if (updates.doel != null && DOEL_OPTIONS.indexOf(String(updates.doel)) >= 0)
+    writeField('doel', 11, String(updates.doel), 'str');
+  if (updates.doelStart) {
+    var ds = new Date(String(updates.doelStart).slice(0, 10) + 'T00:00:00');
+    if (!isNaN(ds.getTime())) writeField('doel_start', 12, ds, 'date');
+  }
+  if (updates.doelDuur != null && !isNaN(Number(updates.doelDuur)))
+    writeField('doel_duur', 13, Math.max(1, Math.round(Number(updates.doelDuur))), 'num');
+  if (typeof updates.ftpAuto === 'boolean')        writeField('ftp_auto_update', 47, updates.ftpAuto, 'bool');
+  if (typeof updates.sundayReminder === 'boolean') setDocProp('sunday_reminder', updates.sundayReminder ? 'true' : 'false');
+  SpreadsheetApp.flush();
+  return getDashboardState();
 }
 
 /**
