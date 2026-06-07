@@ -71,7 +71,22 @@
   var EV_PRIO_CLASS = { A: 'ev-prio-a', B: 'ev-prio-b', C: 'ev-prio-c' };
   function evTodayISO_() { var d = new Date(); var m = d.getMonth() + 1, dd = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (dd < 10 ? '0' + dd : dd); }
   function eventSet(i, k, v) { if (eventsSel[i]) eventsSel[i][k] = v; }
-  function eventCycle(i) { if (eventsSel[i]) { eventsSel[i].prioriteit = EV_PRIO_NEXT[eventsSel[i].prioriteit] || 'C'; settingsRender_(); } }
+  // prio-cycle via DOM-update (geen full re-render → open Details-uitklap blijft open).
+  function eventCycle(i) {
+    if (!eventsSel[i]) return;
+    var np = EV_PRIO_NEXT[eventsSel[i].prioriteit] || 'C';
+    eventsSel[i].prioriteit = np;
+    var btn = document.querySelector('.ev-prio[data-evi="' + i + '"]');
+    if (btn) { btn.textContent = np; btn.className = 'ev-prio ' + (EV_PRIO_CLASS[np] || 'ev-prio-c'); }
+  }
+  var EV_KLIM_OPTS = [['lang', 'Lang'], ['kort', 'Kort'], ['gemengd', 'Gemengd'], ['vlak', 'Vlak']];
+  function eventSetType(i, val) {   // Type-segment via DOM-class-toggle (geen re-render)
+    if (!eventsSel[i]) return;
+    eventsSel[i].type = val;
+    document.querySelectorAll('.ev-seg-btn[data-evi="' + i + '"]').forEach(function (b) {
+      b.classList.toggle('is-on', b.getAttribute('data-evt') === val);
+    });
+  }
   function eventDel(i) { eventsSel.splice(i, 1); settingsRender_(); }
   function eventAdd() {
     if (eventsSel.length >= 10) return;
@@ -81,15 +96,32 @@
   function eventsSectionHtml_() {
     var rows = eventsSel.length ? eventsSel.map(function (e, i) {
       var pc = EV_PRIO_CLASS[e.prioriteit] || 'ev-prio-c';
+      var klimOpts = EV_KLIM_OPTS.map(function (o) {
+        return '<option value="' + o[0] + '"' + ((e.klimType || 'vlak') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join('');
+      var afst = (e.afstandKm != null && e.afstandKm !== '') ? e.afstandKm : '';
+      var hm = (e.hm != null && e.hm !== '') ? e.hm : '';
       return '<div class="ev-row">' +
         '<div class="ev-top">' +
           '<input type="text" class="ev-naam" value="' + esc(e.naam || '') + '" oninput="eventSet(' + i + ',\'naam\',this.value)" placeholder="Event-naam…">' +
           '<button type="button" class="ev-del" onclick="eventDel(' + i + ')" aria-label="Verwijder">✕</button>' +
         '</div>' +
         '<div class="ev-bot">' +
-          '<button type="button" class="ev-prio ' + pc + '" onclick="eventCycle(' + i + ')">' + esc(e.prioriteit || 'C') + '</button>' +
+          '<button type="button" class="ev-prio ' + pc + '" data-evi="' + i + '" onclick="eventCycle(' + i + ')">' + esc(e.prioriteit || 'C') + '</button>' +
           '<input type="date" class="ev-date" value="' + esc(e.datum || '') + '" onchange="eventSet(' + i + ',\'datum\',this.value)">' +
         '</div>' +
+        '<details class="ev-details"><summary>Details <span class="ev-chev">⌄</span></summary>' +
+          '<div class="ev-det">' +
+            '<div class="ev-det-row"><span class="ev-det-lbl">Type</span><div class="ev-seg">' +
+              '<button type="button" class="ev-seg-btn' + (e.type === 'trip' ? ' is-on' : '') + '" data-evi="' + i + '" data-evt="trip" onclick="eventSetType(' + i + ',\'trip\')">Trip</button>' +
+              '<button type="button" class="ev-seg-btn' + (e.type !== 'trip' ? ' is-on' : '') + '" data-evi="' + i + '" data-evt="race" onclick="eventSetType(' + i + ',\'race\')">Race</button>' +
+            '</div></div>' +
+            '<div class="ev-det-row"><span class="ev-det-lbl">Klim-type</span><select class="set-select" onchange="eventSet(' + i + ',\'klimType\',this.value)">' + klimOpts + '</select></div>' +
+            '<div class="ev-det-row"><span class="ev-det-lbl">Afstand</span><span class="ev-det-ctl"><input type="number" class="set-input" value="' + afst + '" oninput="eventSet(' + i + ',\'afstandKm\',this.value)"><span class="ev-unit">km</span></span></div>' +
+            '<div class="ev-det-row"><span class="ev-det-lbl">Hoogtemeters</span><span class="ev-det-ctl"><input type="number" class="set-input" value="' + hm + '" oninput="eventSet(' + i + ',\'hm\',this.value)"><span class="ev-unit">hm</span></span></div>' +
+            '<div class="ev-det-row"><span class="ev-det-lbl">Notitie</span><input type="text" class="ev-note" value="' + esc(e.notitie || '') + '" oninput="eventSet(' + i + ',\'notitie\',this.value)"></div>' +
+          '</div>' +
+        '</details>' +
       '</div>';
     }).join('') : '<div class="ev-empty">Nog geen events</div>';
     return '<div class="set-sec">Events</div>' + rows +
