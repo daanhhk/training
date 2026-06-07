@@ -107,7 +107,13 @@ function generateProposal() {
   var isTripEvent = !!(macro.hoofdEvent && macro.hoofdEvent.type === 'trip');
   var eventDate = macro.eventDate || (macro.hoofdEvent && macro.hoofdEvent.datum) || null;
   var recentHard = recentHardDayDate_(ss);
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.fase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, eventDate);
+  // Taper-overlay (Deel 2): per-dag-gating rond het taper-event (A/trip 7 d of
+  // near-B 3 d). macro.macroFase = de onderliggende periodisering (nooit Taper),
+  // zodat niet-taper-dagen in een taper-week normaal worden toegewezen.
+  var taperCtx = macro.taperEventDate
+    ? { datum: macro.taperEventDate, venster: macro.taperVenster, isTrip: !!macro.taperIsTrip }
+    : null;
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.macroFase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, eventDate, taperCtx);
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
@@ -155,7 +161,7 @@ function generateProposal() {
       // Asymmetrische pendel: vroege sessie(s) geforceerd Z2, laatste = engine-keuze
       // (d.voorgesteldType). Niet-pendel: altijd d.voorgesteldType (1 sessie).
       var sessieType = (isPendel && si < sessieCount - 1) ? 'pendel_z2' : d.voorgesteldType;
-      var wo = buildWorkout(sessieType, sessieMin, settings, mesoWeek, macro.fase, eventCtx, d.dagIdx);
+      var wo = buildWorkout(sessieType, sessieMin, settings, mesoWeek, macro.macroFase, eventCtx, d.dagIdx);
       if (wo) { sessions.push(wo); sessieTypes.push(sessieType); }
     }
     if (!sessions.length) return;
@@ -683,9 +689,11 @@ function redenZoneLabel_(b) {
  * @param wellness  resultaat van getWellnessSignal(); demote/recovery
  *                  signal overschrijft de assignment cascade.
  */
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate, taperCtx) {
   var doel = settings.doel;
-  var isTaper    = macroFase === 'Taper';
+  // Taper is een per-dag-overlay (Deel 2): taperCtx = { datum, venster, isTrip }
+  // of null. macroFase is hier ALTIJD de onderliggende fase (nooit 'Taper').
+  var taperActief = !!(taperCtx && taperCtx.datum && taperCtx.venster > 0);
   var isEventRecovery = macroFase === 'Recovery';
   var isMesoRecovery  = mesoWeek === 4;
   var isRecovery = isMesoRecovery;
@@ -696,7 +704,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   var lastHardDate = recentHardDate ? stripTime_(recentHardDate) : null;
   // Debt-weging alleen in opbouwfasen (niet tijdens taper/recovery —
   // dan geen compensatie-intensiteit forceren; herstel respecteren).
-  var debtActief = !!debt && !isTaper && !isEventRecovery && !isRecovery;
+  var debtActief = !!debt && !taperActief && !isEventRecovery && !isRecovery;
   var debtWerk = debtActief ? { low: debt.low, high: debt.high, anaerobic: debt.anaerobic } : null;
 
   // Sorteer op dagIdx zodat ma→zo wordt verwerkt
@@ -707,18 +715,22 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
     var reden = '';        // v2c: primaire reden bij het FINALE type
     var debtForced = false; // debt-geforceerde compensatie → exempt van avoid-consecutive-hard
 
+    // Per-dag taper-gating: een dag tapert ALLEEN als hij 0..venster dagen vóór
+    // het taper-event ligt; anders (ook post-event) → normale toewijzing.
+    var dToTaper = (taperActief && d.datum)
+      ? Math.round((stripTime_(taperCtx.datum).getTime() - stripTime_(d.datum).getTime()) / 86400000)
+      : null;
+    var dayTapers = taperActief && dToTaper != null && dToTaper >= 0 && dToTaper <= taperCtx.venster;
+
     if (isEventRecovery) {
       // Recovery-week na A-race: alles easy Z2.
       type = 'recovery';
       reden = 'Herstel — herstelweek na A-race';
-    } else if (isTaper) {
-      if (isTripEvent) {
+    } else if (dayTapers) {
+      if (taperCtx.isTrip) {
         // Tour-taper: meerdaagse rittenreis vraagt durability, geen race-snap.
         // Endurance-volume vasthouden; alleen de laatste 2 dagen kort + soepel.
-        var dToEvent = (eventDate && d.datum)
-          ? Math.round((stripTime_(eventDate).getTime() - stripTime_(d.datum).getTime()) / 86400000)
-          : null;
-        var isLaatste2 = (dToEvent != null && dToEvent <= 2);
+        var isLaatste2 = (dToTaper <= 2);
         type = isLaatste2 ? 'taper_z2_kort' : 'tour_taper_z2';
         reden = isLaatste2 ? 'Korte taper-rit — vers worden voor de trip'
                            : 'Taper-duurrit — durability vasthouden';

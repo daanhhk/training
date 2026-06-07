@@ -7,9 +7,12 @@
 
 var DOEL_SHEET = 'Doel';
 
-// Taper-venster voor een A-event/trip: ≤ dit aantal dagen tot het event → Taper.
-// Gemeten VANAF VANDAAG (niet vanaf de week-maandag) — zie eventFase_.
+// Taper-venster (dagen tot het event, gemeten VANAF VANDAAG — zie eventFase_):
+//   A-event/trip ≤ 7 d → volle taper-week (macro = Taper).
+//   B-event      ≤ 3 d → mini-taper (alleen die laatste dagen; macro blijft A/trip).
+//   C-event             → nooit taperen.
 var A_TAPER_DAGEN = 7;
+var B_TAPER_DAGEN = 3;
 
 var DOEL_FOCUS = {
   FTP: {
@@ -205,13 +208,19 @@ function pickMainEvent_(events, fromDate) {
  * Meet ALLES vanaf refDate (= vandaag voor de huidige week; zie
  * bepaalFaseVoorDatum_ voor de ref-keuze), NIET vanaf de week-maandag.
  *
+ * macroFase = de periodisering van het A/trip-hoofdevent (Base/Build/Peak),
+ * LOS van een taper. taperEvent/taperVenster = de per-dag-taper-overlay:
  *   Recovery: A-RACE die deze week (maandag..refDate) al plaatsvond.
- *   Taper:    hoofd-event (A of trip) binnen A_TAPER_DAGEN (=7) dagen.
- *   anders op wekenTot:  >= 9 Base / >= 5 Build / else Peak.
+ *   Taper:    A/trip ≤ A_TAPER_DAGEN (7) d  → taperEvent = hoofd, venster 7;
+ *             anders dichtstbijzijnde B met 0..B_TAPER_DAGEN (3) d → venster 3;
+ *             C telt nooit. Een near-B drijft de taper maar NIET de macro.
+ *   macroFase op wekenTot:  >= 9 Base / >= 5 Build / else Peak.
+ *   fase = Recovery > Taper (taperEvent≠null) > macroFase.
  *
  * @param events  array uit getAllEvents_() (Date-datum, prioriteit, type, naam)
  * @param refDate Date — referentie-datum (meestal vandaag)
- * @return { fase, hoofdEvent, dagenTot, wekenTot } of null (geen hoofd-event)
+ * @return { fase, macroFase, hoofdEvent, taperEvent, taperVenster, dagenTot,
+ *           wekenTot } of null (geen A/trip-hoofdevent)
  */
 function eventFase_(events, refDate) {
   var ref = stripTime_(refDate);
@@ -223,10 +232,12 @@ function eventFase_(events, refDate) {
     var ed = stripTime_(e.datum);
     if (e.prioriteit === 'A' && e.type === 'race' &&
         ed.getTime() >= wkMon.getTime() && ed.getTime() <= ref.getTime()) {
-      return { fase: 'Recovery', hoofdEvent: e, dagenTot: 0, wekenTot: 0 };
+      return { fase: 'Recovery', macroFase: 'Recovery', hoofdEvent: e,
+               taperEvent: null, taperVenster: 0, dagenTot: 0, wekenTot: 0 };
     }
   }
 
+  // Hoofd-event = eerstvolgende A-event of trip → drijft de macro.
   var hoofd = pickMainEvent_(events, ref);
   if (!hoofd) return null;
 
@@ -234,13 +245,33 @@ function eventFase_(events, refDate) {
   var dagenTot = Math.round((hed.getTime() - ref.getTime()) / 86400000);
   var wekenTot = Math.ceil(dagenTot / 7);
 
-  var fase;
-  if (dagenTot <= A_TAPER_DAGEN)   fase = 'Taper';
-  else if (wekenTot >= 9)          fase = 'Base';
-  else if (wekenTot >= 5)          fase = 'Build';
-  else                             fase = 'Peak';
+  var macroFase;
+  if (wekenTot >= 9)      macroFase = 'Base';
+  else if (wekenTot >= 5) macroFase = 'Build';
+  else                    macroFase = 'Peak';
 
-  return { fase: fase, hoofdEvent: hoofd, dagenTot: dagenTot, wekenTot: wekenTot };
+  // Taper-overlay: A/trip-venster (7) gaat vóór een near-B-venster (3); C nooit.
+  var taperEvent = null, taperVenster = 0;
+  if (dagenTot <= A_TAPER_DAGEN) {
+    taperEvent = hoofd; taperVenster = A_TAPER_DAGEN;
+  } else {
+    var besteB = null, besteBd = null;
+    for (var j = 0; j < events.length; j++) {
+      var b = events[j];
+      if (b.prioriteit !== 'B') continue;
+      var bd = Math.round((stripTime_(b.datum).getTime() - ref.getTime()) / 86400000);
+      if (bd >= 0 && bd <= B_TAPER_DAGEN && (besteBd === null || bd < besteBd)) {
+        besteB = b; besteBd = bd;
+      }
+    }
+    if (besteB) { taperEvent = besteB; taperVenster = B_TAPER_DAGEN; }
+  }
+
+  var fase = taperEvent ? 'Taper' : macroFase;
+
+  return { fase: fase, macroFase: macroFase, hoofdEvent: hoofd,
+           taperEvent: taperEvent, taperVenster: taperVenster,
+           dagenTot: dagenTot, wekenTot: wekenTot };
 }
 
 /**
@@ -249,8 +280,9 @@ function eventFase_(events, refDate) {
  * mapping aan eventFase_. Geen hoofd-event → vaste mesocyclus (fallback).
  *
  * @param weekStart Date — maandag van de te plannen week
- * @return { fase, week, wekenTotEvent, dagenTotEvent, isTaper, isRecovery,
- *           isTestWeek, eventDriven, hoofdEvent, eventName, eventDate }
+ * @return { fase, week, wekenTotEvent, dagenTotEvent, macroFase, taperEventDate,
+ *           taperVenster, taperIsTrip, isTaper, isRecovery, isTestWeek,
+ *           eventDriven, hoofdEvent, eventName, eventDate }
  */
 /**
  * Fase 1a: plan-card model (PeriodTimeline) voor de Schema-top. Puur afgeleid
@@ -315,6 +347,7 @@ function bepaalFaseVoorDatum_(weekStart) {
     var m = computeMacroPhase(s.doelStart, new Date());
     var base = {
       fase: m.fase, week: m.week, wekenTotEvent: null, dagenTotEvent: null,
+      macroFase: m.fase, taperEventDate: null, taperVenster: 0, taperIsTrip: false,
       isTaper: false, isRecovery: false, isTestWeek: m.isTestWeek,
       eventDriven: false, hoofdEvent: null, eventName: null, eventDate: null
     };
@@ -336,6 +369,7 @@ function bepaalFaseVoorDatum_(weekStart) {
   if (ef.fase === 'Recovery') {
     return {
       fase: 'Recovery', week: null, wekenTotEvent: 0, dagenTotEvent: 0,
+      macroFase: 'Recovery', taperEventDate: null, taperVenster: 0, taperIsTrip: false,
       isTaper: false, isRecovery: true, isTestWeek: false,
       eventDriven: true, hoofdEvent: ef.hoofdEvent,
       eventName: ef.hoofdEvent.naam, eventDate: ef.hoofdEvent.datum
@@ -347,6 +381,10 @@ function bepaalFaseVoorDatum_(weekStart) {
     week: null,
     wekenTotEvent: ef.wekenTot,
     dagenTotEvent: ef.dagenTot,
+    macroFase: ef.macroFase,
+    taperEventDate: ef.taperEvent ? ef.taperEvent.datum : null,
+    taperVenster: ef.taperVenster,
+    taperIsTrip: ef.taperEvent ? ef.taperEvent.type === 'trip' : false,
     isTaper: ef.fase === 'Taper',
     isRecovery: false,
     isTestWeek: false,

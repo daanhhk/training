@@ -115,13 +115,16 @@ function testEventFase_(ctx) {
   }
   var woe = new Date(2026, 5, 10);   // wo 10 jun 2026 (week-maandag = ma 8 jun)
 
-  // A-event op exact A_TAPER_DAGEN (7) dagen → Taper; aftelling vanaf vandaag.
+  // A-event op exact A_TAPER_DAGEN (7) dagen → Taper (venster 7); vanaf vandaag.
   var t7 = eventFase_([ev(2026, 5, 17, 'A', 'race')], woe);
   assert_(ctx, 'eventFase A@7d fase', 'Taper', t7.fase);
   assert_(ctx, 'eventFase A@7d dagen', 7, t7.dagenTot);
+  assert_(ctx, 'eventFase A@7d venster', 7, t7.taperVenster);
 
-  // A-event op 8 dagen → net buiten taper → Peak (wekenTot = 2).
-  assert_(ctx, 'eventFase A@8d fase', 'Peak', eventFase_([ev(2026, 5, 18, 'A', 'race')], woe).fase);
+  // A-event op 8 dagen → net buiten taper → Peak (wekenTot = 2), geen taper.
+  var t8 = eventFase_([ev(2026, 5, 18, 'A', 'race')], woe);
+  assert_(ctx, 'eventFase A@8d fase', 'Peak', t8.fase);
+  assert_(ctx, 'eventFase A@8d venster', 0, t8.taperVenster);
 
   // Ver A-event (≥ 9 wkn) → Base.
   assert_(ctx, 'eventFase verA fase', 'Base', eventFase_([ev(2026, 7, 15, 'A', 'race')], woe).fase);
@@ -132,6 +135,21 @@ function testEventFase_(ctx) {
 
   // Geen hoofd-event → null (val terug op vaste meso in bepaalFaseVoorDatum_).
   assert_(ctx, 'eventFase geen event', null, eventFase_([], woe));
+
+  // ── Deel 2: B-mini-taper. A staat ruim weg (macro = Base); B/C dichtbij. ──
+  var Aver = ev(2026, 7, 15, 'A', 'race');   // ~9+ wkn → macro Base
+
+  // B op 3 dagen → Taper (venster 3); B drijft de taper, macro blijft Base.
+  var b3 = eventFase_([Aver, ev(2026, 5, 13, 'B', 'race')], woe);
+  assert_(ctx, 'eventFase B@3d fase', 'Taper', b3.fase);
+  assert_(ctx, 'eventFase B@3d venster', 3, b3.taperVenster);
+  assert_(ctx, 'eventFase B@3d macro', 'Base', b3.macroFase);
+
+  // B op 4 dagen → buiten B-venster → geen taper → macro Base.
+  assert_(ctx, 'eventFase B@4d fase', 'Base', eventFase_([Aver, ev(2026, 5, 14, 'B', 'race')], woe).fase);
+
+  // C op 1 dag → C telt nooit → geen taper → macro Base.
+  assert_(ctx, 'eventFase C@1d fase', 'Base', eventFase_([Aver, ev(2026, 5, 11, 'C', 'race')], woe).fase);
 }
 
 // ── getReadinessScore_ (factor-subs/dots puur; band via consistentie) ──
