@@ -662,6 +662,7 @@ function getDashboardState() {
     availability: planner.map(function (p) {
       return { train: p.train === true, minuten: p.minuten || 0, dagtype: p.type || '', dagLabel: p.dag };
     }),
+    availabilityPlus1: readAvailabilityPlus1_(ss),
     dagtypeOptions: DAGTYPE_OPTIONS,
     // Read-only spiegel van de fase-engine (bepaalFaseVoorDatum_ @353, hergebruikt) —
     // databron voor latere [#3] takeover-UX. Geen nieuwe afleiding, geen relabeling.
@@ -713,6 +714,57 @@ function saveAvailability(updates) {
   sh.getRange(3, 5, 7, 1).setValues(typeCol);    // E3:E9 Dagtype
   setDocProp('avail_dirty', '1');   // pass 2: plan verouderd t.o.v. nieuwe beschikbaarheid → stale-banner
   return getDashboardState();
+}
+
+/**
+ * Fix (b): lees de Weekplanner +1-tab als 7-rij-array (zelfde vorm als
+ * state.availability). Blanco/afwezig → defaults (rust). Read-only.
+ */
+function readAvailabilityPlus1_(ss) {
+  var sh = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
+  var data = (sh && plannerHasData_(sh)) ? sh.getRange(3, 1, 7, 8).getValues() : null;
+  var rows = [];
+  for (var i = 0; i < 7; i++) {
+    var d = data ? data[i] : null;
+    rows.push({
+      train: d ? (d[0] === true) : false,
+      minuten: d ? (Number(d[3]) || 0) : 0,
+      dagtype: d ? String(d[4] || '') : '',
+      dagLabel: DAGEN_NL[i]
+    });
+  }
+  return rows;
+}
+
+/**
+ * Fix (b): schrijf beschikbaarheid naar de Weekplanner +1-tab (volgende week).
+ * Spiegelt saveAvailability, maar: (a) ensureCurrentWeekPlus1 EERST (web-context:
+ * onOpen draait niet, +1-datums moeten bestaan; mid-week re-blankt 't niet), en
+ * (b) GEEN avail_dirty (een +1-edit maakt de HUIDIGE week niet verouderd).
+ */
+function saveAvailabilityPlus1(updates) {
+  var ss = SpreadsheetApp.getActive();
+  try { ensureCurrentWeekPlus1(ss); }
+  catch (e) { console.warn('saveAvailabilityPlus1 ensure: ' + (e && e.message ? e.message : e)); }
+  var sh = ss.getSheetByName(WEEKPLANNER_PLUS1_SHEET);
+  if (!sh) throw new Error('Tab "Weekplanner +1" ontbreekt.');
+  updates = updates || [];
+  var trainCol = [], minCol = [], typeCol = [];
+  for (var i = 0; i < 7; i++) {
+    var u = updates[i] || {};
+    var dt = String(u.dagtype || '');
+    if (DAGTYPE_OPTIONS.indexOf(dt) < 0) dt = '';
+    var min = Number(u.minuten);
+    if (isNaN(min) || min < 0) min = 0;
+    if (min > 600) min = 600;
+    trainCol.push([u.train === true]);
+    minCol.push([min]);
+    typeCol.push([dt]);
+  }
+  sh.getRange(3, 1, 7, 1).setValues(trainCol);   // A3:A9 Train?
+  sh.getRange(3, 4, 7, 1).setValues(minCol);     // D3:D9 Minuten
+  sh.getRange(3, 5, 7, 1).setValues(typeCol);    // E3:E9 Dagtype
+  return getDashboardState();   // BEWUST geen avail_dirty: +1-edit raakt de huidige week niet
 }
 
 /**

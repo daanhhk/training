@@ -452,8 +452,9 @@
   // muteert client-side één slot. Dagtype (E) afgeleid (F-beschikbaarheid §3):
   // pendel→'pendel', anders Za/Zo→'weekend', anders 'vrij'; nooit 'recovery'.
   var AVAIL_MIN = 30, AVAIL_MAX = 360, AVAIL_STEP = 15;
-  var availScope = 'dag';     // 'dag' | 'week'
-  var availSel = [];          // werk-kopie van state.availability tijdens bewerken
+  var availScope = 'dag';          // 'dag' | 'week' | 'volgende'
+  var availSel = [];               // werk-kopie van de beschikbaarheid tijdens bewerken
+  var availLoadedWeek = 'current'; // 'current' | 'volgende' — welke week in availSel zit
 
   function availDayIdx_() {   // weekdag van de geselecteerde dag → slot 0..6 (Ma..Zo)
     var s = String(selectedDate || '').slice(0, 10);
@@ -484,10 +485,11 @@
   function availSheetHtml() {
     var seg = '<div class="av-seg">' +
       '<button type="button" class="av-seg-btn' + (availScope === 'dag' ? ' is-on' : '') + '" onclick="availSetScope(\'dag\')">Alleen deze dag</button>' +
-      '<button type="button" class="av-seg-btn' + (availScope === 'week' ? ' is-on' : '') + '" onclick="availSetScope(\'week\')">Hele week</button>' +
+      '<button type="button" class="av-seg-btn' + (availScope === 'week' ? ' is-on' : '') + '" onclick="availSetScope(\'week\')">Deze week</button>' +
+      '<button type="button" class="av-seg-btn' + (availScope === 'volgende' ? ' is-on' : '') + '" onclick="availSetScope(\'volgende\')">Volgende week</button>' +
     '</div>';
     var body;
-    if (availScope === 'week') {
+    if (availScope === 'week' || availScope === 'volgende') {
       body = availSel.map(function (d, i) { return availDayControls_(i, d); }).join('');
     } else {
       var idx = availDayIdx_();
@@ -502,14 +504,24 @@
     var c = document.getElementById('overlay-content');
     if (c) c.innerHTML = availSheetHtml();
   }
-  function openAvailEditor() {
-    availSel = (state.availability || []).map(function (d) {
+  function availLoad_(week) {   // laad availSel uit de juiste week (current = state.availability, volgende = +1)
+    var src = (week === 'volgende') ? (state.availabilityPlus1 || []) : (state.availability || []);
+    availSel = src.map(function (d) {
       return { train: !!d.train, minuten: Number(d.minuten) || 0, pendel: (d.dagtype === 'pendel'), dagLabel: d.dagLabel };
     });
+    availLoadedWeek = week;
+  }
+  function openAvailEditor() {
     availScope = 'dag';
+    availLoad_('current');
     openDrawer({ variant: 'sheet', html: availSheetHtml() });
   }
-  function availSetScope(scope) { availScope = scope; availRender_(); }
+  function availSetScope(scope) {
+    var w = (scope === 'volgende') ? 'volgende' : 'current';
+    if (w !== availLoadedWeek) availLoad_(w);   // herlaad enkel bij week-wissel (behoud edits binnen dezelfde week)
+    availScope = scope;
+    availRender_();
+  }
   function availSetTrain(idx, on) { if (availSel[idx]) { availSel[idx].train = on; availRender_(); } }
   function availSetPendel(idx, on) { if (availSel[idx]) availSel[idx].pendel = on; }
   function availSetMin(idx, v) {
@@ -518,16 +530,17 @@
     if (lbl) lbl.textContent = (Number(v) || 0) + ' min';
   }
   function saveAvailEditor() {
+    var plus1 = (availScope === 'volgende');
     var updates = availSel.map(function (d, i) {
       var dagtype = d.pendel ? 'pendel' : ((i === 5 || i === 6) ? 'weekend' : 'vrij');
       return { train: !!d.train, minuten: availMins_(d), dagtype: dagtype };
     });
     var btn = document.querySelector('.av-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Opslaan…'; }
-    google.script.run
-      .withSuccessHandler(function (s) { closeDrawer(); onState(s); })
-      .withFailureHandler(function (err) { if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } showError(err); })
-      .saveAvailability(updates);
+    var runner = google.script.run
+      .withSuccessHandler(function (s) { closeDrawer(); onState(s); if (plus1) setActStatus('✅ Volgende week opgeslagen'); })
+      .withFailureHandler(function (err) { if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; } showError(err); });
+    if (plus1) runner.saveAvailabilityPlus1(updates); else runner.saveAvailability(updates);
   }
 
   function renderDagDetail() {
