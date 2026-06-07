@@ -167,11 +167,22 @@
     }).join('');
     return '<div class="bloklist">' + rows + '</div>';
   }
+  // Optie D: blok-lijst uit de server-structuur (label · duur · doel-watt; = ZWO/Garmin).
+  function blokLijstStruct_(struct) {
+    var rows = struct.map(function (r) {
+      return '<div class="blok-row"><span class="blok-zone">' + esc(r[0]) + '</span>' +
+        '<span class="blok-min">' + esc(r[1]) + ' · ' + esc(r[2]) + '</span></div>';
+    }).join('');
+    return '<div class="bloklist">' + rows + '</div>';
+  }
   // ZoneBar + ZoneLegend (klikbaar) → klapt de Blokstructuur uit/in (INTERACTIONS §1d).
-  function zoneBlock_(segs) {
-    var n = (segs && segs.length) ? segs.length : 0;
+  // Lijst + teller uit structuur (watt); valt terug op segmenten als structuur ontbreekt.
+  function zoneBlock_(segs, struct) {
+    var useStruct = !!(struct && struct.length);
+    var n = useStruct ? struct.length : ((segs && segs.length) ? segs.length : 0);
+    var lijst = useStruct ? blokLijstStruct_(struct) : blokLijst_(segs);
     return '<details class="wk-blocks"><summary>' + zoneBar(segs) + zoneLegend_(segs) +
-      '<div class="wk-blokhint">Blokstructuur · ' + n + ' blok' + (n === 1 ? '' : 'ken') + ' <span class="wk-chev">⌄</span></div></summary>' + blokLijst_(segs) + '</details>';
+      '<div class="wk-blokhint">Blokstructuur · ' + n + ' blok' + (n === 1 ? '' : 'ken') + ' <span class="wk-chev">⌄</span></div></summary>' + lijst + '</details>';
   }
   // IF-proxy uit TSS + duur: IF = √(TSS / (uur × 100)). Client-display, geen server-calc.
   function ifProxy_(tss, durMin) {
@@ -211,7 +222,7 @@
       }).join('');
       return '<div class="wk-card">' + ol + name + subs + wkWhy_(v) + '</div>';
     }
-    return '<div class="wk-card">' + ol + name + zoneBlock_(v.segmenten) +
+    return '<div class="wk-card">' + ol + name + zoneBlock_(v.segmenten, v.structuur) +
       inlineMetrics_(v.duurMin, v.tss) +
       (v.reden ? '<div class="wk-note">' + esc(v.reden) + '</div>' : '') +
       wkWhy_(v) + '</div>';

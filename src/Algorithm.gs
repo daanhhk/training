@@ -158,13 +158,14 @@ function generateProposal() {
     // totaalMin/tss/intent = som, blokken/zones samengevoegd) + sessies[] forward-compat.
     var sumMin = 0, sumTss = 0;
     var aggIntent = { low: 0, high: 0, anaerobic: 0 };
-    var aggBlok = [], zoneSet = {};
+    var aggBlok = [], zoneSet = {}, aggStruct = [];
     sessions.forEach(function (s) {
       sumMin += s.totaalMin || 0;
       sumTss += s.tss || 0;
       var it = ensureIntent_(s);
       ['low', 'high', 'anaerobic'].forEach(function (b) { aggIntent[b] += (it[b] || 0); });
       (s.blokken || []).forEach(function (b) { aggBlok.push(b); });
+      (s.structuur || []).forEach(function (r) { aggStruct.push(r); });
       (s.zones || []).forEach(function (z) { zoneSet[z] = true; });
     });
 
@@ -183,6 +184,7 @@ function generateProposal() {
       zones: Object.keys(zoneSet),
       intent: aggIntent,
       blokken: aggBlok.length ? aggBlok : null,
+      structuur: aggStruct.length ? aggStruct : null,
       tss: Math.round(sumTss),
       minuten: Math.round(sumMin),
       reden: d.reden || '',   // v2c: per-dag rationale (leeg voor voltooid/missed)

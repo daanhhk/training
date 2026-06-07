@@ -304,6 +304,7 @@ function dashDayCard_(dISO, wpEntry, actual, rpe) {
       duurMin: wpEntry.minuten || 0,
       tss: wpEntry.tss || 0,
       segmenten: segs,
+      structuur: wpEntry.structuur || null,   // optie D: per-blok label/duur/doel-watt (= ZWO)
       // v2c: rationale alleen tonen voor (nog) niet-gefietste dagen.
       reden: actual ? '' : (wpEntry.reden || '')
     };
