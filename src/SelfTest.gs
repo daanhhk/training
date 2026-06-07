@@ -32,6 +32,7 @@ function runSelfTest() {
   testTrainingLibrary_(ctx);
   testDayOverride_(ctx);
   testCoach_(ctx);
+  testCoachAdaptatie_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -296,4 +297,32 @@ function testCoach_(ctx) {
   // Gemiste sleutelprikkel → missed + aanpassing-voorstel.
   var fm = coachFeedback_({ type: 'vo2max', titel: 'VO2max 5x4', duurMin: 70, tss: 92, segmenten: [] }, null, evCtx, true);
   assert_(ctx, 'coach missed adapt', true, !!fm.adapt);
+}
+
+// ── coachAdaptatie_ (puur) — make-up-payload deterministisch + GELDIGE variant ──
+function testCoachAdaptatie_(ctx) {
+  var settings = { ftp: 250, lthr: 160, doel: 'FTP', doelStart: new Date(2026, 0, 5) };
+  var lib = getTrainingLibrary_(settings);
+  function inLib(wt, vid) {
+    for (var i = 0; i < lib.length; i++) if (lib[i].type === wt) {
+      for (var j = 0; j < lib[i].variants.length; j++) if (lib[i].variants[j].variantId === vid) return true;
+    }
+    return false;
+  }
+  // (i) afgeweken intensiteit-substitutie (gepland duur) → ingekorte long_z2-make-up.
+  var aDuur = coachAdaptatie_({ intent: 'duur', duurMin: 120 }, lib, '2026-06-12', 'vr 12 jun', '2026-06-07');
+  assert_(ctx, 'adapt duur type', 'library', aDuur.type);
+  assert_(ctx, 'adapt duur workoutType', 'long_z2', aDuur.workoutType);
+  assert_(ctx, 'adapt duur variant geldig', true, !!aDuur.variantId && inLib(aDuur.workoutType, aDuur.variantId));
+  assert_(ctx, 'adapt duur ingekort', true, aDuur.durMin > 0 && aDuur.durMin <= 120);
+  assert_(ctx, 'adapt duur dISO', '2026-06-12', aDuur.dISO);
+  assert_(ctx, 'adapt duur from', '2026-06-07', aDuur.from);
+  // (ii) gemiste sleutelprikkel (vo2) → ingekorte vo2max-make-up, geldige variant.
+  var aVo2 = coachAdaptatie_({ intent: 'vo2', duurMin: 70 }, lib, '2026-06-10', 'di 10 jun', '2026-06-06');
+  assert_(ctx, 'adapt vo2 workoutType', 'vo2max', aVo2.workoutType);
+  assert_(ctx, 'adapt vo2 variant geldig', true, inLib(aVo2.workoutType, aVo2.variantId));
+  assert_(ctx, 'adapt vo2 durMin>0', true, aVo2.durMin > 0);
+  // (iii) null: geen target / intent zonder deterministische make-up.
+  assert_(ctx, 'adapt geen target', null, coachAdaptatie_({ intent: 'duur', duurMin: 120 }, lib, null, '', '2026-06-07'));
+  assert_(ctx, 'adapt vrij null', null, coachAdaptatie_({ intent: 'vrij', duurMin: 90 }, lib, '2026-06-12', 'vr', '2026-06-07'));
 }

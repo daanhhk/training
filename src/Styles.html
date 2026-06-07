@@ -235,6 +235,12 @@
   .gd-niet { flex: 0 0 auto; font-size: var(--fs-label); color: var(--text-muted); }
   .gd-reasons { margin-bottom: var(--s-2); }
   .disp-btn.is-on { border-color: var(--accent); color: var(--accent); }
+  /* Adaptatie-executie-knop (NIEUW — niet in het design; --btn-primary-* interim) */
+  .coach-adapt-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; margin-top: var(--s-3); padding: 9px var(--s-3); border: none; border-radius: var(--btn-radius); background: var(--btn-primary-bg); color: var(--btn-primary-text); font-family: var(--font-sans); cursor: pointer; }
+  .coach-adapt-btn:disabled { opacity: 0.6; cursor: default; }
+  .coach-adapt-main { font-size: var(--fs-label); font-weight: 600; }
+  .coach-adapt-sub2 { font-size: var(--fs-caption); font-weight: var(--fw-caption); opacity: 0.85; }
+  .coach-adapt-done { margin-top: var(--s-3); text-align: center; font-size: var(--fs-label); font-weight: 600; color: var(--align-on-plan); }
   .lc-chip { display: inline-flex; align-items: center; gap: 6px; }
   .lc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .lc-delta-line { font-family: var(--font-num); font-size: var(--fs-num-sm); font-weight: var(--fw-num-sm); margin-top: 8px; }

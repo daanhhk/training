@@ -192,7 +192,7 @@ function coachFeedback_(planned, actual, ctx, isMissed) {
   var isKey = !!COACH_KEY_INTENTS_[plIntent];
   var plBlock = {
     typeLabel: COACH_INTENT_LABEL_[plIntent], naam: planned.titel || COACH_INTENT_LABEL_[plIntent],
-    duurMin: plDur, tss: plTss, ifv: plIf, badgeZone: COACH_INTENT_ZONE_[plIntent],
+    intent: plIntent, duurMin: plDur, tss: plTss, ifv: plIf, badgeZone: COACH_INTENT_ZONE_[plIntent],
     segmenten: planned.segmenten || null
   };
 
@@ -221,4 +221,39 @@ function coachFeedback_(planned, actual, ctx, isMissed) {
   return { state: al.state, score: al.score, chipLabel: COACH_CHIP_LABEL_[al.state],
            isImpact: (al.state !== 'on-plan'),
            planned: plBlock, done: doneBlock, narrative: c.narrative, adapt: c.adapt };
+}
+
+// intent-label → engine-pool-type (inverse van COACH_TYPE_INTENT_). vrij/onbekend
+// hebben geen deterministische make-up → afwezig → coachAdaptatie_ geeft null.
+var COACH_INTENT_ENGINE_TYPE_ = {
+  herstel: 'recovery', duur: 'long_z2', tempo: 'tempo',
+  sweetspot: 'sweet_spot', drempel: 'threshold', vo2: 'vo2max'
+};
+
+/**
+ * FIX-vervolg — adaptatie-EXECUTIE-payload: leidt een INGEKORTE make-up van de
+ * gemiste/vervangen prikkel af naar een GELDIGE saveDayOverride-payload. PUUR.
+ * @param planned     coach.planned-blok ({ intent, duurMin })
+ * @param library     getTrainingLibrary_-output (voor een echte variantId)
+ * @param targetDISO  doel-dag (eerstvolgende plannbare dag; door getDashboardState bepaald)
+ * @param targetLabel weergave-label van de doel-dag (bv. "vr 12 jun")
+ * @param fromDISO    bron-dag (tag op de override → idempotent, voorkomt dubbel-plannen)
+ * @return { dISO, type:'library', workoutType, variantId, durMin, from, label } of null
+ */
+function coachAdaptatie_(planned, library, targetDISO, targetLabel, fromDISO) {
+  if (!planned || !targetDISO || !library || !library.length) return null;
+  var wt = COACH_INTENT_ENGINE_TYPE_[planned.intent];
+  if (!wt) return null;                              // vrij/onbekend → geen make-up
+  var cat = null;
+  for (var i = 0; i < library.length; i++) { if (library[i].type === wt) { cat = library[i]; break; } }
+  if (!cat || !cat.variants || !cat.variants.length) return null;   // geen schone variant-match
+  var v = cat.variants[0];                           // eerste GELDIGE variant (deterministisch)
+  var base = planned.duurMin || cat.defaultDur || 60;
+  var durMin = Math.round((base * 0.7) / 15) * 15;   // ingekort, op 15-min-stap
+  durMin = Math.max(45, Math.min(base, durMin));     // 45 ≤ durMin ≤ origineel
+  return {
+    dISO: targetDISO, type: 'library', workoutType: wt, variantId: v.variantId, durMin: durMin,
+    from: fromDISO || null,
+    label: 'Ingekorte ' + (COACH_INTENT_LABEL_[planned.intent] || wt) + ' · ' + durMin + ' min' + (targetLabel ? (' · ' + targetLabel) : '')
+  };
 }

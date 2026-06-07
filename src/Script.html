@@ -477,7 +477,7 @@
       '<div class="dd-overline"><span class="dd-date">' + esc(d.kort) + ' · Voltooid</span>' + alignChip_(c.state, c.chipLabel) + '</div>' +
       '<div class="dd-badge">' + coachBadge_(c.done.typeLabel, c.done.badgeZone) + '</div>' +
       '<div class="wk-name">' + esc(coachTitle_(c)) + '</div>' +
-      coachReadingHtml_(c) + coachZonesHtml_(c) + coachPctHtml_(c) + coachCallout_(c) + '</div>';
+      coachReadingHtml_(c) + coachZonesHtml_(c) + coachPctHtml_(c) + coachCallout_(c) + coachAdaptBtn_(d) + '</div>';
   }
   function gemistDetailHtml_(d) {
     var c = d.coach, p = c.planned;
@@ -492,8 +492,33 @@
       '<div class="dd-overline"><span class="dd-date">' + esc(d.kort) + ' · Niet gereden</span>' + alignChip_('missed', c.chipLabel) + '</div>' +
       '<div class="dd-badge">' + coachBadge_(p.typeLabel, p.badgeZone) + '</div>' +
       '<div class="wk-name">' + esc(p.naam) + '</div>' + planRow +
-      '<div class="gd-reasons">' + reasons + '</div>' + coachCallout_(c) + '</div>';
+      '<div class="gd-reasons">' + reasons + '</div>' + coachCallout_(c) + coachAdaptBtn_(d) + '</div>';
   }
+
+  // Adaptatie-EXECUTIE: "Plan deze aanpassing" → bestaande override-replanner
+  // (saveDayOverride). Omkeerbaar gratis (target toont OverriddenDetail + "Terug
+  // naar voorstel"); idempotent via de server-`from`-tag → bron-dag bevestigt.
+  function coachAdaptBtn_(d) {
+    var ad = d && d.coach && d.coach.adaptatie;
+    if (!ad) return '';
+    if (ad.planned) {
+      var tg = dagByISO_(ad.dISO);
+      return '<div class="coach-adapt-done">✓ Aanpassing ingepland' + (tg ? ' op ' + esc(tg.kort) : '') + '</div>';
+    }
+    return '<button type="button" class="coach-adapt-btn" onclick="planAdaptatie_(\'' + d.dateISO + '\')">' +
+      '<span class="coach-adapt-main">Plan deze aanpassing</span>' +
+      (ad.label ? '<span class="coach-adapt-sub2">' + esc(ad.label) + '</span>' : '') + '</button>';
+  }
+  function planAdaptatie_(srcISO) {
+    var d = dagByISO_(srcISO), ad = d && d.coach && d.coach.adaptatie;
+    if (!ad || ad.planned) return;
+    var payload = (ad.type === 'free')
+      ? { type: 'free', ritType: ad.ritType, intensiteit: ad.intensiteit, durMin: ad.durMin, from: ad.from }
+      : { type: 'library', workoutType: ad.workoutType, variantId: ad.variantId, durMin: ad.durMin, from: ad.from };
+    var btn = document.querySelector('.coach-adapt-btn'); if (btn) btn.disabled = true;
+    google.script.run.withSuccessHandler(onState).withFailureHandler(showError).saveDayOverride(ad.dISO, payload);
+  }
+  window.planAdaptatie_ = planAdaptatie_;
 
   // FIX 2 — lazy reële zone-verdeling: vervang de IF-benadering door echte
   // power-time-in-zone zodra een voltooide dag bekeken wordt (gecachet per dag).

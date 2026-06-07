@@ -598,6 +598,7 @@ function getDashboardState() {
 
   // Coach-ctx (Fase 4b/4c): event-demand + fase + patroon-teller — éénmaal per state.
   var coachCtx = { fase: macro.macroFase, event: coachEventFromMacro_(macro), patternCount: coachPatternCount_(actuals, wpByDate, today) };
+  var library = getTrainingLibrary_(settings);   // hergebruikt door de adaptatie-post-pass + de payload
 
   var dagen = [];
   var lowerBound = stripTime_(new Date(today.getTime() - 28 * 86400000));
@@ -646,6 +647,29 @@ function getDashboardState() {
     });
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);  // DST-immuun
   }
+
+  // ── Adaptatie-EXECUTIE (Fase 4c): koppel elke coach-suggestie (afgeweken/gemist)
+  // aan de eerstvolgende plannbare toekomstige dag + een GELDIGE make-up-payload.
+  // Idempotent: een override met .from = bron-dag → al ingepland (geen dubbel-plant).
+  var madeFrom = {};
+  Object.keys(overrides).forEach(function (k) { var o = overrides[k]; if (o && o.from) madeFrom[o.from] = k; });
+  var claimedTarget = {};
+  dagen.forEach(function (cd) {
+    if (!cd.coach || !cd.coach.adapt) return;                          // alleen waar de "Voorstel:"-suggestie staat
+    if (cd.coach.state !== 'different' && cd.coach.state !== 'missed') return;
+    if (madeFrom[cd.dateISO]) { cd.coach.adaptatie = { planned: true, dISO: madeFrom[cd.dateISO] }; return; }
+    var target = null;
+    for (var ti = 0; ti < dagen.length; ti++) {
+      var t = dagen[ti];
+      if (t.dateISO <= cd.dateISO || t.dateISO <= todayISO) continue;  // toekomst, ná de bron-dag
+      if (claimedTarget[t.dateISO] || t.override || t.actual) continue;
+      if (t.status !== 'gepland' && t.status !== 'rust' && t.status !== 'vandaag') continue;
+      target = t; break;
+    }
+    if (!target) { cd.coach.adaptatie = null; return; }                // geen geldige target → geen knop
+    claimedTarget[target.dateISO] = true;
+    cd.coach.adaptatie = coachAdaptatie_(cd.coach.planned, library, target.dateISO, target.kort, cd.dateISO);
+  });
 
   // ── Vorm ──
   var reeks = dashVormReeks_();
@@ -788,7 +812,7 @@ function getDashboardState() {
     // zodat getReadinessScore_ geen extra live getWellness-call doet.
     readiness: getReadinessScore_(fs, wellness, reeks),
     // Fase 4: Trainingen-bibliotheek (read-side) + geplande types (In-je-blok-badge).
-    library: getTrainingLibrary_(settings),
+    library: library,
     plannedTypes: (function () {
       var base = weekPlannedTypes_(weekStart);
       var wkEnd = new Date(weekStart.getTime() + 7 * 86400000);
@@ -1065,6 +1089,8 @@ function saveDayOverride(dateISO, overrideJson) {
     clean = { type: 'free', ritType: rit, intensiteit: inten, durMin: dur };
   }
   clean.ts = new Date().toISOString();
+  // Optioneel: coach-make-up tagt de bron-dag → idempotent (geen dubbel-plant).
+  if (ov.from && /^\d{4}-\d{2}-\d{2}$/.test(String(ov.from))) clean.from = String(ov.from);
   setDocProp('override_' + dateISO, JSON.stringify(clean));
   return getDashboardState();
 }
