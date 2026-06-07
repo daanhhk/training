@@ -168,10 +168,14 @@
     return '<div class="bloklist">' + rows + '</div>';
   }
   // Optie D: blok-lijst uit de server-structuur (label · duur · doel-watt; = ZWO/Garmin).
+  // wattFmt_ = ALLEEN display: "242-261W" → "242–261 W" (engine/ZWO-string ongemoeid).
+  function wattFmt_(s) {
+    return String(s == null ? '' : s).replace(/(\d)\s*-\s*(\d)/, '$1–$2').replace(/\s*W$/, ' W');
+  }
   function blokLijstStruct_(struct) {
     var rows = struct.map(function (r) {
       return '<div class="blok-row"><span class="blok-zone">' + esc(r[0]) + '</span>' +
-        '<span class="blok-min">' + esc(r[1]) + ' · ' + esc(r[2]) + '</span></div>';
+        '<span class="blok-min">' + esc(r[1]) + ' · ' + wattFmt_(esc(r[2])) + '</span></div>';
     }).join('');
     return '<div class="bloklist">' + rows + '</div>';
   }
