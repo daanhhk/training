@@ -46,6 +46,9 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 - **Rapport-cap**: MAX 200 woorden proza. Literals (bestand/functie/regel/
   key/commit-hash) exact en tellen niet mee. Geen code-dumps, geen
   prompt-herhaling, afwijkingen expliciet melden.
+- **Test-gate `runSelfTest`** (pure-engine asserts; details + stand in HANDOFF).
+  `clasp run` is GEPARKEERD → een nieuwe pure-calc-testcase draait **Daan
+  HANDMATIG** in de Apps Script-editor; CC kan 'm niet remote draaien.
 - Mobiel-signaal "ik zit op mijn telefoon" → lever prompts als PLATTE TEKST,
   geen triple-backtick-blokken (slecht plakbaar op telefoon).
 - **HANDOFF.md = bron van waarheid voor de STAND** (chat leest die).
@@ -79,6 +82,10 @@ componenten + states), `DESIGN.md` (visuele taal), `INTERACTIONS.md`
 - **Self-heal:** corrigeer stale feiten (verschoven regels, achterhaalde
   hex/token, ingetrokken invarianten) die je tijdens een taak in HANDOFF.md of
   CLAUDE.md tegenkomt.
+- **Nieuwe tabs = DESIGN-FIRST:** Schema + Vorm zijn af; Instellingen + Training
+  (en verdere schermen) eerst in Claude Design / canvas 424c9d ontwerpen, dán
+  bouwen. NB: `export.md` loopt achter op de canvas (dag-detail-viz/staaf +
+  inline-metrics kwamen uit 424c9d) → reconcile bij gelegenheid.
 
 ## Conventies (HARD-EARNED — niet zelf herontdekken)
 
@@ -226,6 +233,11 @@ Rolling FTP `idx14`. `ACT_HISTORY_DAYS = 730`.
   door de `ReadinessCard` (Fase 1b) — `statusGraphicHtml` wordt niet meer
   gerenderd → legacy/dead CSS. Het oude "NIET wijzigen" is INGETROKKEN (zie
   HANDOFF); opruimen = future. (Er is GEEN `.status-deck`-class.)
+- **Dead-code (opruim-kandidaten, onschadelijk):** `ifMetric_` (wees na de
+  inline-metrics), de `.wk-sub .wk-metrics`-CSS-regel, `.chart-caption`-CSS, en
+  het ongebruikte `weight`-veld in de readiness-factors-payload.
+- **Geaccepteerde render-limiet:** de niveau-grafiek (`drawNiveauChart`) toont
+  het actieve punt zónder stroke-rand — Google Charts kan dat niet; bewust zo.
 - **Multi-session ONDERSTEUND (v2b-B)**: per dag 1..N sessies via
   `proposal_<dISO>[_s<n>]` + `external_id`-suffix `_s<n>` (n≥2). Sleutelformaat
   UITSLUITEND via `readDaySessions_` / `writeDaySessions_` / `deleteDaySessions_`
