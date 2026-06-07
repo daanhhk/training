@@ -88,7 +88,8 @@ function dashActualsByDate_() {
     map[key] = {
       naam: String(r[2] || 'Rit'),
       duurMin: Number(r[3]) || 0,
-      tss: r[8] !== '' && r[8] != null ? Number(r[8]) : null
+      tss: r[8] !== '' && r[8] != null ? Number(r[8]) : null,
+      ifReal: r[7] !== '' && r[7] != null ? Number(r[7]) : null   // IF (idx7) — coach-engine
     };
   });
   return map;
@@ -340,6 +341,7 @@ function dashDayCard_(dISO, wpEntry, actual, rpe) {
     var exp = expectedRpe_(wpEntry ? wpEntry.workoutType : null);
     act = {
       naam: actual.naam, duurMin: actual.duurMin, tss: actual.tss,
+      ifReal: actual.ifReal != null ? actual.ifReal : null,
       rpe: rpe != null ? rpe : null,
       rpeVerwacht: exp != null ? exp : null,
       mismatch: (rpe != null && exp != null) ? Math.round((rpe - exp) * 10) / 10 : null
@@ -562,12 +564,17 @@ function getDashboardState() {
       kleur = seg0 ? seg0.kleur : '#90a4ae';
     } else if (status === 'preview') { kleur = '#b0bec5'; }
     if (status === 'gemist') kleur = null;
+    // Fase 4b — coach-feedback op dag-niveau (voltooid: plan vs actual; gemist: plan).
+    var coach = null;
+    if (card.voorstel && card.actual) coach = coachFeedback_(card.voorstel, card.actual, macro.macroFase, false);
+    else if (status === 'gemist')     coach = coachFeedback_(card.voorstel, null, macro.macroFase, true);
     dagen.push({
       dateISO: dISO, weekdag: dashWeekdag_(d), kort: dashKort_(d),
       status: status, kleur: kleur,
       voorstel: card.voorstel, actual: card.actual, previewMin: previewMin,
       dispositie: disp || null,
-      override: overrides[dISO] || null
+      override: overrides[dISO] || null,
+      coach: coach
     });
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);  // DST-immuun
   }

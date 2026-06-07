@@ -113,6 +113,19 @@ overschrijven (delen van) de normale opbouw.
 | **Vastleggen** (RPE) | Bewaart de RPE-score. | WRITE · 🌐 | Alleen zichtbaar nadat een cijfer is gekozen én nog niet bevestigd. Daarna verschijnt de feedback-callout (gepland vs ervaren). Bij een reeds beoordeelde rit start de schaal voor-ingevuld en bevestigd. |
 | GarminSync wordt **niet** getoond bij voltooide dagen. | — | — | — |
 
+**C-bis. Coach-feedback op voltooide/gemiste dagen** (`DoneMatch` /
+`DoneDeviation` / `Missed` — zie export-doc §1bis). De gepland-vs-gedaan-lezing,
+de impact-callout en de adaptatie zijn **coach-beslissingen** en daarom
+server-geleid.
+| Element | Doet | R/W | Effect / voorwaarden |
+| --- | --- | --- | --- |
+| **Alignment-chip** (`AlignChip`: Op plan / Licht afgeweken / Anders getraind / Niet gereden) | Toont hoe goed de uitvoering het plan volgde. | READ · 🌐 | Soort + percentage server-side bepaald (uit de geüploade activiteit). Puur lezen. |
+| **Gepland-vs-gedaan-lezing** (`Reading`: type · duur · IF · TSS · zone-verdeling) | Toont plan naast uitvoering. | READ · 🌐 | Geplande waarden uit het plan, gedane uit de activiteit (zone-verdeling Gedaan = IF/intent-benadering tot intervals.icu-time-in-zone landt). |
+| **Uitvoerings-balk** (`AlignBar`, bij zelfde-intent) | Toont alignment-%. | READ · 🌐 | Server-berekend. |
+| **Impact-callout** (`CoachCallout impact`) | Legt uit wat match/afwijking/gemist betekent voor de blok-fase. | READ · 🌐 | **Server-geleid** (coach-engine); narratief, niet bewerkbaar. |
+| **Adaptatie-regel** ("Voorstel: …") | Toont wat de coach voorstelt (verplaatsen / inkorten / niets). | READ · 🌐 | **Server-geleid** (coach-engine). NB: in deze pass een VOORSTEL (uitleg); auto-executie via de override-replanner = toekomst. |
+| **Skip-reden** (Geen tijd / Bewust gerust / Iets anders — alleen `Missed`) | Legt de reden van de gemiste dag vast. | WRITE · 🌐 | Eén actief; voedt de coach-engine. |
+
 **D. Rustdag (`RecoveryCard`) / Niet beschikbaar (`UnavailableCard`)**
 | Element | Doet | R/W | Effect |
 | --- | --- | --- | --- |

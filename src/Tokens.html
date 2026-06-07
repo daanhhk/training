@@ -288,5 +288,45 @@
   /* ─── Status badge (e.g. "Connected") ──────────────────────────────────── */
   --badge-good-bg:   var(--success-soft);
   --badge-good-text: var(--success);
+
+  /* ─── Execution alignment (day-level: planned vs done) ──────────────────────
+     SEMANTIC. How closely a completed day followed the plan, or that it was
+     missed. Never punishing — "missed" is neutral grey, not danger-red.
+       on-plan    = executed as planned
+       deviated   = same intent, lighter/shorter than planned
+       different  = trained something else than planned
+       missed     = planned but not ridden */
+  --align-on-plan:        var(--success);
+  --align-deviated:       var(--warning);
+  --align-different:      var(--info);
+  --align-missed:         var(--text-muted);
+  --align-on-plan-soft:   var(--success-soft);
+  --align-deviated-soft:  var(--warning-soft);
+  --align-different-soft: var(--info-soft);
+  --align-missed-soft:    color-mix(in srgb, var(--text-muted) 16%, transparent);
+
+  /* ─── Planned-vs-done reading (echoes WeekLoad's "done / planned") ──────────
+     COMPONENT. Two-column metric table + paired zone bars. */
+  --reading-planned:   var(--text-muted);    /* the planned (reference) column */
+  --reading-done:      var(--text-primary);  /* the achieved column            */
+  --reading-track:     var(--bg-sunken);     /* zone-bar / progress track       */
+  --reading-divider:   var(--border-subtle); /* row hairlines                   */
+  --reading-col-label: var(--text-muted);    /* "Gepland" / "Gedaan" headers    */
+
+  /* ─── Coach callout (one voice across day feedback) ─────────────────────────
+     COMPONENT. Narrative (match) · impact (deviation/missed) · adaptation.
+     The coach speaks as a single accent-soft voice; the impact variant gets a
+     stronger border, and the adaptation line is hairline-separated inside the
+     SAME callout so it reads as one continuous voice. */
+  --coach-bg:            var(--accent-soft);
+  --coach-border:        color-mix(in srgb, var(--accent) 35%, transparent);
+  --coach-border-impact: color-mix(in srgb, var(--accent) 55%, transparent); /* prominent impact */
+  --coach-mark:          var(--accent);                                      /* coach glyph stroke */
+  --coach-mark-bg:       color-mix(in srgb, var(--accent) 18%, transparent); /* coach badge fill   */
+  --coach-label:         var(--accent);                                      /* "Coach" overline   */
+  --coach-text:          var(--text-secondary);                              /* narrative body     */
+  --coach-divider:       color-mix(in srgb, var(--accent) 22%, transparent); /* narrative ↔ adapt  */
+  --coach-adapt-label:   var(--accent);                                      /* "Aanpassing" label */
+  --coach-adapt-icon:    var(--accent);                                      /* move/calendar icon */
 }
 </style>

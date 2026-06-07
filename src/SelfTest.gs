@@ -31,6 +31,7 @@ function runSelfTest() {
   testWeekLoad_(ctx);
   testTrainingLibrary_(ctx);
   testDayOverride_(ctx);
+  testCoach_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -259,4 +260,29 @@ function testDayOverride_(ctx) {
   var wo = buildOverrideWorkout_({ type: 'library', workoutType: 'vo2max', variantId: vo2.variants[0].variantId, durMin: 75 }, settings, 1, 'Peak', null, 0);
   assert_(ctx, 'override lib tss>0', true, wo.tss > 0);
   assert_(ctx, 'override lib resolved', true, !!wo.naam);
+}
+
+// ── Coach-engine (puur) — classificatie + alignment + feedback ──
+function testCoach_(ctx) {
+  assert_(ctx, 'coach IF duur', 'duur', intentFromIF_(0.62));
+  assert_(ctx, 'coach IF tempo', 'tempo', intentFromIF_(0.78));
+  assert_(ctx, 'coach IF vo2', 'vo2', intentFromIF_(0.97));
+  assert_(ctx, 'coach type sweetspot', 'sweetspot', intentFromType_('sweet_spot'));
+  assert_(ctx, 'coach type vo2', 'vo2', intentFromType_('vo2max'));
+  // Alignment relatief op IF/TSS (trouwe Sweet Spot = op plan; veel lichter = anders).
+  assert_(ctx, 'align on-plan', 'on-plan', coachAlignment_(78, 0.88, 81, 0.89).state);
+  assert_(ctx, 'align different', 'different', coachAlignment_(95, 0.94, 74, 0.81).state);
+  assert_(ctx, 'align deviated', 'deviated', coachAlignment_(90, 0.90, 70, 0.84).state);
+  var on = coachAlignment_(78, 0.88, 81, 0.89).score;
+  assert_(ctx, 'align score 0-100', true, on > 0 && on <= 100);
+  // End-to-end: match → on-plan + done + narratief.
+  var fb = coachFeedback_({ type: 'sweet_spot', titel: 'Sweet Spot 3x12', duurMin: 60, tss: 78, segmenten: [] }, { duurMin: 62, tss: 81, ifReal: 0.89 }, 'Build', false);
+  assert_(ctx, 'coach match state', 'on-plan', fb.state);
+  assert_(ctx, 'coach match done', true, !!fb.done);
+  assert_(ctx, 'coach match narratief', true, (fb.narrative || '').length > 0);
+  // Gemiste sleutelprikkel → missed + aanpassing-voorstel + impact.
+  var fm = coachFeedback_({ type: 'vo2max', titel: 'VO2max 5x4', duurMin: 70, tss: 92, segmenten: [] }, null, 'Build', true);
+  assert_(ctx, 'coach missed state', 'missed', fm.state);
+  assert_(ctx, 'coach missed adapt', true, !!fm.adapt);
+  assert_(ctx, 'coach missed impact', true, fm.isImpact === true);
 }

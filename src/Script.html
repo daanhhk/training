@@ -414,7 +414,85 @@
     google.script.run.withSuccessHandler(function (s) { state = s; renderSchema(); }).withFailureHandler(showError).saveRpe(dateISO, rpe);
   }
   function setDisposition(dateISO, reason) {
-    google.script.run.withSuccessHandler(function (s) { state = s; renderSchema(); renderWeekLoad(); }).withFailureHandler(showError).saveDisposition(dateISO, reason);
+    google.script.run.withSuccessHandler(function (s) { state = s; renderSchema(); renderWeekLoad(); renderDagDetail(); }).withFailureHandler(showError).saveDisposition(dateISO, reason);
+  }
+
+  // ══ Coach-feedback (Fase 4b) — DoneDetail (08/09) + GemistDetail (10) ══
+  var ALIGN_VAR_ = { 'on-plan': '--align-on-plan', deviated: '--align-deviated', different: '--align-different', missed: '--align-missed' };
+  var ALIGN_SOFT_ = { 'on-plan': '--align-on-plan-soft', deviated: '--align-deviated-soft', different: '--align-different-soft', missed: '--align-missed-soft' };
+  var COACH_GLYPH_ = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h9A1.5 1.5 0 0 1 14 4.5v5A1.5 1.5 0 0 1 12.5 11H6.5L3.5 13.3V11A1.5 1.5 0 0 1 2 9.5z"/></svg>';
+  var ADAPT_GLYPH_ = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>';
+  function cfDur_(mins) { mins = Math.round(mins || 0); var h = Math.floor(mins / 60), m = mins % 60; return h > 0 ? (h + 'u' + (m < 10 ? '0' + m : m)) : (m + ' min'); }
+  function cfIfTxt_(v) { return v != null ? nl(v, 2) : '–'; }
+  function coachBadge_(label, zoneVar) { return '<span class="zbadge" style="color:var(' + zoneVar + ');border-color:var(' + zoneVar + ')">' + esc(label) + '</span>'; }
+  function alignChip_(state, label) {
+    var v = ALIGN_VAR_[state] || '--text-muted', s = ALIGN_SOFT_[state] || '--bg-sunken';
+    return '<span class="align-chip" style="color:var(' + v + ');background:var(' + s + ')"><span class="align-dot" style="background:var(' + v + ')"></span>' + esc(label) + '</span>';
+  }
+  function coachCallout_(c) {
+    var border = c.isImpact ? 'var(--coach-border-impact)' : 'var(--coach-border)';
+    var label = c.isImpact ? 'COACH · IMPACT' : 'COACH';
+    var h = '<div class="coach-callout" style="background:var(--coach-bg);border-color:' + border + '">' +
+      '<div class="coach-head"><span class="coach-mark" style="background:var(--coach-mark-bg);color:var(--coach-mark)">' + COACH_GLYPH_ + '</span>' +
+      '<span class="coach-label" style="color:var(--coach-label)">' + label + '</span></div>' +
+      '<div class="coach-text" style="color:var(--coach-text)">' + esc(c.narrative) + '</div>';
+    if (c.adapt) {
+      h += '<div class="coach-adapt" style="border-top-color:var(--coach-divider)">' +
+        '<div class="coach-adapt-head"><span class="coach-adapt-icon" style="color:var(--coach-adapt-icon)">' + ADAPT_GLYPH_ + '</span>' +
+        '<span class="coach-adapt-label" style="color:var(--coach-adapt-label)">AANPASSING</span></div>' +
+        '<div class="coach-adapt-text" style="color:var(--coach-text)">' + esc(c.adapt) + '</div></div>';
+    }
+    return h + '</div>';
+  }
+  function coachReadingHtml_(c) {
+    var p = c.planned, d = c.done, diffType = (c.state === 'different');
+    function row(lbl, plv, dv, dvVar) {
+      return '<div class="rd-row"><span class="rd-lbl">' + lbl + '</span><span class="rd-pl">' + plv + '</span>' +
+        '<span class="rd-done"' + (dvVar ? ' style="color:var(' + dvVar + ')"' : '') + '>' + dv + '</span></div>';
+    }
+    return '<div class="rd-table">' +
+      '<div class="rd-row rd-head"><span class="rd-lbl"></span><span class="rd-pl">GEPLAND</span><span class="rd-done">GEDAAN</span></div>' +
+      row('Type', esc(p.typeLabel), esc(d.typeLabel), diffType ? '--align-different' : null) +
+      row('Duur', cfDur_(p.duurMin), cfDur_(d.duurMin), null) +
+      row('IF', cfIfTxt_(p.ifv), cfIfTxt_(d.ifv), null) +
+      row('TSS', (p.tss != null ? Math.round(p.tss) : '–'), (d.tss != null ? Math.round(d.tss) : '–'), null) +
+      '</div>';
+  }
+  function coachZonesHtml_(c) {
+    return '<div class="rd-overline">Zone-verdeling</div><div class="rd-zones">' +
+      '<div class="rd-zcol"><div class="rd-zbar">' + zoneBar(c.planned.segmenten, true) + '</div><div class="rd-zlbl">Gepland</div></div>' +
+      '<div class="rd-zcol"><div class="rd-zbar">' + zoneBar(c.done.segmenten, true) + '</div><div class="rd-zlbl rd-zlbl-done">Gedaan</div></div></div>';
+  }
+  function coachPctHtml_(c) {
+    if (c.state === 'different' || c.state === 'missed' || c.score == null) return '';
+    var v = ALIGN_VAR_[c.state] || '--align-on-plan', pct = Math.max(0, Math.min(100, c.score));
+    return '<div class="rd-pct"><div class="rd-pct-row"><span class="rd-pct-lbl">Uitvoering volgt plan</span>' +
+      '<span class="rd-pct-val" style="color:var(' + v + ')">' + c.score + '%</span></div>' +
+      '<div class="rd-pct-track"><div class="rd-pct-fill" style="width:' + pct + '%;background:var(' + v + ')"></div></div></div>';
+  }
+  function coachTitle_(c) { return (c.state === 'different') ? (c.done.typeLabel + '-rit · ' + cfDur_(c.done.duurMin)) : c.planned.naam; }
+  function doneDetailHtml_(d) {
+    var c = d.coach;
+    return '<div class="dd-card">' +
+      '<div class="dd-overline"><span class="dd-date">' + esc(d.kort) + ' · Voltooid</span>' + alignChip_(c.state, c.chipLabel) + '</div>' +
+      '<div class="dd-badge">' + coachBadge_(c.done.typeLabel, c.done.badgeZone) + '</div>' +
+      '<div class="wk-name">' + esc(coachTitle_(c)) + '</div>' +
+      coachReadingHtml_(c) + coachZonesHtml_(c) + coachPctHtml_(c) + coachCallout_(c) + '</div>';
+  }
+  function gemistDetailHtml_(d) {
+    var c = d.coach, p = c.planned;
+    var planRow = '<div class="gd-planrow"><span class="gd-plan">Gepland: ' + cfDur_(p.duurMin) + ' · IF ' + cfIfTxt_(p.ifv) +
+      ' · ' + (p.tss != null ? Math.round(p.tss) : '–') + ' TSS</span><span class="gd-niet">niet gereden</span></div>';
+    var reasons = '<div class="disp-q">Wat was de reden?</div><div class="disp-row">' +
+      Object.keys(DISP_LABEL).map(function (r) {
+        var on = (d.dispositie && d.dispositie.reason === r) ? ' is-on' : '';
+        return '<button type="button" class="disp-btn' + on + '" onclick="setDisposition(\'' + d.dateISO + '\',\'' + r + '\')">' + DISP_LABEL[r] + '</button>';
+      }).join('') + '</div>';
+    return '<div class="dd-card">' +
+      '<div class="dd-overline"><span class="dd-date">' + esc(d.kort) + ' · Niet gereden</span>' + alignChip_('missed', c.chipLabel) + '</div>' +
+      '<div class="dd-badge">' + coachBadge_(p.typeLabel, p.badgeZone) + '</div>' +
+      '<div class="wk-name">' + esc(p.naam) + '</div>' + planRow +
+      '<div class="gd-reasons">' + reasons + '</div>' + coachCallout_(c) + '</div>';
   }
 
   // ── Schema (Vandaag + Kalender samengevoegd) ──
@@ -689,8 +767,12 @@
     if (ov && plannable) {
       // Handmatig gekozen wint van het coach-voorstel (OverriddenDetail / FreeRideCard).
       h += overrideKaart_(d.dateISO, ov);
+    } else if (d.coach && d.coach.state === 'missed') {
+      h += gemistDetailHtml_(d);                       // GemistDetail (frame 10)
+    } else if (d.coach && d.coach.done) {
+      h += doneDetailHtml_(d);                         // DoneDetail (frame 08/09)
     } else if (d.status === 'gemist') {
-      h += gemistKaart_(d);
+      h += gemistKaart_(d);                            // fallback (geen coach-data)
     } else if (d.status === 'vandaag') {
       // Schema = puur trainingsgericht; readiness/Garmin-verwachting leven op Vorm.
       var v = state.vandaag;

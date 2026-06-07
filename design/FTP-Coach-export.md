@@ -138,6 +138,52 @@ Kaart "vorm = fitheid − vermoeidheid"; één van drie visualisaties
 
 ---
 
+## 1bis. Schema · dag-detail coach-feedback
+
+De voltooide- en gemiste-dag-details zijn verrijkt tot volwaardige
+**coach-feedback** met één herkenbare coach-stem. Bouwt voort op de bestaande
+dag-detail-skin (zone-badge, `MiniZoneBar`, kaart-tokens) en op de gepland-vs-
+gedaan-lezing van `WeekLoad` (de `/`-noemer-stijl), nu op dag-niveau.
+
+### Gedeelde bouwstenen
+
+**Alignment-chip** (`AlignChip`) — rechtsboven in de dag-kop. Vier soorten,
+elk `align-*` + `-soft` + dot: *Op plan* (`--align-on-plan`), *Licht afgeweken*
+(`--align-deviated`), *Anders getraind* (`--align-different`), *Niet gereden*
+(`--align-missed`, neutraal grijs — nóóit danger-rood, geen schuldgevoel).
+
+**Gepland-vs-gedaan-lezing** (`Reading`) — twee kolommen "Gepland" / "Gedaan"
+(`--reading-col-label`), rij-hairlines `--reading-divider`, track
+`--reading-track`. Type-rij + metric-rijen (Duur · IF · TSS) met geplande waarde
+in `--reading-planned` (muted), gedane in `--reading-done` (primary, zwaarder);
+bij afwijking kleurt de gedane type-waarde `--align-different`. Onderaan
+**zone-verdeling**: twee `MiniZoneBar`s naast elkaar (gepland / gedaan), zones
+`--zone-1…6`.
+
+**Uitvoerings-/alignment-balk** (`AlignBar`) — bij match/afwijking-met-zelfde-
+intent: "Uitvoering volgt plan" + percentage; track `--reading-track`, vulling
+in de chip-kleur.
+
+**Coach-callout** (`CoachCallout`) — de coach-stem, één component over alle
+staten. Vlak `--coach-bg`, rand `--coach-border` (impact-variant:
+`--coach-border-impact`). Links een coach-merkje (`CoachMark`: chat-glyph,
+`--coach-mark` op `--coach-mark-bg`), overline "COACH" / "COACH · IMPACT"
+(`--coach-label`), narratief `--coach-text`. Optionele **adaptatie-regel**
+hairline-gescheiden binnen dezelfde callout (`--coach-divider`), met move/agenda-
+icoon (`--coach-adapt-icon`) + label "AANPASSING" (`--coach-adapt-label`).
+
+### Staten
+- **08 · Voltooid — match** (`08-dag-voltooid-match.png`): chip *Op plan*,
+  gelijke gepland/gedaan-kolommen, `AlignBar` (96%), motiverend narratief.
+- **09 · Voltooid — afwijking** (`09-dag-voltooid-afwijking.png`): chip *Anders
+  getraind*, `Reading` toont gepland *VO2max* vs gedaan *Tempo*
+  (`--align-different`); `CoachCallout impact` met impact + adaptatie.
+- **10 · Gemist** (`10-dag-gemist.png`): chip *Niet gereden*, compacte
+  "Gepland: … · niet gereden"-lezing, skip-reden-keuze, `CoachCallout impact`
+  zonder verwijt + adaptatie + motiverende vooruitblik.
+
+---
+
 ## 3. Trainingen
 
 Status-deck bovenaan; daaronder een drill-down in drie views (`TrainingenTab`):
@@ -193,3 +239,6 @@ Exporteer deze naar `design/screenshots/` (390×844, tenzij anders):
 | `05-status-card.png` | Readiness-/statuskaart (Vorm) close-up, check-in ingevuld |
 | `06-checkin-sheet.png` | Ochtend-check-in bottom sheet (open) |
 | `07-plan-card.png` | Plan/periodisering-kaart uitgeklapt (countdown + seizoens-mode) |
+| `08-dag-voltooid-match.png` | Dag-detail coach-feedback — voltooid, uitvoering matcht plan |
+| `09-dag-voltooid-afwijking.png` | Dag-detail coach-feedback — voltooid, afwijking + impact + adaptatie |
+| `10-dag-gemist.png` | Dag-detail coach-feedback — gemist, skip-reden + impact + adaptatie |
