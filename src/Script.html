@@ -404,10 +404,10 @@
       else if (d.status === 'gemist') mark = '<span class="m-gemist">×</span>';
       else if (d.status === 'preview') mark = '~';
       else if (!d.voorstel && !d.actual) mark = '<span class="m-rust"></span>';  // rust/lege dag (incl. vandaag-rust) → streepje
-      else if (d.status === 'vandaag') mark = '●';
       var sel = (d.dateISO === selectedDate) ? ' sel' : '';
+      var today = (d.status === 'vandaag') ? ' vandaag' : '';
       var wd = d.weekdag.slice(0, 2);
-      strip += '<div class="chip' + sel + '" data-date="' + d.dateISO + '" onclick="selectDay(\'' + d.dateISO + '\')">' +
+      strip += '<div class="chip' + today + sel + '" data-date="' + d.dateISO + '" onclick="selectDay(\'' + d.dateISO + '\')">' +
         '<div class="cw">' + wd + '</div>' +
         '<div class="cd">' + d.kort.replace(/^.. /, '') + '</div>' +
         '<div class="dots">' + stripDots_(d) + '</div><div class="mark">' + mark + '</div></div>';
@@ -691,7 +691,7 @@
       return '<div class="rc-frow">' +
         '<span class="rc-flabel">' + esc(f.label) + '</span>' +
         '<span class="rc-fdot" style="background:' + dotVar + '"></span>' +
-        '<span class="rc-fval">' + esc(f.valueText) + ' · ' + f.weight + '%</span>' +
+        '<span class="rc-fval">' + esc(f.valueText) + '</span>' +
         '</div>';
     }).join('');
 
@@ -827,8 +827,6 @@
     renderVormStatus();
     document.getElementById('vorm-level').innerHTML = levelCardHtml(state);
     document.getElementById('vorm-metrics').innerHTML = metricRowHtml(state);
-    document.getElementById('niveau-trend-sub').textContent =
-      'W/kg-niveau per maand sinds ' + (state.beginLabel || 'start');
     renderNiveauHead_();
     renderBalans_();
   }
