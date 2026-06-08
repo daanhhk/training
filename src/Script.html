@@ -417,6 +417,21 @@
   function setDisposition(dateISO, reason) {
     google.script.run.withSuccessHandler(function (s) { state = s; renderSchema(); renderWeekLoad(); renderDagDetail(); }).withFailureHandler(showError).saveDisposition(dateISO, reason);
   }
+  // Toggle-to-clear: wis de dispositie OPTIMISTISCH (voorstel zit lokaal) — lokaal terug
+  // naar 't voorstel + dagstrip ×→dot, dan saveDisposition(null) op de achtergrond ZONDER
+  // onState (instant UX, gerechtvaardigde afwijking zoals pushWeb). Fallback = round-trip.
+  function clearDisposition(dateISO) {
+    var dagen = state.dagen || [], d = null;
+    for (var i = 0; i < dagen.length; i++) if (dagen[i].dateISO === dateISO) { d = dagen[i]; break; }
+    if (d && d.voorstel) {
+      d.dispositie = null; d.coach = null;
+      d.status = (state.vandaag && dateISO === state.vandaag.dateISO) ? 'vandaag' : 'gepland';
+      renderSchema(); renderDagDetail();
+      google.script.run.withFailureHandler(showError).saveDisposition(dateISO, null);
+    } else {
+      setDisposition(dateISO, null);   // fallback: normale round-trip
+    }
+  }
 
   // ══ Coach-feedback (Fase 4b) — DoneDetail (08/09) + GemistDetail (10) ══
   var ALIGN_VAR_ = { 'on-plan': '--align-on-plan', deviated: '--align-deviated', different: '--align-different', missed: '--align-missed' };
@@ -527,8 +542,11 @@
       ' · ' + (p.tss != null ? Math.round(p.tss) : '–') + ' TSS</span><span class="gd-niet">niet gereden</span></div>';
     var reasons = '<div class="disp-q">Wat was de reden?</div><div class="disp-row">' +
       Object.keys(DISP_LABEL).map(function (r) {
-        var on = (d.dispositie && d.dispositie.reason === r) ? ' is-on' : '';
-        return '<button type="button" class="disp-btn' + on + '" onclick="setDisposition(\'' + d.dateISO + '\',\'' + r + '\')">' + DISP_LABEL[r] + '</button>';
+        var sel = !!(d.dispositie && d.dispositie.reason === r);
+        // Toggle-to-clear: tik op de AL-gekozen chip → wist de dispositie (terug naar 't voorstel).
+        var click = sel ? ('clearDisposition(\'' + d.dateISO + '\')') : ('setDisposition(\'' + d.dateISO + '\',\'' + r + '\')');
+        var ttl = sel ? ' title="Tik nogmaals om te wissen"' : '';
+        return '<button type="button" class="disp-btn' + (sel ? ' is-on' : '') + '"' + ttl + ' onclick="' + click + '">' + DISP_LABEL[r] + (sel ? ' ×' : '') + '</button>';
       }).join('') + '</div>';
     return '<div class="dd-card">' +
       '<div class="dd-overline"><span class="dd-date">' + esc(d.kort) + ' · Niet gereden</span>' + alignChip_('missed', c.chipLabel) + '</div>' +
