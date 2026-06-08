@@ -11,11 +11,15 @@
  */
 
 function doGet(e) {
-  var t = HtmlService.createTemplateFromFile('Index');
-  return t.evaluate()
+  var output = HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('Cadans')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  // PNG-favicon via jsDelivr (juiste content-type). CRASH-VEILIG: setFaviconUrl throwt
+  // op niet-ondersteunde/onbereikbare types → NOOIT uit doGet laten ontsnappen.
+  try { output.setFaviconUrl('https://cdn.jsdelivr.net/gh/daanhhk/training@main/favicon.png'); }
+  catch (e2) { Logger.log('favicon skip: ' + e2); }
+  return output;
 }
 
 /** Include-helper voor CSS/JS-partials in Index. */
