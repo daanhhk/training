@@ -55,9 +55,10 @@
     renderWeekLoad();
     renderVorm();
     renderTrainingen();
+    renderNiveau();
     switchTab('schema');
     google.charts.load('current', { packages: ['corechart'] });
-    google.charts.setOnLoadCallback(function () { chartsReady = true; drawNiveauChart(); });
+    google.charts.setOnLoadCallback(function () { chartsReady = true; drawNiveauChart(); drawNvTraj_(); });
     maybeAutoOpenCheckin();
   }
 
@@ -1327,6 +1328,153 @@
     return (NL_MND[m] || '?') + " '" + p[0].slice(-2);
   }
 
+  // ════════════════════════════════════════════════════════════════
+  // NIVEAU-TAB (Fase 7, v1) — vermogen-snapshot + progressie-trajectorie.
+  // Tier = W/kg-afgeleid (design). Hergebruikt cssColor_ + AreaChart/venster-stijl;
+  // Vorm (drawNiveauChart/NIVEAU_WINDOWS) ONGEMOEID. Elementen 3+4 = Fase 2-kaart.
+  // ════════════════════════════════════════════════════════════════
+  var NV_TIERS = [
+    { l: 'Beginner', max: 2.5 }, { l: 'Recreatief', max: 3.0 }, { l: 'Getraind', max: 3.5 },
+    { l: 'Gevorderd', max: 4.1 }, { l: 'Zeer goed', max: 4.8 }, { l: 'Elite', max: 99 }
+  ];
+  function nvTierIndex_(wkg) { for (var i = 0; i < NV_TIERS.length; i++) if (wkg < NV_TIERS[i].max) return i; return NV_TIERS.length - 1; }
+  var NV_METRICS = {
+    niveau: { label: 'Niveau',  unit: 'niveau', color: 'var(--traj-line)' },
+    wkg:    { label: 'W/kg',    unit: 'W/kg',   color: 'var(--traj-line)' },
+    ctl:    { label: 'Fitheid', unit: 'CTL',    color: 'var(--traj-ctl-line)' }
+  };
+  var nvMetric = 'wkg', nvWindow = 'alles', nvCtlOverlay = false;
+  function nvReeks_() { return (state && state.niveauProgressie) ? state.niveauProgressie : []; }
+  function nvWindowSlice_(reeks) {
+    var w = NIVEAU_WINDOWS.filter(function (x) { return x.k === nvWindow; })[0];
+    if (!w || w.n == null) return reeks;
+    return reeks.slice(Math.max(0, reeks.length - w.n));
+  }
+  function nvFmt_(metric, v) {
+    if (v == null) return '–';
+    if (metric === 'wkg') return nl(v, 2);
+    if (metric === 'ctl') return Math.round(v).toString();
+    return nl(v, 1);
+  }
+
+  function renderNiveau() { renderNiveauSnapshot_(); renderNiveauProg_(); renderNiveauSoon_(); }
+
+  function renderNiveauSnapshot_() {
+    var el = document.getElementById('niveau-snapshot'); if (!el) return;
+    var ftp = state.ftp, gewicht = state.gewicht, wkg = state.wkg;
+    if (ftp == null || wkg == null) {
+      el.innerHTML = '<div class="rc-card nv-snap"><div class="rc-overline">Vermogen</div>' +
+        '<div class="nv-empty muted">—<br>Verbind je account — dan verschijnt hier je FTP, W/kg en niveau-tier.</div></div>';
+      return;
+    }
+    var ti = nvTierIndex_(wkg);
+    var ladder = NV_TIERS.map(function (t, i) {
+      var bg = (i <= ti) ? 'var(--accent)' : 'var(--tier-step)', op = (i < ti) ? '0.4' : '1';
+      return '<div class="nv-rung" style="background:' + bg + ';opacity:' + op + '"></div>';
+    }).join('');
+    el.innerHTML = '<div class="rc-card nv-snap">' +
+      '<div class="nv-snap-top"><div class="rc-overline">Vermogen</div>' +
+        '<span class="nv-tier-chip">' + esc(NV_TIERS[ti].l) + '</span></div>' +
+      '<div class="nv-snap-hero">' +
+        '<div class="nv-ftp"><div class="nv-ftp-num">' + Math.round(ftp) + '<span class="nv-ftp-unit">W</span></div>' +
+          '<div class="nv-ftp-lbl">FTP</div></div>' +
+        '<div class="nv-wkg-pill"><div class="nv-wkg-over">Klimvermogen</div>' +
+          '<div class="nv-wkg-row"><span class="nv-wkg-num">' + nl(wkg, 2) + '</span><span class="nv-wkg-unit">W/kg</span></div>' +
+          (gewicht != null ? '<div class="nv-wkg-kg">' + nl(gewicht, 1) + ' kg</div>' : '') + '</div>' +
+      '</div>' +
+      '<div class="nv-ladder">' + ladder + '</div>' +
+      '<div class="nv-ladder-lbls"><span>Beginner</span><span>Elite</span></div>' +
+    '</div>';
+  }
+
+  function renderNiveauProg_() {
+    var el = document.getElementById('niveau-prog'); if (!el) return;
+    var reeks = nvReeks_();
+    var have = function (k) { return reeks.filter(function (p) { return p[k] != null; }).length; };
+    if (have('niveau') < 2 && have('wkg') < 2 && have('ctl') < 2) {
+      el.innerHTML = '<div class="rc-card"><div class="rc-overline">Progressie</div>' +
+        '<div class="nv-empty muted">Verschijnt zodra ~4 weken aan ritten binnen zijn.</div></div>';
+      return;
+    }
+    if (have(nvMetric) < 2) nvMetric = (have('wkg') >= 2) ? 'wkg' : (have('niveau') >= 2 ? 'niveau' : 'ctl');
+    var m = NV_METRICS[nvMetric];
+    var pts = nvWindowSlice_(reeks).filter(function (p) { return p[nvMetric] != null; });
+    var cur = pts.length ? pts[pts.length - 1][nvMetric] : null;
+    var first = pts.length ? pts[0][nvMetric] : null;
+    var delta = (cur != null && first != null) ? (cur - first) : null;
+    var wLabel = nvWindow === '1m' ? 'deze maand' : nvWindow === '6m' ? '6 mnd' : nvWindow === '12m' ? '12 mnd' : 'seizoenstart';
+    var deltaHtml = '';
+    if (delta != null && pts.length > 1) {
+      var dTxt = (nvMetric === 'wkg') ? nl(Math.abs(delta), 2) : (nvMetric === 'ctl') ? Math.round(Math.abs(delta)).toString() : nl(Math.abs(delta), 1);
+      if (delta > 0)      deltaHtml = '<span class="nv-delta nv-up">+' + dTxt + ' ↑ sinds ' + wLabel + '</span>';
+      else if (delta < 0) deltaHtml = '<span class="nv-delta nv-down">−' + dTxt + ' ↓ sinds ' + wLabel + '</span>';
+      else                deltaHtml = '<span class="nv-delta">±0 sinds ' + wLabel + '</span>';
+    }
+    var metricSeg = [['niveau', 'Niveau'], ['wkg', 'W/kg'], ['ctl', 'Fitheid']].map(function (a) {
+      return '<button type="button"' + (nvMetric === a[0] ? ' class="active"' : '') + ' onclick="setNvMetric(\'' + a[0] + '\')">' + a[1] + '</button>';
+    }).join('');
+    var winSeg = NIVEAU_WINDOWS.map(function (w) {
+      return '<button type="button"' + (w.k === nvWindow ? ' class="active"' : '') + ' onclick="setNvWindow(\'' + w.k + '\')">' + w.l + '</button>';
+    }).join('');
+    var overlayBtn = (nvMetric !== 'ctl')
+      ? '<button type="button" class="nv-ctl-toggle' + (nvCtlOverlay ? ' on' : '') + '" onclick="toggleNvCtl()">Fitheid-lijn</button>' : '';
+    el.innerHTML = '<div class="rc-card">' +
+      '<div class="nv-prog-head"><div class="rc-overline">Progressie · ' + esc(m.label) + '</div>' + overlayBtn + '</div>' +
+      '<div class="nv-prog-val">' + nvFmt_(nvMetric, cur) + '<span class="nv-prog-unit">' + esc(m.unit) + '</span>' + deltaHtml + '</div>' +
+      '<div class="seg nv-seg">' + metricSeg + '</div>' +
+      '<div class="seg nv-seg">' + winSeg + '</div>' +
+      '<div class="nv-chart" id="niveau-traj-chart"></div>' +
+    '</div>';
+    drawNvTraj_();
+  }
+  function setNvMetric(k) { nvMetric = k; if (k === 'ctl') nvCtlOverlay = false; renderNiveauProg_(); }
+  function setNvWindow(k) { nvWindow = k; renderNiveauProg_(); }
+  function toggleNvCtl() { nvCtlOverlay = !nvCtlOverlay; renderNiveauProg_(); }
+
+  // Elementen 3 (rijdersprofiel) + 4 (doel-projectie) = Fase 2 → binnenkort-kaart (geen backing-logica).
+  function renderNiveauSoon_() {
+    var el = document.getElementById('niveau-soon'); if (!el) return;
+    el.innerHTML = '<div class="rc-card nv-soon"><span class="nv-soon-tag">Fase 2</span>' +
+      '<div class="nv-soon-t">Rijdersprofiel &amp; doel-projectie</div>' +
+      '<div class="nv-soon-s muted">Power-duration-curve (sprinter↔klimmer) en Girona-gereedheid met uren→potentieel-projectie volgen in een latere fase.</div></div>';
+  }
+
+  function drawNvTraj_() {
+    if (!chartsReady) return;
+    var el = document.getElementById('niveau-traj-chart'); if (!el) return;
+    var reeks = nvWindowSlice_(nvReeks_());
+    var withCtl = nvCtlOverlay && nvMetric !== 'ctl';
+    var lastIdx = -1; reeks.forEach(function (p, i) { if (p[nvMetric] != null) lastIdx = i; });
+    var puntStyle = 'point { size: 5; fill-color: ' + cssColor_(NV_METRICS[nvMetric].color) + '; }';
+    var dt = new google.visualization.DataTable();
+    dt.addColumn('string', 'Maand');
+    dt.addColumn('number', NV_METRICS[nvMetric].label);
+    dt.addColumn({ type: 'string', role: 'tooltip' });
+    dt.addColumn({ type: 'string', role: 'style' });
+    if (withCtl) { dt.addColumn('number', 'Fitheid'); dt.addColumn({ type: 'string', role: 'tooltip' }); }
+    reeks.forEach(function (p, i) {
+      var v = p[nvMetric];
+      var tip = (v != null) ? (nlMaandLabel_(p.maand) + ': ' + nvFmt_(nvMetric, v) + ' ' + NV_METRICS[nvMetric].unit) : null;
+      var row = [nlMaandLabel_(p.maand), v, tip, (i === lastIdx) ? puntStyle : null];
+      if (withCtl) { row.push(p.ctl != null ? p.ctl : null); row.push(p.ctl != null ? (nlMaandLabel_(p.maand) + ': ' + Math.round(p.ctl) + ' CTL') : null); }
+      dt.addRow(row);
+    });
+    var opt = {
+      backgroundColor: 'transparent', legend: 'none', height: 200, fontName: 'var(--font-sans)',
+      chartArea: { left: 38, top: 12, right: withCtl ? 40 : 12, bottom: 26 },
+      seriesType: 'area',
+      hAxis: { textStyle: { color: cssColor_('var(--text-secondary)'), fontSize: 10 }, gridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
+      vAxes: {
+        0: { textStyle: { color: cssColor_('var(--chart-axis)'), fontSize: 10 }, gridlines: { color: cssColor_('var(--chart-grid)') }, minorGridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
+        1: { textStyle: { color: cssColor_('var(--traj-ctl-line)'), fontSize: 10 }, gridlines: { color: 'transparent' }, minorGridlines: { color: 'transparent' } }
+      },
+      series: { 0: { type: 'area', color: cssColor_(NV_METRICS[nvMetric].color), areaOpacity: 0.26, lineWidth: 2.5, targetAxisIndex: 0 } },
+      interpolateNulls: true
+    };
+    if (withCtl) opt.series[1] = { type: 'line', color: cssColor_('var(--traj-ctl-line)'), lineWidth: 1.5, lineDashStyle: [3, 3], areaOpacity: 0, targetAxisIndex: 1, pointSize: 0 };
+    new google.visualization.ComboChart(el).draw(dt, opt);
+  }
+
   // Fase 3 deel 2 — niveau-trend venster-toggle (1M/6M/12M/Alles) + value/delta-header.
   // Client-display: slicet de bestaande maand-reeks (geen server-aggregatie).
   var NIVEAU_WINDOWS = [{ k: '1m', l: '1M', n: 2 }, { k: '6m', l: '6M', n: 7 }, { k: '12m', l: '12M', n: 13 }, { k: 'alles', l: 'Alles', n: null }];
@@ -1723,6 +1871,7 @@
       b.classList.toggle('active', b.getAttribute('data-tab') === name);
     });
     if (name === 'vorm') { drawNiveauChart(); }
+    if (name === 'niveau') { drawNvTraj_(); }
     // Schema opent op vandaag: scroll de geselecteerde chip in beeld zodra
     // de container zichtbaar is (scrollIntoView werkt niet op display:none).
     if (name === 'schema') setTimeout(scrollSelectedChip, 30);
