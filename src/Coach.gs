@@ -294,3 +294,40 @@ function coachAdaptatie_(planned, library, targetDISO, targetLabel, fromDISO) {
     label: 'Ingekorte ' + (COACH_INTENT_LABEL_[planned.intent] || wt) + ' · ' + durMin + ' min' + (targetLabel ? (' · ' + targetLabel) : '')
   };
 }
+
+// ════════════════════════════════════════════════════════════════
+// STAP 2 — readiness→plan-koppeling (PUUR; getest via runSelfTest).
+// Bepaalt of de ochtend-gereedheid een HARDE geplande sessie moet verlichten.
+// planned = { type, isHard } — isHard wordt door de CALLER bepaald via workoutZones;
+// deze calc roept GEEN workoutZones/IO. band = readiness-band (ready/caution/rest).
+// macroFase = engine-fase INCL. Taper/Recovery (NIET assignWorkouts' onderliggende).
+// Hergebruikt demoteType_ (Algorithm.gs, pure map-lookup) voor de caution-stap.
+// ════════════════════════════════════════════════════════════════
+function readinessAdjust_(planned, band, macroFase) {
+  if (band === 'ready') return { action: 'keep' };
+  if (macroFase === 'Taper' || macroFase === 'Recovery') return { action: 'keep' };
+  if (!planned || !planned.isHard) return { action: 'keep' };
+  if (band === 'caution') {
+    var toType = demoteType_(planned.type);
+    if (toType === planned.type) return { action: 'keep' };   // niet in DEMOTE_MAP → niets te verlichten
+    return { action: 'demote', fromType: planned.type, toType: toType,
+             intensiteit: (toType === 'tempo' ? 'tempo' : 'rustig'), reden: 'caution_key' };
+  }
+  if (band === 'rest') {
+    return { action: 'demote', fromType: planned.type, toType: 'recovery', intensiteit: 'rustig', reden: 'rest_key' };
+  }
+  return { action: 'keep' };
+}
+
+// engine-demote-type → NL weergavenaam voor de verlichte rit.
+function readinessEaseNaam_(toType) {
+  return ({ tempo: 'Tempo-rit', recovery: 'Herstelrit', long_z2: 'Rustige duurrit' })[toType] || 'Rustige rit';
+}
+
+// NL coach-regel voor de readiness-banner (één coach-stem, vooruitkijkend).
+function readinessRegel_(band, score, fromNaam, toNaam) {
+  if (band === 'caution') {
+    return 'Je gereedheid is vanochtend matig (' + score + '). Ik heb je ' + fromNaam + ' verlicht naar ' + toNaam + ' — fris train je de kwaliteit beter.';
+  }
+  return 'Je gereedheid is laag (' + score + '). Een zware sessie stapelt nu vooral vermoeidheid. Ik heb ' + fromNaam + ' naar een rustige rit gezet; volledige rust mag ook.';
+}

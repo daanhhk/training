@@ -32,6 +32,7 @@ function runSelfTest() {
   testTrainingLibrary_(ctx);
   testDayOverride_(ctx);
   testCoach_(ctx);
+  testReadinessAdjust_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -279,6 +280,30 @@ function testDayOverride_(ctx) {
 }
 
 // ── Coach-engine (puur) — IF-normalisatie + zone-classificatie + doel-bewust ──
+// ── STAP 2 — readinessAdjust_ (puur) — band×fase×isHard → keep/demote ──
+function testReadinessAdjust_(ctx) {
+  function adj(type, isHard, band, macroFase) { return readinessAdjust_({ type: type, isHard: isHard }, band, macroFase); }
+  assert_(ctx, 'rdyAdj ready+hard keep', 'keep', adj('vo2max', true, 'ready', 'Build').action);
+  var a1 = adj('threshold', true, 'caution', 'Build');
+  assert_(ctx, 'rdyAdj caution threshold action', 'demote', a1.action);
+  assert_(ctx, 'rdyAdj caution threshold toType', 'tempo', a1.toType);
+  assert_(ctx, 'rdyAdj caution threshold intensiteit', 'tempo', a1.intensiteit);
+  var a2 = adj('vo2_3015', true, 'caution', 'Build');
+  assert_(ctx, 'rdyAdj caution vo2_3015 toType', 'long_z2', a2.toType);
+  assert_(ctx, 'rdyAdj caution vo2_3015 intensiteit', 'rustig', a2.intensiteit);
+  assert_(ctx, 'rdyAdj caution vo2max toType', 'tempo', adj('vo2max', true, 'caution', 'Build').toType);
+  assert_(ctx, 'rdyAdj caution !hard keep', 'keep', adj('long_z2', false, 'caution', 'Build').action);
+  var a3 = adj('vo2max', true, 'rest', 'Build');
+  assert_(ctx, 'rdyAdj rest action', 'demote', a3.action);
+  assert_(ctx, 'rdyAdj rest toType', 'recovery', a3.toType);
+  assert_(ctx, 'rdyAdj rest intensiteit', 'rustig', a3.intensiteit);
+  assert_(ctx, 'rdyAdj rest reden', 'rest_key', a3.reden);
+  assert_(ctx, 'rdyAdj rest !hard keep', 'keep', adj('long_z2', false, 'rest', 'Build').action);
+  assert_(ctx, 'rdyAdj caution Taper keep', 'keep', adj('vo2max', true, 'caution', 'Taper').action);
+  assert_(ctx, 'rdyAdj rest Recovery keep', 'keep', adj('vo2max', true, 'rest', 'Recovery').action);
+  assert_(ctx, 'rdyAdj caution not-in-map keep', 'keep', adj('taper_openers', true, 'caution', 'Build').action);
+}
+
 function testCoach_(ctx) {
   // FIX 1 — IF-normalisatie: percentage → 0–1; reeds-ratio ongemoeid; 0,77 ≠ vo2.
   assertClose_(ctx, 'normIf 77.09', 0.7709, cfNormIf_(77.09), 0.0001);

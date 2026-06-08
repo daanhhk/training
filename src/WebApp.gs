@@ -870,6 +870,34 @@ function getDashboardState() {
   // ── Vorm ──
   var reeks = dashVormReeks_(wellValues);
   var statsBundle = dashStatsFromActivities_(actValues);
+
+  // ── STAP 2: readiness→plan-overlay (read-side) ──────────────────────────────
+  // Zet een readiness-coach op de VANDAAG-PLANNED dag als de ochtend-gereedheid een
+  // harde sessie moet verlichten. macro.fase draagt Taper/Recovery (engine-fase incl.
+  // taper). Los van de completed/missed coach (wederzijds exclusieve dag-staten); de
+  // C12-post-pass (hierboven) raakt 'm niet (geen .adapt-veld). Override aanwezig → geen coach.
+  var readinessState = getReadinessScore_(fs, wellness, reeks);
+  (function () {
+    var wp = wpByDate[todayISO];
+    if (!wp || !wp.workoutType || wp.workoutType === 'free') return;     // geen geplande engine-sessie vandaag
+    if (actuals[todayISO] || overrides[todayISO]) return;               // al gereden / al gewijzigd
+    if (wp.sessies && wp.sessies.length > 1) return;                    // multi-sessie overslaan
+    if (!readinessState || !readinessState.band) return;
+    var zs = workoutZones(wp.workoutType, settings.doel);
+    var isHard = zs.indexOf('high') >= 0 || zs.indexOf('anaerobic') >= 0;
+    var adj = readinessAdjust_({ type: wp.workoutType, isHard: isHard }, readinessState.band, macro.fase);
+    if (adj.action !== 'demote') return;
+    var toNaam = readinessEaseNaam_(adj.toType);
+    var fromNaam = wp.naam || COACH_INTENT_LABEL_[intentFromType_(wp.workoutType)] || 'je sessie';
+    var rc = {
+      gereedheid: readinessState.score, status: readinessState.band, reden: adj.reden,
+      fromType: adj.fromType, toType: adj.toType, fromNaam: fromNaam, toNaam: toNaam,
+      regel: readinessRegel_(readinessState.band, readinessState.score, fromNaam, toNaam),
+      adaptatie: { dISO: todayISO, type: 'free', ritType: 'vrij', intensiteit: adj.intensiteit,
+                   durMin: Math.round(wp.minuten || 0), src: 'readiness', label: 'Verlicht naar ' + toNaam }
+    };
+    for (var i = 0; i < dagen.length; i++) { if (dagen[i].dateISO === todayISO) { dagen[i].coach = rc; break; } }
+  })();
   // Event-countdown uit bepaalFaseVoorDatum_ (al berekend in `macro`).
   var evDatum = macro.eventDate || (macro.hoofdEvent && macro.hoofdEvent.datum) || null;
   var dagenTot = null;
@@ -1012,7 +1040,7 @@ function getDashboardState() {
     plan: buildPlanModel_(macro, settings, eventsData),
     // Fase 1b: readiness (read-side) — hergebruikt reeds-berekende fs/wellness/reeks
     // zodat getReadinessScore_ geen extra live getWellness-call doet.
-    readiness: getReadinessScore_(fs, wellness, reeks),
+    readiness: readinessState,
     // Fase 4: Trainingen-bibliotheek (read-side) + geplande types (In-je-blok-badge).
     library: library,
     plannedTypes: (function () {
@@ -1297,6 +1325,7 @@ function saveDayOverride(dateISO, overrideJson) {
   clean.ts = new Date().toISOString();
   // Optioneel: coach-make-up tagt de bron-dag → idempotent (geen dubbel-plant).
   if (ov.from && /^\d{4}-\d{2}-\d{2}$/.test(String(ov.from))) clean.from = String(ov.from);
+  if (ov.src) clean.src = String(ov.src);   // STAP 2: bron-tag (bv. 'readiness'); display-lezers negeren 't
   setDocProp('override_' + dateISO, JSON.stringify(clean));
   return getDashboardState();
 }
