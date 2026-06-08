@@ -312,3 +312,129 @@ Exporteer deze naar `design/screenshots/` (390×844, tenzij anders):
 | `11-rit-detail.png` | Rit-detail sheet — geladen (tijd-in-zone, hero-metrics, metric-grid, intervallen) |
 | `11b-rit-detail-laden.png` | Rit-detail sheet — laden (skeleton, `getRideDetail` loopt) |
 | `11c-rit-detail-error.png` | Rit-detail sheet — error / geen data + "Opnieuw proberen" |
+
+---
+
+<!-- Levering 4 — Niveau-tab + Vorm A/B-varianten (gefold uit _import-design-4) -->
+
+## §2 — VORM (met Variant A/B-noot)
+
+## 2. Vorm
+
+Status-deck bovenaan, daarna de vorm-analyse.
+
+### a. Status / readiness-kaart (`ReadinessCard`) — statuskaart van Vorm
+- Overline "Status · vandaag". **ProgressRing**: waarde-kleur naar score —
+  `--readiness-ready` (≥62) / `--readiness-caution` (48–61) / `--readiness-rest`
+  (<48), spoor `--readiness-ring-track`. Centertekst in `--font-num`.
+- Verdict-tekst (`--text-primary`) + chips: "Vorm +7" (`--fresh`/`--fresh-soft`),
+  "HRV 48" (`--text-muted`). "Waarom dit cijfer?"-expander → factor-lijst met
+  status-dots (`--good`/`--warn`/`--text-muted`).
+- **Onderaan**: als check-in gedaan → samenvattingsregel + ronde **+**-knop
+  (`--accent-soft`) om de bottom sheet te heropenen, plus effect-callout
+  (`--accent-soft`). Als nog niet ingevuld → gestippelde prompt
+  "+ Ochtend-check-in invullen" (`--bg-sunken`/`--border-strong`).
+- Kaart: card-tokens; padding `--card-pad`.
+
+### b. Niveau-kaart (`LevelCard`)
+Overline "Niveau" + "Gevorderd"-chip (`--accent-soft`/`--accent`). Groot getal
+"28 / 50" (`--font-num`), W/kg. Voortgangsbalk `--accent-grad` over `--bg-sunken`.
+*(Dit is de deck-kaart; staat los van de Vorm-variant hieronder.)*
+
+> **Vorm-variant (Tweak):** de body-secties (c) + (d) hieronder horen bij
+> **Variant B** (Vorm ongewijzigd). In **Variant A** vervallen (c) + (d) en komt
+> er één compacte `VormLevelSummary` (overline "Progressie", W/kg · niveau · FTP
+> + delta, "Progressie →"-affordance naar Niveau) voor in de plaats; de diepe
+> progressie verhuist naar de Niveau-tab (§4). De conditie-balans (e) blijft in
+> beide varianten.
+
+### c. Niveau over tijd (lijngrafiek) — *Variant B*
+Kaart met waarde + delta (`--good`/`--bad`), segmented control 1M/6M/12M/Alles
+(`--segment-*`), en **NiveauChart**: lijn `--chart-line`, area `--chart-fill`,
+grid `--chart-grid`, as `--chart-axis`, actief punt `--chart-point` met
+`--accent`-rand.
+
+### d. Metric-rij (`MetricRow`) — *Variant B*
+Drie cellen **FTP / Gewicht / Week-TSS** (`--font-num`), gescheiden door
+`--border-subtle`. Lege staat = "—" in `--text-muted`.
+
+### e. Conditie-balans
+Kaart "vorm = fitheid − vermoeidheid"; één van drie visualisaties
+(balans / driehoek / pmc) via Tweaks. Eerste-keer = opbouw-melding.
+
+---
+
+---
+
+## 4. Niveau
+
+De langetermijn-**vermogen & ontwikkeling**-lens. Beantwoordt: waar sta ik ·
+word ik sterker · wat voor rijder ben ik · waar kán ik komen. (Vorm = "nu";
+Niveau = "hoe sterk + waarheen".) Hoofd-event: **Girona** — lange klimmen,
+~90 km / 1200 hm per dag = duurvermogen/durability, geen piek-sprint.
+
+**Geen status-deck op Niveau** (afwijking van Vorm/Trainingen): de deck gaat over
+"nu", Niveau over de lange termijn, en de deck-`LevelCard` zou de vermogen-
+snapshot dubbelen. De tab opent direct in de vermogen-identiteit. Mobiel-first
+kolom (`niveau.jsx`, `NiveauTab`), van boven naar onder:
+
+### a. Vermogen-snapshot (`VermogenSnapshot`) — *element 1 · v1*
+Compacte "waar sta ik"-kaart. **FTP** is het kopgetal (`48px`, `--font-num`)
+met eFTP als sub-regel. **W/kg** wordt BENADRUKT — dé klimmetric voor Girona:
+groot in `--wkg-emphasis` (accent) in een eigen pill `--wkg-emphasis-bg` met
+overline "Klimvermogen" + gewicht eronder. Tier-chip rechtsboven
+(`Beginner → Recreatief → Getraind → Gevorderd → Zeer goed → Elite`,
+`--accent-soft`/`--tier-step-border-active`). Onderaan een **tier-ladder**: zes
+segmenten, behaalde in `--accent`, rest `--tier-step`; labels Beginner…Elite
+(`--tier-label`).
+- *Leeg*: "—" + "Verbind je account". *Laden*: skeletons (`--skeleton-*`).
+
+### b. Progressie over tijd (`ProgressieCard`) — *element 2 · v1*
+Eén interactieve trajectorie-grafiek (`NvTrajectoryChart`, viz-laag `--traj-*`,
+zelfde area/scrub-stijl als de Vorm-`NiveauChart`). **Metric-switch** Niveau ·
+W/kg · Fitheid (segmented `--segment-*`) + **venster-switch** 1M/6M/12M/Alles.
+Kop toont de huidige waarde + **periode-delta** (`--traj-delta-up/down`,
+"+0,90 ↑ sinds seizoenstart"). De **fitheid/CTL-lijn** (weggehaald bij Vorm)
+landt hier als optionele context-overlay (gestippeld, `--traj-ctl-line`,
+neutraal — concurreert nooit met de accent-metric).
+- *Leeg*: "verschijnt zodra ~4 weken aan ritten binnen zijn". *Laden*: skeleton.
+
+### c. Rijdersprofiel (`Rijdersprofiel`) — *element 3 · FASE 2*
+Power-duration-curve (beste inspanning per duur: 5s · 1m · 5m · 20m · 60m) op
+log-x, viz-laag `--curve-*`. Girona-relevante duren (5–20 min + lang) gemarkeerd
+in `--curve-point-key` (accent-halo); rest `--curve-point`. Daaronder een
+type-schaal Sprinter ↔ Allrounder ↔ Diesel·klimmer (`--curve-type-track` /
+`--curve-type-marker`) + één-regel-duiding. Vraagt een nieuwe intervals.icu
+mean-max-power-fetch → kaart draagt een **"Fase 2"-tag** (`--soon-tag-*`), zelfde
+binnenkort-conventie als de vermogenscurve-placeholder in het rit-detail.
+
+### d. Doel-gereedheid + projectie (`DoelProjectie`) — *element 4 · FASE 2 · visie-kopstuk*
+- **Doel-gap** (`GapRow`): per dimensie huidig vs Girona-vraag —
+  Klimvermogen (W/kg, *op koers* `--goal-ontrack`), Duurvermogen (CTL,
+  *nog te gaan* `--goal-gap`), Lange-rit-capaciteit. Samenvattende callout
+  (`--goal-ontrack-soft`).
+- **Uren → potentieel** (interactieve what-if, `HoursSlider`): sleep de
+  uren/week (`--slider-*`) → de projectie beweegt mee.
+- **EERLIJKHEID = ontwerp-eis**, twee visueel ONDERSCHEIDEN lagen:
+  1. **Fitheid-projectie** (`ProjectionChart`) — de SOLIDE, uit volume berekende
+     CTL-ramp (`--proj-solid` + `--proj-solid-fill`) naar het plafond, met de
+     duurdoel-lijn (`--goal-target-line`) en een groene **klaar-marker**
+     (`--proj-ready-marker`) waar de ramp het doel kruist. Label "berekend uit
+     volume". Zakt het plafond ónder het doel → géén klaar-marker + eerlijke
+     waarschuwing ("bij Nu/week niet haalbaar", `--warn-soft`).
+  2. **Geschat FTP-effect** — de SPECULATIEVE W/FTP-winst als een **band**
+     (`--proj-band-fill`, gestreept `--proj-band-hatch`, rand `--proj-band-border`),
+     gelabeld **"schatting"** (`--proj-estimate-text`), nooit één vals-precies
+     getal — altijd een bereik ("276–284 W over 12 wk") met een uitklapbare
+     **aannames**-lijst.
+- Readout: "Duurdoel bereikt over ~N weken" + delta "+2u/week ≈ X weken eerder".
+- *Leeg*: "Stel je Girona-doel in en verbind je historie."
+
+> **Vorm-overlap (zie §2):** de diepe progressie + LevelCard staan nu óók op
+> Vorm. Twee behandelingen, togglebaar via Tweak **Vorm-variant**:
+> **A (verplaatsen)** — diepe progressie verhuist naar Niveau; Vorm houdt een
+> compacte `VormLevelSummary` (W/kg · niveau · FTP · delta) + "Progressie →"-
+> affordance naar Niveau. **B (laten staan)** — Vorm ongewijzigd; Niveau draagt
+> de diepe view zelfstandig.
+
+---

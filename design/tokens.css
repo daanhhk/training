@@ -379,4 +379,48 @@
   --coach-divider:       color-mix(in srgb, var(--accent) 22%, transparent); /* narrative ↔ adapt  */
   --coach-adapt-label:   var(--accent);                                      /* "Aanpassing" label */
   --coach-adapt-icon:    var(--accent);                                      /* move/calendar icon */
+
+  /* ─── Niveau tab · power identity + long-term development ───────────────────
+     The long-term POWER & DEVELOPMENT lens (Vorm = "now", Niveau = "how strong
+     + where to"). Mobile-first column under the global header. */
+  /* Power snapshot · tier ladder (element 1 — v1) */
+  --tier-step:               var(--bg-sunken);    /* inactive rung fill              */
+  --tier-step-active:        var(--accent-soft);  /* current tier rung fill          */
+  --tier-step-border-active: color-mix(in srgb, var(--accent) 38%, transparent);
+  --tier-label:              var(--text-muted);   /* rung label                      */
+  --tier-label-active:       var(--accent);       /* current tier label              */
+  --wkg-emphasis:            var(--accent);        /* W/kg figure — the climb metric */
+  --wkg-emphasis-bg:         var(--accent-soft);   /* W/kg pill behind the figure    */
+  /* Progression trajectory chart (element 2 — v1) */
+  --traj-line:    var(--chart-line);              /* active metric line (accent)     */
+  --traj-fill:    var(--chart-fill);              /* area under active metric        */
+  --traj-point:   var(--chart-point);
+  --traj-ctl-line: var(--text-secondary);         /* fitness/CTL series = neutral    */
+  --traj-delta-up:   var(--good);                 /* positive period delta           */
+  --traj-delta-down: var(--bad);                  /* negative period delta           */
+  /* Power-duration curve (element 3 — RIJDERSPROFIEL · fase 2) */
+  --curve-line:         var(--accent);
+  --curve-fill:         color-mix(in srgb, var(--accent) 12%, transparent);
+  --curve-point:        var(--text-primary);      /* effort markers                  */
+  --curve-point-key:    var(--accent);            /* Girona-relevant durations       */
+  --curve-axis:         var(--text-muted);
+  --curve-type-track:   var(--bg-sunken);         /* sprinter↔diesel type scale      */
+  --curve-type-marker:  var(--accent);            /* where this rider sits           */
+  /* Goal readiness + projection (element 4 — DOEL-GEREEDHEID · fase 2 · visie) */
+  --goal-ontrack:       var(--good);              /* "op koers" gap                  */
+  --goal-ontrack-soft:  var(--good-soft);
+  --goal-gap:           var(--accent);            /* "nog te gaan" gap               */
+  --goal-gap-soft:      var(--accent-soft);
+  --goal-target-line:   var(--text-secondary);    /* the Girona target threshold     */
+  --proj-solid:         var(--accent);            /* SOLID fitness-ceiling ramp      */
+  --proj-solid-fill:    color-mix(in srgb, var(--accent) 14%, transparent);
+  --proj-ready-marker:  var(--good);              /* week the ramp crosses target    */
+  --proj-band-fill:     color-mix(in srgb, var(--info) 18%, transparent);  /* speculative gain band   */
+  --proj-band-border:   color-mix(in srgb, var(--info) 42%, transparent);
+  --proj-band-hatch:    color-mix(in srgb, var(--info) 30%, transparent);  /* stripe = "estimate"     */
+  --proj-estimate-text: var(--info);              /* "schatting"-tag + band figure   */
+  /* "Fase 2 / binnenkort" tag (elements 3 & 4 are future, designed alongside v1) */
+  --soon-tag-bg:     var(--bg-elevated);
+  --soon-tag-text:   var(--text-muted);
+  --soon-tag-border: var(--border-strong);
 }

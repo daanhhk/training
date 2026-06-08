@@ -337,3 +337,69 @@ gemarkeerd.
 - Dagstrip-selectie, grafiek-tijdvenster (1M/6M/12M/Alles).
 - Duur-budget-sliders en alle picker-/editor-keuzes vóór "Opslaan"/"Kies"/"Vastleggen".
 - Conditie-visualisatie-variant (via Tweaks).
+
+---
+
+<!-- Levering 4 — Niveau-tab + Vorm-analyse (gefold uit _import-design-4) -->
+
+## Vorm-analyse (Variant A/B-schakel)
+
+### Vorm-analyse
+**Vorm-variant** (Tweak A/B). Bij **A** vervalt onderstaande niveau-grafiek +
+metric-rij; ze worden vervangen door één `VormLevelSummary`-rij (READ · 🌐;
+klik → `tab='niveau'`). De diepe progressie woont dan op Niveau (zie Tab:
+Niveau). Bij **B** blijft onderstaande ongewijzigd. De conditie-balans blijft in
+beide.
+
+| Element | Doet | R/W | Effect / voorwaarden |
+| --- | --- | --- | --- |
+| **`VormLevelSummary` → "Progressie →"** *(alleen Variant A)* | Springt naar de Niveau-tab. | READ · 💻 | `tab='niveau'`; toont W/kg · niveau · FTP + delta als samenvatting. |
+| Segmented **1M / 6M / 12M / Alles** *(Variant B)* | Kiest het tijdvenster van de niveau-grafiek. | READ · 💻 | Herrendert `NiveauChart` met die reeks + delta. Verborgen bij *eerste keer*. |
+| **Niveau-grafiek** (`NiveauChart`) *(Variant B)* | Toont niveau-verloop. | READ · 🌐 | Bij *eerste keer* → `EmptyChart`-placeholder. |
+| **Metric-rij** FTP / Gewicht / Week-TSS *(Variant B)* | Toont kerncijfers. | READ · 🌐 | Bij *eerste keer* → "—". |
+| **Conditie-balans** (`ConditieBalans` / `Driehoek` / `PMC`) | Toont fitheid − vermoeidheid. | READ · 🌐 | Visualisatie-variant via Tweaks gekozen, niet in-scherm. Bij *eerste keer* → opbouw-melding. |
+
+---
+
+---
+
+## Tab: Niveau
+
+Langetermijn vermogen & ontwikkeling. **Geen status-deck.** Data-staten:
+*gevuld* (normaal), *laden* (skeletons) en *leeg* (eerste keer / lege historie).
+Vrijwel alles READ; de enige WRITE-achtige interacties zijn lokale view-state
+(metric/venster-switch, what-if-slider).
+
+### a. Vermogen-snapshot
+- Volledig **READ · 🌐** — FTP, eFTP, W/kg, gewicht, tier + tier-ladder.
+  Geen controls. Tier = afgeleid van W/kg.
+
+### b. Progressie over tijd
+| Element | Doet | R/W | Effect / voorwaarden |
+| --- | --- | --- | --- |
+| Segmented **Niveau / W/kg / Fitheid** | Kiest de metric van de grafiek. | READ · 💻 | Herrendert `NvTrajectoryChart`; kop-waarde + delta + y-as schalen mee. |
+| Segmented **1M / 6M / 12M / Alles** | Kiest het tijdvenster. | READ · 💻 | Slice van de 730d-reeks; delta = waarde − vensterstart. |
+| **Fitheid**-overlay-toggle | Toont/verbergt de CTL-context-lijn. | READ · 💻 | Alleen bij metric Niveau/W/kg; gestippelde neutrale lijn. |
+| **Grafiek-scrub** (sleep/hover) | Leest een punt af. | READ · 💻 | Tooltip met waarde + maandlabel. |
+| Reeksen | niveau, W/kg, fitheid (CTL). | READ · 🌐 | Afgeleid uit 730d FTP/TSS/gewicht-historie. Bij *leeg* → placeholder. |
+
+### c. Rijdersprofiel — *Fase 2*
+- **READ · 🌐** — power-duration-curve + type-duiding. Vraagt een nieuwe
+  intervals.icu mean-max-power-fetch; tot dan een "Fase 2"-preview-kaart.
+  (Toekomst: tik op een duur-marker → die best-effort-rit openen.)
+
+### d. Doel-gereedheid + projectie — *Fase 2 · visie*
+| Element | Doet | R/W | Effect / voorwaarden |
+| --- | --- | --- | --- |
+| **Doel-gap-rijen** (Klimvermogen / Duurvermogen / Lange-rit) | Tonen huidig vs Girona-vraag + op-koers/nog-te-gaan. | READ · 🌐 | Huidig uit historie; Girona-vraag uit de doel-definitie (vereist een target-instelling). |
+| **Uren → potentieel** (`HoursSlider`, sleep) | Stelt de aangenomen uren/week in voor de projectie. | READ · 💻 | Lokale what-if; de app kent het werkelijke gemiddelde al uit beschikbaarheid. Drijft plafond + ramp + readout. Muteert geen plan. |
+| **Fitheid-projectie** (`ProjectionChart`) | Toont de uit-volume-berekende CTL-ramp → plafond, met duurdoel-lijn + klaar-marker. | READ · 💻 | **Solide** = wiskundig gefundeerd. Plafond ≤ doel → géén klaar-marker + eerlijke "niet haalbaar"-melding. |
+| **Geschat FTP-effect** (band + "schatting") | Toont het speculatieve W/FTP-bereik over de horizon. | READ · 💻 | **Nadrukkelijk onderscheiden** van de solide ramp: gestreepte band, gelabeld "schatting", nooit één getal. |
+| **Aannames tonen/verbergen** | Klapt de aannames onder de band uit/in. | READ · 💻 | Maakt de basis van de schatting zichtbaar (sleutelsessies, regelmaat, herstel, afvlakking). |
+| Readout + "+2u/week ≈ X weken eerder" | Vertaalt de slider naar een gereedheid-tijdlijn. | READ · 💻 | Herberekent live bij elke sliderstap. |
+
+> **Eerlijkheid = harde eis.** Het fitheid-plafond (uit volume) is wiskundig
+> gefundeerd → solide weergegeven. De FTP/W-kg-winst is een schatting → een
+> gelabelde band met zichtbare aannames, géén vals-precieze enkel-getal-belofte.
+
+---
