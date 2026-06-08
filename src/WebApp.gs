@@ -14,7 +14,6 @@ function doGet(e) {
   var t = HtmlService.createTemplateFromFile('Index');
   return t.evaluate()
     .setTitle('Cadans')
-    .setFaviconUrl('https://raw.githubusercontent.com/daanhhk/training/main/favicon.svg')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
