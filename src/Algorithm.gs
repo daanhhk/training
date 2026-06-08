@@ -2028,6 +2028,21 @@ function getTrainingLibrary_(settings) {
   });
 }
 
+// PERF: cross-execution cache van getTrainingLibrary_ (puur in settings.ftp +
+// settings.lthr; mesoWeek=1 + macroFase=cat.fase zijn statisch → géén datum/fase/
+// wellness-afhankelijkheid). Key bevat exact die twee inputs → zelf-invalidatie bij
+// FTP/LTHR-wijziging; 6h backstop. getTrainingLibrary_ blijft ONGEMOEID (test-gate).
+function getTrainingLibraryCached_(settings) {
+  var cache = CacheService.getUserCache();
+  var key = 'trainlib_v1_' + Utilities.base64Encode(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([settings.ftp, settings.lthr])));
+  var hit = cache.get(key);
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  var lib = getTrainingLibrary_(settings);
+  try { cache.put(key, JSON.stringify(lib), 21600); } catch (e) {}   // 6h; key zelf-invalideert op input-wijziging
+  return lib;
+}
+
 // ── Day-override: bouw de gekozen workout (bibliotheek-variant óf vrije rit) ──
 // Bibliotheek: render de SPECIFIEKE variant (variantId) op de gekozen duur; valt
 // terug op buildWorkout(type) als de variant ontbreekt. Vrij/groep: synthese met

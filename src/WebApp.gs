@@ -743,7 +743,7 @@ function getDashboardState() {
 
   // Coach-ctx (Fase 4b/4c): event-demand + fase + patroon-teller — éénmaal per state.
   var coachCtx = { fase: macro.macroFase, event: coachEventFromMacro_(macro), patternCount: coachPatternCount_(actuals, wpByDate, today) };
-  var library = getTrainingLibrary_(settings);   // hergebruikt door de adaptatie-post-pass + de payload
+  var library = getTrainingLibraryCached_(settings);   // hergebruikt door de adaptatie-post-pass + de payload
 
   var dagen = [];
   var lowerBound = stripTime_(new Date(today.getTime() - 28 * 86400000));
