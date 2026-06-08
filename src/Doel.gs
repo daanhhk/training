@@ -289,7 +289,7 @@ function eventFase_(events, refDate) {
  * uit de bestaande fase-logica (macro = bepaalFaseVoorDatum_-resultaat) + Events
  * + getVolumeTargets. Geen nieuwe drempels.
  */
-function buildPlanModel_(macro, settings) {
+function buildPlanModel_(macro, settings, eventsData) {
   var today = stripTime_(new Date());
   var PHASES = [
     { key: 'Base',  label: 'Basis' },
@@ -311,7 +311,7 @@ function buildPlanModel_(macro, settings) {
     : null;
   if (dagenTot != null && dagenTot < 0) dagenTot = null;
 
-  var events = getAllEvents_()
+  var events = (eventsData || getAllEvents_())
     .filter(function (e) {
       return (e.prioriteit === 'A' || e.prioriteit === 'B') && stripTime_(e.datum).getTime() >= today.getTime();
     })
@@ -336,7 +336,7 @@ function buildPlanModel_(macro, settings) {
   };
 }
 
-function bepaalFaseVoorDatum_(weekStart) {
+function bepaalFaseVoorDatum_(weekStart, events) {
   var ss = SpreadsheetApp.getActive();
   var ws = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
   var today = new Date(); today.setHours(0, 0, 0, 0);
@@ -355,7 +355,7 @@ function bepaalFaseVoorDatum_(weekStart) {
     return base;
   }
 
-  var all = getAllEvents_();
+  var all = events || getAllEvents_();   // PERF: lever-c — gegeven events hergebruiken, anders zelf lezen
 
   // Referentie-datum: VANDAAG als de te plannen week de huidige week is (de
   // aftelling leeft vanaf vandaag, niet vanaf maandag — dit is de fix); anders

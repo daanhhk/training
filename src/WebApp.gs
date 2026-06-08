@@ -670,7 +670,8 @@ function getDashboardState() {
   var wellValues = readWellnessValues_();
   var weekStart = weekStartDate(new Date());
   var mesoWeek = getMesoWeek();
-  var macro = bepaalFaseVoorDatum_(weekStart);
+  var eventsData = getAllEvents_();   // PERF: één Events-read; gedeeld door alle fase-consumenten + payload
+  var macro = bepaalFaseVoorDatum_(weekStart, eventsData);
   var wellness = combineSignals_(getWellnessSignal(ss, wellValues), rpeSignal_());
   var fs = getFormScore_(wellValues);
   var weekTss = _statusWeekTss_(weekStart, actValues);
@@ -889,7 +890,7 @@ function getDashboardState() {
   var verwachtCum = 0;
   var wkM = new Date(eersteWeekStart.getFullYear(), eersteWeekStart.getMonth(), eersteWeekStart.getDate());
   while (wkM.getTime() < huidigeWeekStart.getTime()) {
-    var wkFase = bepaalFaseVoorDatum_(wkM).fase;
+    var wkFase = bepaalFaseVoorDatum_(wkM, eventsData).fase;
     var band = vt[wkFase] || vt.Build || [4, 7];   // Test/onbekend → Build-fallback
     verwachtCum += ((band[0] + band[1]) / 2) * tssPerUur;   // per week, geen /7
     aantalVoltooideWeken++;
@@ -939,7 +940,7 @@ function getDashboardState() {
       garminLastSync: getDocProp('last_sync', '') || null,
       sundayReminder: getDocProp('sunday_reminder', '') === 'true'
     },
-    events: getAllEvents_().map(function (e) {
+    events: eventsData.map(function (e) {
       return { datum: formatDate(e.datum, 'yyyy-MM-dd'), naam: e.naam, type: e.type, prioriteit: e.prioriteit,
                afstandKm: e.afstandKm, hm: e.hm, klimType: e.klimType, notitie: e.notitie };
     }),
@@ -952,7 +953,7 @@ function getDashboardState() {
       seasonMode: settings.fase || null,         // FASE-setting: build/maintain
       weeksToEvent: (macro.wekenTotEvent != null) ? macro.wekenTotEvent : null
     },
-    plan: buildPlanModel_(macro, settings),
+    plan: buildPlanModel_(macro, settings, eventsData),
     // Fase 1b: readiness (read-side) — hergebruikt reeds-berekende fs/wellness/reeks
     // zodat getReadinessScore_ geen extra live getWellness-call doet.
     readiness: getReadinessScore_(fs, wellness, reeks),
