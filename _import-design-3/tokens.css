@@ -1,0 +1,379 @@
+/* ============================================================================
+   FTP COACH — Design Tokens (single source of truth)
+   Dark, data-dense performance tool. Phone-first (~390px wide).
+
+   STRUCTURE
+     1. Primitives  — raw palette + scales. The ONLY place literal values live.
+     2. Semantic    — role-based tokens that the UI consumes. Reference primitives
+                      (or other semantic tokens) only — never a loose hex.
+     3. Components  — per-element tokens (buttons, fields, tab bar, sheet, cards…).
+
+   RULES
+     - English variable names + English comments.
+     - Every value resolves inside this file (no external references).
+     - The mock consumes these exact names; renaming a semantic token is a
+       breaking change.
+   ============================================================================ */
+
+:root {
+
+  /* ==========================================================================
+     1. PRIMITIVES  — raw values, do not consume directly in UI code
+     ========================================================================== */
+
+  /* Cool neutral ramp (dark → light) */
+  --gray-950: #070A0E;   /* deepest — sunken wells, plot background           */
+  --gray-940: #0A0D12;   /* app canvas                                        */
+  --gray-930: #0C1117;   /* focused field fill                                */
+  --gray-900: #12161D;   /* card / surface                                    */
+  --gray-850: #1A212B;   /* elevated surface (chips, tiles, tooltips)         */
+  --gray-820: #232B36;   /* subtle hairline border                           */
+  --gray-780: #2A323D;   /* neutral control track (toggle off)                */
+  --gray-720: #313B49;   /* strong border on interactive objects             */
+  --gray-500: #5C6775;   /* muted text, axis labels                          */
+  --gray-350: #9BA7B4;   /* secondary text                                   */
+  --gray-100: #EDF1F5;   /* primary text, thumbs, markers                    */
+  --white:    #FFFFFF;   /* on-accent text, active datapoint                 */
+
+  /* Accent ramp (orange → red) */
+  --orange-400: #FF7A2F; /* gradient start (lighter)                         */
+  --orange-500: #FF5A1F; /* base accent                                      */
+  --orange-600: #FF3526; /* deep red (peak / end / gradient end)             */
+
+  /* Status hues */
+  --green-500: #34D17F;  /* success / productive zone                        */
+  --amber-500: #F5B83D;  /* warning / threshold                              */
+  --rose-500:  #FF5267;  /* danger / overreached                             */
+  --blue-500:  #3DA5F0;  /* info / fresh / tapered                           */
+
+  /* Training-zone hues (Z5/Z6 inherit accent, see semantic layer) */
+  --zone-slate-500: #5C84A6; /* recovery (cool)                              */
+  --zone-blue-500:  #3E9BC9; /* endurance                                    */
+  --zone-teal-500:  #36B0A4; /* tempo                                        */
+  --zone-amber-500: #E0A93C; /* threshold                                    */
+
+
+  /* ==========================================================================
+     2. SEMANTIC
+     ========================================================================== */
+
+  /* ─── Background layers & borders ──────────────────────────────────────────
+     Higher in the stack = lighter = "closer". */
+  --bg-app:        var(--gray-940);  /* app canvas, deepest layer            */
+  --bg-sunken:     var(--gray-950);  /* pressed fields, chart plot, empty row */
+  --bg-surface:    var(--gray-900);  /* default card / panel                 */
+  --bg-elevated:   var(--gray-850);  /* chips, tooltips, active tile         */
+  --border-subtle: var(--gray-820);  /* hairline divider inside surfaces     */
+  --border-strong: var(--gray-720);  /* edge of interactive / raised objects */
+
+  /* ─── Text levels (on dark layers) ─────────────────────────────────────── */
+  --text-primary:   var(--gray-100); /* headings, key numbers                */
+  --text-secondary: var(--gray-350); /* labels, supporting copy              */
+  --text-muted:     var(--gray-500); /* axis text, captions, inactive        */
+  --text-on-accent: var(--white);    /* text/icons on accent fills           */
+
+  /* ─── Accent + interactive states ──────────────────────────────────────────
+     Use sparingly: active ring progress, primary CTA, active tab/dot, the
+     level chart line, one key-number highlight per screen. Never for body
+     text, borders or semantic status. */
+  --accent:          var(--orange-500);
+  --accent-strong:   var(--orange-600);
+  --accent-soft:     color-mix(in srgb, var(--accent) 14%, transparent); /* tint fill / hover bg */
+  --accent-grad:     linear-gradient(135deg, var(--orange-400) 0%, var(--orange-600) 100%);
+  --accent-hover:    color-mix(in srgb, var(--accent) 85%, var(--white));     /* hover (lighter)  */
+  --accent-active:   color-mix(in srgb, var(--accent) 82%, var(--gray-950));  /* pressed (darker) */
+  --accent-disabled: color-mix(in srgb, var(--accent) 38%, var(--bg-surface));/* disabled fill    */
+  --accent-ring:     color-mix(in srgb, var(--accent) 35%, transparent);      /* focus glow/ring  */
+
+  /* ─── Status / feedback ─────────────────────────────────────────────────────
+     Never mix with the accent. */
+  --success: var(--green-500);
+  --warning: var(--amber-500);
+  --danger:  var(--rose-500);
+  --info:    var(--blue-500);
+  --success-soft: color-mix(in srgb, var(--success) 15%, transparent);
+  --warning-soft: color-mix(in srgb, var(--warning) 15%, transparent);
+  --danger-soft:  color-mix(in srgb, var(--danger)  15%, transparent);
+  --info-soft:    color-mix(in srgb, var(--info)    16%, transparent);
+
+  /* Domain aliases consumed across the mock:
+       good  = productive / building (where you want to be)
+       warn  = caution      bad = overreached      fresh = rested / tapered */
+  --good:       var(--success);
+  --warn:       var(--warning);
+  --bad:        var(--danger);
+  --fresh:      var(--info);
+  --good-soft:  var(--success-soft);
+  --warn-soft:  var(--warning-soft);
+  --bad-soft:   var(--danger-soft);
+  --fresh-soft: var(--info-soft);
+
+  /* ─── Training zones (power) ────────────────────────────────────────────────
+     Easy → hard. Z5/Z6 inherit the accent, so they shift with it. */
+  --zone-1: var(--zone-slate-500);  /* Recovery  */
+  --zone-2: var(--zone-blue-500);   /* Endurance */
+  --zone-3: var(--zone-teal-500);   /* Tempo     */
+  --zone-4: var(--zone-amber-500);  /* Threshold */
+  --zone-5: var(--accent);          /* VO2max    */
+  --zone-6: var(--accent-strong);   /* Anaerobic */
+
+  /* ─── Data-viz (chart + progress ring) ─────────────────────────────────── */
+  --chart-line:  var(--accent);
+  --chart-fill:  color-mix(in srgb, var(--accent) 12%, transparent); /* area gradient top */
+  --chart-grid:  color-mix(in srgb, var(--white) 5%, transparent);   /* gridlines         */
+  --chart-axis:  var(--text-muted);                                  /* axis text         */
+  --chart-point: var(--white);                                       /* active datapoint  */
+  --ring-track:  color-mix(in srgb, var(--white) 7%, transparent);   /* progress-ring track */
+
+
+  /* ─── Typography ────────────────────────────────────────────────────────────
+     sans → UI, labels, headings      num → all numerals (tabular, mono) */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-num:  'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* Type scale — size / line-height / weight */
+  --fs-display: 56px;  --lh-display: 1.0;   --fw-display: 600;  /* hero number       */
+  --fs-h1:      22px;  --lh-h1:      1.2;   --fw-h1:      600;  /* section heading    */
+  --fs-h2:      16px;  --lh-h2:      1.3;   --fw-h2:      600;  /* card heading       */
+  --fs-h3:      14px;  --lh-h3:      1.35;  --fw-h3:      600;  /* sub-heading / row  */
+  --fs-body:    15px;  --lh-body:    1.45;  --fw-body:    400;  /* running text       */
+  --fs-label:   13px;  --lh-label:   1.4;   --fw-label:   500;  /* control labels     */
+  --fs-caption: 11px;  --lh-caption: 1.3;   --fw-caption: 600;  /* overline / caption */
+
+  /* Numeric scale (mono, tabular) */
+  --fs-num-lg: 44px;  --fw-num-lg: 600;  /* level / ring value */
+  --fs-num-md: 26px;  --fw-num-md: 600;  /* metric value       */
+  --fs-num-sm: 17px;  --fw-num-sm: 500;  /* inline number      */
+
+  --tracking-overline: 0.14em;  /* letter-spacing for CAPS overlines */
+
+
+  /* ─── Border-radius scale ──────────────────────────────────────────────── */
+  --r-xs:   6px;
+  --r-sm:   9px;
+  --r-md:   12px;
+  --r-lg:   16px;
+  --r-xl:   20px;
+  --r-2xl:  22px;   /* bottom-sheet top corners */
+  --r-pill: 999px;
+
+  /* ─── Spacing scale (4-pt grid) ────────────────────────────────────────── */
+  --s-1:   4px;
+  --s-2:   8px;
+  --s-3:  12px;
+  --s-4:  16px;
+  --s-5:  20px;
+  --s-6:  24px;
+  --s-7:  32px;
+  --s-8:  40px;
+
+  /* ─── Elevation / shadow scale (dark, subtle) ──────────────────────────── */
+  --shadow-sm:    0 1px 2px rgba(0,0,0,0.30);
+  --shadow-card:  0 1px 0 rgba(255,255,255,0.02) inset, 0 2px 8px rgba(0,0,0,0.35);
+  --shadow-md:    0 6px 20px rgba(0,0,0,0.40);
+  --shadow-lg:    0 18px 50px rgba(0,0,0,0.50);
+  --shadow-sheet: 0 -18px 50px rgba(0,0,0,0.50);  /* bottom sheet (upward)   */
+  --shadow-drawer: -10px 0 34px rgba(0,0,0,0.55); /* slide-in settings panel */
+
+
+  /* ==========================================================================
+     3. COMPONENTS
+     ========================================================================== */
+
+  /* ─── Buttons ──────────────────────────────────────────────────────────── */
+  --btn-height:           44px;
+  --btn-radius:           var(--r-md);
+  --btn-primary-bg:       var(--accent-grad);
+  --btn-primary-text:     var(--text-on-accent);
+  --btn-secondary-bg:     var(--bg-elevated);
+  --btn-secondary-border: var(--border-strong);
+  --btn-secondary-text:   var(--text-primary);
+  --btn-destructive-bg:   var(--danger-soft);
+  --btn-destructive-text: var(--danger);
+  --btn-disabled-bg:      var(--bg-elevated);
+  --btn-disabled-text:    var(--text-muted);
+
+  /* ─── Text / number fields ─────────────────────────────────────────────── */
+  --field-bg:           var(--bg-sunken);
+  --field-bg-focus:     var(--gray-930);
+  --field-border:       var(--border-strong);
+  --field-border-focus: var(--accent);
+  --field-text:         var(--text-primary);
+  --field-placeholder:  var(--text-muted);
+  --field-height:       38px;
+  --field-pad-x:        12px;
+  --field-radius:       var(--r-sm);
+
+  /* ─── Toggle / switch (off = neutral, on = accent) ─────────────────────── */
+  --toggle-w:            44px;
+  --toggle-h:            26px;
+  --toggle-track-off:    var(--gray-780);
+  --toggle-track-on:     var(--accent);
+  --toggle-thumb:        var(--gray-100);
+  --toggle-thumb-shadow: 0 1px 3px rgba(0,0,0,0.50);
+
+  /* ─── Segmented control ────────────────────────────────────────────────── */
+  --segment-track-bg:      var(--bg-sunken);
+  --segment-text:          var(--text-muted);
+  --segment-active-bg:     var(--bg-elevated);
+  --segment-active-text:   var(--text-primary);
+  --segment-active-shadow: 0 1px 3px rgba(0,0,0,0.45);
+
+  /* ─── Dropdown / select ────────────────────────────────────────────────── */
+  --select-bg:            var(--bg-sunken);
+  --select-border:        var(--border-strong);
+  --select-text:          var(--text-primary);
+  --select-menu-bg:       var(--bg-elevated);
+  --select-menu-border:   var(--border-strong);
+  --select-option-active: var(--accent-soft);
+
+  /* ─── Range slider (availability minutes) ──────────────────────────────── */
+  --slider-track: var(--border-subtle);
+  --slider-fill:  var(--accent);
+  --slider-thumb: var(--accent);
+
+  /* ─── Date picker (inherits field style) ───────────────────────────────── */
+  --date-bg:     var(--field-bg);
+  --date-border: var(--field-border);
+  --date-text:   var(--field-text);
+
+  /* ─── Bottom tab bar (primary navigation) ──────────────────────────────── */
+  --tabbar-bg:           color-mix(in srgb, var(--bg-app) 88%, transparent); /* blurred over content */
+  --tabbar-border:       var(--border-subtle);
+  --tabbar-icon:         var(--text-muted);
+  --tabbar-icon-active:  var(--accent);
+  --tabbar-label:        var(--text-muted);
+  --tabbar-label-active: var(--accent);
+  --tabbar-indicator:    var(--accent);   /* active-tab top bar */
+  --tabbar-safe-bottom:  20px;            /* home-indicator safe area */
+
+  /* ─── Overlay scrim + bottom sheet (e.g. morning check-in) ─────────────── */
+  --scrim:        color-mix(in srgb, var(--gray-950) 62%, transparent);
+  --sheet-bg:     var(--bg-surface);
+  --sheet-radius: var(--r-2xl);
+  --sheet-handle: var(--border-strong);
+  --sheet-shadow: var(--shadow-sheet);
+
+  /* ─── Status / readiness card (Vorm tab, top) ──────────────────────────── */
+  --card-bg:               var(--bg-surface);
+  --card-border:           var(--border-subtle);
+  --card-radius:           var(--r-lg);
+  --card-shadow:           var(--shadow-card);
+  --card-pad:              var(--s-4);
+  --readiness-ready:       var(--success);  /* score ≥ 62 */
+  --readiness-caution:     var(--warning);  /* score 48–61 */
+  --readiness-rest:        var(--danger);   /* score < 48  */
+  --readiness-ring-track:  var(--ring-track);
+
+  /* ─── Plan / periodisation card (Schema tab, top) ───────────────────────────
+     Countdown to A-event + season-mode timeline. */
+  --phase-past:          color-mix(in srgb, var(--accent) 28%, var(--bg-sunken)); /* completed phases */
+  --phase-current:       var(--accent);                                          /* active phase     */
+  --phase-future:        var(--bg-elevated);                                      /* upcoming phases  */
+  --phase-marker:        var(--gray-100);                                         /* "you are here"   */
+  --phase-label:         var(--text-muted);
+  --phase-label-current: var(--accent);
+  --mode-chip-bg:        var(--accent-soft);     /* "goal-oriented" season-mode chip */
+  --mode-chip-text:      var(--accent);
+  --mode-chip-border:    color-mix(in srgb, var(--accent) 38%, transparent);
+  --event-a-bg:          var(--accent-soft);     /* A-priority event tag */
+  --event-a-text:        var(--accent);
+  --event-b-bg:          var(--bg-elevated);     /* B-priority event tag */
+  --event-b-text:        var(--text-secondary);
+
+  /* ─── Status badge (e.g. "Connected") ──────────────────────────────────── */
+  --badge-good-bg:   var(--success-soft);
+  --badge-good-text: var(--success);
+
+  /* ─── Ride detail (activity statistics sheet) ───────────────────────────────
+     COMPONENT. Tap a completed ride → overlay sheet with the real activity
+     stats from intervals.icu: summary metrics + interval structure. Reuses the
+     bottom-sheet (--scrim/--sheet-*), zone (--zone-*) and reading layers. */
+  --ride-metric-tile-bg: var(--bg-sunken);     /* secondary metric tile         */
+  --ride-metric-label:   var(--text-muted);    /* metric caption                */
+  --ride-metric-value:   var(--text-primary);  /* metric figure (font-num)      */
+  --ride-metric-unit:    var(--text-muted);    /* unit suffix (w, bpm, kJ…)     */
+  --ride-hero-bg:        var(--bg-sunken);      /* NP/IF/TSS hero strip          */
+  --ride-hero-value:     var(--text-primary);   /* hero figure                   */
+  --ride-hero-accent:    var(--accent);         /* the single key hero (TSS)     */
+  --ride-divider:        var(--border-subtle);  /* section + tile hairlines      */
+  --ride-section-label:  var(--text-muted);     /* "Intervallen" overline        */
+
+  /* Time-in-zone overview bar (segments sized by time, colored --zone-1..6) */
+  --tiz-track:       var(--bg-sunken);
+  --tiz-gap:         2px;                        /* hairline between zone blocks  */
+  --tiz-legend-text: var(--text-secondary);
+
+  /* Interval blocks list (the core) */
+  --interval-row-bg:    var(--bg-sunken);        /* work-interval row             */
+  --interval-rest-bg:   var(--bg-app);           /* recovery row (lower contrast) */
+  --interval-stripe-w:  3px;                      /* zone-colored left stripe      */
+  --interval-label:     var(--text-primary);     /* "Interval 1" / "Herstel"      */
+  --interval-sub:       var(--text-muted);       /* duur · HR · %FTP meta line    */
+  --interval-power:     var(--text-primary);     /* watt figure (row hero)        */
+  --interval-power-unit:var(--text-muted);
+
+  /* Lazy-load skeleton + empty/error state */
+  --skeleton-base:   var(--bg-elevated);
+  --skeleton-sheen:  color-mix(in srgb, var(--white) 7%, transparent);
+  --state-icon:      var(--text-muted);          /* error/empty glyph             */
+  --state-icon-bg:   var(--bg-elevated);         /* glyph disc                    */
+  --state-title:     var(--text-secondary);
+  --state-body:      var(--text-muted);
+
+  /* ─── Execution alignment (day-level: planned vs done) ──────────────────────
+     SEMANTIC. How closely a completed day followed the plan, or that it was
+     missed. Never punishing — "missed" is neutral grey, not danger-red.
+       on-plan    = executed as planned
+       deviated   = same intent, lighter/shorter than planned
+       different  = trained something else than planned
+       missed     = planned but not ridden */
+  --align-on-plan:        var(--success);
+  --align-deviated:       var(--warning);
+  --align-different:      var(--info);
+  --align-missed:         var(--text-muted);
+  --align-on-plan-soft:   var(--success-soft);
+  --align-deviated-soft:  var(--warning-soft);
+  --align-different-soft: var(--info-soft);
+  --align-missed-soft:    color-mix(in srgb, var(--text-muted) 16%, transparent);
+
+  /* ─── Planned-vs-done reading (echoes WeekLoad's "done / planned") ──────────
+     COMPONENT. Two-column metric table + paired zone bars. */
+  --reading-planned:   var(--text-muted);    /* the planned (reference) column */
+  --reading-done:      var(--text-primary);  /* the achieved column            */
+  --reading-track:     var(--bg-sunken);     /* zone-bar / progress track       */
+  --reading-divider:   var(--border-subtle); /* row hairlines                   */
+  --reading-col-label: var(--text-muted);    /* "Gepland" / "Gedaan" headers    */
+
+  /* ─── Zone comparison (planned vs done time per zone) ───────────────────────
+     COMPONENT. Replaces the two stacked zone bars in the planned-vs-done
+     reading. One horizontal row per zone (Z1–6): a faded "planned-envelope"
+     bar carries the planned minutes, a solid "done" bar overlaid carries the
+     done minutes — both in the zone hue. Per-zone deviation reads at a glance
+     (done past planned = more · planned past done = short · done-only = not
+     planned · planned-only = skipped). Bar hues come from --zone-1..6; the
+     minute labels reuse --reading-planned / --reading-done. */
+  --zcompare-track:         var(--reading-track);  /* row track behind both bars     */
+  --zcompare-plan-strength: 26%;                   /* zone-hue tint of planned bar    */
+  --zcompare-track-h:       18px;                  /* full row height (planned bar)   */
+  --zcompare-done-h:        8px;                   /* inset solid "done" bar height   */
+  --zcompare-label:         var(--text-secondary); /* zone name label                 */
+  --zcompare-tag-unplanned: var(--align-different);/* "niet gepland" (done, no plan)  */
+  --zcompare-tag-skipped:   var(--text-muted);     /* "niet gereden" (plan, no done)  */
+
+  /* ─── Coach callout (one voice across day feedback) ─────────────────────────
+     COMPONENT. Narrative (match) · impact (deviation/missed) · adaptation.
+     The coach speaks as a single accent-soft voice; the impact variant gets a
+     stronger border, and the adaptation line is hairline-separated inside the
+     SAME callout so it reads as one continuous voice. */
+  --coach-bg:            var(--accent-soft);
+  --coach-border:        color-mix(in srgb, var(--accent) 35%, transparent);
+  --coach-border-impact: color-mix(in srgb, var(--accent) 55%, transparent); /* prominent impact */
+  --coach-mark:          var(--accent);                                      /* coach glyph stroke */
+  --coach-mark-bg:       color-mix(in srgb, var(--accent) 18%, transparent); /* coach badge fill   */
+  --coach-label:         var(--accent);                                      /* "Coach" overline   */
+  --coach-text:          var(--text-secondary);                              /* narrative body     */
+  --coach-divider:       color-mix(in srgb, var(--accent) 22%, transparent); /* narrative ↔ adapt  */
+  --coach-adapt-label:   var(--accent);                                      /* "Aanpassing" label */
+  --coach-adapt-icon:    var(--accent);                                      /* move/calendar icon */
+}
