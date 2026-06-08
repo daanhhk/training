@@ -349,6 +349,22 @@
   --reading-divider:   var(--border-subtle); /* row hairlines                   */
   --reading-col-label: var(--text-muted);    /* "Gepland" / "Gedaan" headers    */
 
+  /* ─── Zone comparison (planned vs done time per zone) ───────────────────────
+     COMPONENT. Replaces the two stacked zone bars in the planned-vs-done
+     reading. One horizontal row per zone (Z1–6): a faded "planned-envelope"
+     bar carries the planned minutes, a solid "done" bar overlaid carries the
+     done minutes — both in the zone hue. Per-zone deviation reads at a glance
+     (done past planned = more · planned past done = short · done-only = not
+     planned · planned-only = skipped). Bar hues come from --zone-1..6; the
+     minute labels reuse --reading-planned / --reading-done. */
+  --zcompare-track:         var(--reading-track);  /* row track behind both bars     */
+  --zcompare-plan-strength: 26%;                   /* zone-hue tint of planned bar    */
+  --zcompare-track-h:       18px;                  /* full row height (planned bar)   */
+  --zcompare-done-h:        8px;                   /* inset solid "done" bar height   */
+  --zcompare-label:         var(--text-secondary); /* zone name label                 */
+  --zcompare-tag-unplanned: var(--align-different);/* "niet gepland" (done, no plan)  */
+  --zcompare-tag-skipped:   var(--text-muted);     /* "niet gereden" (plan, no done)  */
+
   /* ─── Coach callout (one voice across day feedback) ─────────────────────────
      COMPONENT. Narrative (match) · impact (deviation/missed) · adaptation.
      The coach speaks as a single accent-soft voice; the impact variant gets a

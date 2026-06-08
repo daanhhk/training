@@ -157,8 +157,23 @@ elk `align-*` + `-soft` + dot: *Op plan* (`--align-on-plan`), *Licht afgeweken*
 `--reading-track`. Type-rij + metric-rijen (Duur · IF · TSS) met geplande waarde
 in `--reading-planned` (muted), gedane in `--reading-done` (primary, zwaarder);
 bij afwijking kleurt de gedane type-waarde `--align-different`. Onderaan
-**zone-verdeling**: twee `MiniZoneBar`s naast elkaar (gepland / gedaan), zones
-`--zone-1…6`.
+**zone-vergelijking** (`ZoneCompare`, zie hieronder).
+
+**Zone-vergelijking** (`ZoneCompare`) — vervangt de twee losse gestapelde
+zone-balken (die lazen als twee aparte trainingen — de gedane stapel oogde
+rommelig terwijl het een normale rit was). Nu één **rij per zone** (Z1–6, alleen
+zones met gepland óf gedaan > 0): een faded "geplande-omvang"-balk
+(`color-mix(--zone-N, --zcompare-plan-strength)`, `--zcompare-track-h`) met een
+massieve, in hoogte ingesprongen "gedaan"-balk eroverheen (`--zone-N`,
+`--zcompare-done-h`), op een gedeelde minuten-schaal. Rechts de minuten:
+gedaan groot in zonekleur, eronder `gepland N′` (`--reading-planned`). De
+afwijking per zone leest in één oogopslag — gedaan voorbij gepland = méér ·
+gepland voorbij gedaan = te kort · alléén gedaan = tag *niet gepland*
+(`--zcompare-tag-unplanned`) · alléén gepland = tag *niet gereden*
+(`--zcompare-tag-skipped`). Stijl-idee uit de intervals.icu-tijd-per-zone-balk,
+maar met gepland ÉN gedaan per zone. *Alleen in de coach-feedback* (plan vs
+uitvoering); de rit-detail (§1ter) houdt z'n enkele gereden-zone-verdeling-balk
+(`TimeInZoneBar` = "wat deed ik", los van een plan).
 
 **Uitvoerings-/alignment-balk** (`AlignBar`) — bij match/afwijking-met-zelfde-
 intent: "Uitvoering volgt plan" + percentage; track `--reading-track`, vulling
@@ -174,10 +189,13 @@ icoon (`--coach-adapt-icon`) + label "AANPASSING" (`--coach-adapt-label`).
 
 ### Staten
 - **08 · Voltooid — match** (`08-dag-voltooid-match.png`): chip *Op plan*,
-  gelijke gepland/gedaan-kolommen, `AlignBar` (96%), motiverend narratief.
+  gelijke gepland/gedaan-kolommen + een `ZoneCompare` waar de gedane balk per
+  zone vrijwel samenvalt met de geplande omvang, `AlignBar` (96%), motiverend narratief.
 - **09 · Voltooid — afwijking** (`09-dag-voltooid-afwijking.png`): chip *Anders
-  getraind*, `Reading` toont gepland *VO2max* vs gedaan *Tempo*
-  (`--align-different`); `CoachCallout impact` met impact + adaptatie.
+  getraind*, `Reading` toont gepland *VO2max* vs gedaan *Tempo* (`--align-different`).
+  De `ZoneCompare` maakt het hard zichtbaar: Z5 gepland 20′ → gedaan 0′ (*niet
+  gereden* — de gemiste sleutel-stimulus) en Z3 gepland 0′ → gedaan 30′ (*niet
+  gepland* — de losse tempo); `CoachCallout impact` met impact + adaptatie.
 - **10 · Gemist** (`10-dag-gemist.png`): chip *Niet gereden*, compacte
   "Gepland: … · niet gereden"-lezing, skip-reden-keuze, `CoachCallout impact`
   zonder verwijt + adaptatie + motiverende vooruitblik.
@@ -203,10 +221,15 @@ Opbouw top → onder:
 3. **Hero-strip** — drie cellen NP · IF · TSS op `--ride-hero-bg`, scheiders
    `--ride-divider`, waarden `--ride-hero-value`; TSS als enige accent
    (`--ride-hero-accent`).
-4. **Metric-grid** (`Metric`, 2 kolommen) — Gem. vermogen, Variabiliteit,
-   Gem. HR, Max. HR, Cadans, Hoogtewinst, Arbeid, Calorieën. Tegel
-   `--ride-metric-tile-bg`, label `--ride-metric-label`, waarde
-   `--ride-metric-value`, eenheid `--ride-metric-unit`.
+4. **Metric-grid** (`Metric`, 2 kolommen, 2×3) — herzien voor een fietser die
+   z'n rit nabeschouwt (klim-/Girona-doel), niet voor volledigheid: **Gem.
+   vermogen** (w) · **W/kg** (uit gem. vermogen ÷ gewicht; klim-relevant) ·
+   **Gem. HR** (bpm, met *max NNN* als sub-waarde rechts) · **Hoogtewinst** (m) ·
+   **Cadans** (rpm, secundair) · **Arbeid** (kJ). Bewust wég: *Variabiliteit
+   (VI)*, losse *Max. HR*-tegel (gevouwen in de sub van Gem. HR) en *Calorieën*
+   (overlapt met kJ — kJ is training-relevanter). Tegel `--ride-metric-tile-bg`,
+   label `--ride-metric-label`, waarde `--ride-metric-value`, eenheid
+   `--ride-metric-unit`, sub `--text-muted`.
 5. **Intervallen** (`IntervalRow`) — de kern. Sectie-overline
    `--ride-section-label` + "FTP {n} w". Per blok: zone-gekleurde linker-stripe
    (`--interval-stripe-w`, `--zone-*`), label (`--interval-label`) + `Z*`-badge,

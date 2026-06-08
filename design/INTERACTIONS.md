@@ -120,7 +120,8 @@ server-geleid.
 | Element | Doet | R/W | Effect / voorwaarden |
 | --- | --- | --- | --- |
 | **Alignment-chip** (`AlignChip`: Op plan / Licht afgeweken / Anders getraind / Niet gereden) | Toont hoe goed de uitvoering het plan volgde. | READ · 🌐 | Soort + percentage server-side bepaald (uit de geüploade activiteit). Puur lezen. |
-| **Gepland-vs-gedaan-lezing** (`Reading`: type · duur · IF · TSS · zone-verdeling) | Toont plan naast uitvoering. | READ · 🌐 | Geplande waarden uit het plan, gedane uit de activiteit. Zone-verdeling Gedaan = reële power-time-in-zone (intervals.icu, lazy + per dag gecachet); IF/intent-benadering als fallback. IF genormaliseerd naar 0–1. |
+| **Gepland-vs-gedaan-lezing** (`Reading`: type · duur · IF · TSS) | Toont plan naast uitvoering. | READ · 🌐 | Geplande waarden uit het plan, gedane uit de activiteit. IF genormaliseerd naar 0–1. |
+| **Zone-vergelijking** (`ZoneCompare`: gepland vs gedaan, min/zone) | Toont per zone (Z1–6) de geplande tijd naast de gedane tijd; tags *niet gepland* / *niet gereden*. | READ · 🌐 | Geplande zone-minuten uit de workout-structuur, gedane uit de intervals.icu-zonetijden (lazy + per dag gecachet; IF/intent-benadering als fallback). Puur lezen. *Alleen in de coach-feedback* (vs plan), niet in de rit-detail. |
 | **Uitvoerings-balk** (`AlignBar`, bij zelfde-intent) | Toont alignment-%. | READ · 🌐 | Server-berekend. |
 | **Impact-callout** (`CoachCallout impact`) | Legt uit wat match/afwijking/gemist betekent voor de blok-fase. | READ · 🌐 | **Server-geleid** (coach-engine); narratief, niet bewerkbaar. |
 | **Adaptatie-regel** ("Voorstel: …") | Toont wat de coach voorstelt (verplaatsen / inkorten / niets). | READ · 🌐 | **Server-geleid** (coach-engine). NB: in deze pass een VOORSTEL (uitleg); auto-executie via de override-replanner = toekomst. |
@@ -133,7 +134,7 @@ voltooide rit; de detaildata wordt lazy opgehaald.
 | --- | --- | --- | --- |
 | **Tik-affordance op gereden rit** ("Bekijk ritdetails") | Opent de rit-detail-sheet. | 💻 | Mount de overlay (`--scrim` + sheet) en triggert `getRideDetail(dISO)`. Alleen op dagen met een gekoppelde activiteit. |
 | **Lazy-load** (`getRideDetail`) | Haalt summary-metrics + interval-structuur op bij intervals.icu. | READ · 🌐 | Tijdens het ophalen → `RideLoading` (skeleton). Resultaat gecachet per activiteit (DocProps `ridedetail_<id>` + client-cache); heropenen toont direct de geladen sheet. |
-| **Sheet-inhoud** (kop, tijd-in-zone, hero-metrics, metric-grid, intervallen) | Toont de statistieken. | READ · 🌐 | Alles server-data; puur lezen. |
+| **Sheet-inhoud** (kop, tijd-in-zone, hero NP·IF·TSS, herziene metric-grid: gem. vermogen · W/kg · gem. HR [max als sub] · hoogtewinst · cadans · arbeid kJ, intervallen) | Toont de statistieken. | READ · 🌐 | Alles server-data; puur lezen. W/kg = gem. vermogen ÷ gewicht. VI/max-HR-tegel/calorieën bewust weggelaten (fietser-nut). |
 | **Sluiten** (✕ of tik op scrim / sleep omlaag) | Sluit de sheet. | 💻 | Unmount overlay; geen server-call. |
 | **"Opnieuw proberen"** (alleen `RideError`) | Herhaalt `getRideDetail`. | READ · 🌐 | Bij mislukte/lege respons; klik → terug naar `RideLoading`. |
 
