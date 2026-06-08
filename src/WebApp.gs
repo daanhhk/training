@@ -672,8 +672,8 @@ function getDashboardState() {
   var mesoWeek = getMesoWeek();
   var macro = bepaalFaseVoorDatum_(weekStart);
   var wellness = combineSignals_(getWellnessSignal(ss, wellValues), rpeSignal_());
-  var fs = getFormScore_();
-  var weekTss = _statusWeekTss_(weekStart);
+  var fs = getFormScore_(wellValues);
+  var weekTss = _statusWeekTss_(weekStart, actValues);
   var garminVerdict = garminHeuristic(weekTss, mesoWeek, macro.fase, fs);
 
   var planner = readPlanner(ss);

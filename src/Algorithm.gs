@@ -1017,8 +1017,29 @@ function formZone_(form) {
 // Latest CTL/ATL/Form from the most recent wellness record carrying them.
 // Field names confirmed 2026-06-02 as plain ctl/atl/rampRate (no icu_ prefix);
 // live-read at display time, spiegelt actualTssByDate_/_statusWeekTss_ (geen persistence).
-function getFormScore_() {
+function getFormScore_(wellValues) {
   try {
+    // PERF: Sheet-pad — meest-recente Wellness-rij (idx0 Datum / idx8 CTL / idx9 ATL /
+    // idx11 Ramp) i.p.v. live getWellness(7). Zelfde afleiding (form=ctl-atl, formZone_)
+    // + zelfde null-handling (geen rij met ctl+atl → null). Geen array → live ongewijzigd.
+    if (wellValues) {
+      var best = null;
+      for (var j = 0; j < wellValues.length; j++) {
+        var w = wellValues[j];
+        if (!(w[0] instanceof Date)) continue;
+        var wc = (w[8] !== '' && w[8] != null) ? Number(w[8]) : null;
+        var wa = (w[9] !== '' && w[9] != null) ? Number(w[9]) : null;
+        if (wc == null || wa == null) continue;
+        var wt = w[0].getTime();
+        if (!best || wt > best.t) {
+          best = { t: wt, date: formatDate(w[0], 'yyyy-MM-dd'), ctl: wc, atl: wa,
+                   ramp: (w[11] !== '' && w[11] != null) ? Number(w[11]) : null };
+        }
+      }
+      if (!best) return null;
+      var formW = best.ctl - best.atl;
+      return { date: best.date, ctl: best.ctl, atl: best.atl, form: formW, ramp: best.ramp, label: formZone_(formW) };
+    }
     var arr = getWellness(7);            // raw /wellness records
     if (!arr || !arr.length) return null;
     arr.sort(function (a, b) { return String(b.id).localeCompare(String(a.id)); }); // newest first

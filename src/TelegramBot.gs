@@ -546,11 +546,24 @@ function handleKlaar_(chatId) {
 }
 
 /** Sum icu_training_load over cycling activities tussen weekStart en +7d. */
-function _statusWeekTss_(weekStart) {
-  var acts = [];
-  try { acts = getActivities(14) || []; } catch (e) { console.warn('_statusWeekTss_ getActivities: ' + e.message); return 0; }
+function _statusWeekTss_(weekStart, actValues) {
   var wsT = stripTime_(weekStart).getTime();
   var weT = wsT + 7 * 86400000;
+  // PERF: Sheet-pad (actValues = Activiteiten-array) — zelfde week+cycling-filter +
+  // TSS-som (idx0 Datum / idx1 Type / idx8 TSS) als getWeekLoad_. Geen array → live.
+  if (actValues) {
+    var sumA = 0;
+    actValues.forEach(function (r) {
+      if (!(r[0] instanceof Date)) return;
+      if (CYCLING_TYPES.indexOf(String(r[1] || '')) < 0) return;
+      var t = stripTime_(r[0]).getTime();
+      if (t < wsT || t >= weT) return;
+      if (r[8] !== '' && r[8] != null) sumA += Number(r[8]) || 0;
+    });
+    return Math.round(sumA);
+  }
+  var acts = [];
+  try { acts = getActivities(14) || []; } catch (e) { console.warn('_statusWeekTss_ getActivities: ' + e.message); return 0; }
   var sum = 0;
   acts.forEach(function (a) {
     if (CYCLING_TYPES.indexOf(String(a.type || '')) < 0) return;
