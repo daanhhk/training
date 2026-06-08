@@ -96,6 +96,20 @@ function testNiveau_(ctx) {
   assertClose_(ctx, 'niveau clamp-low → 0', 0, computeNiveau_(35, 70).niveau);
   assert_(ctx, 'niveau null-ftp', null, computeNiveau_(null, 70).niveau);
   assert_(ctx, 'niveau null-gewicht', null, computeNiveau_(295, null).niveau);
+  // Niveau-tab progressie (Fase 7) — ctlReeksMaandelijks_ (daily PMC) + niveauProgressie_.
+  function actRow_(d, tss) { var r = []; r[0] = d; r[8] = tss; return r; }
+  assert_(ctx, 'ctl leeg → {}', 0, Object.keys(ctlReeksMaandelijks_([])).length);
+  var c1 = ctlReeksMaandelijks_([actRow_(new Date(2026, 0, 15), 100)]);
+  assertClose_(ctx, 'ctl 1-rit', 2.4, c1['2026-01'], 0.05);
+  var c2 = ctlReeksMaandelijks_([actRow_(new Date(2026, 0, 31), 42), actRow_(new Date(2026, 1, 1), 42)]);
+  assertClose_(ctx, 'ctl maand jan', 1.0, c2['2026-01'], 0.05);
+  assertClose_(ctx, 'ctl maand feb (build + maand-eind wint)', 2.0, c2['2026-02'], 0.05);
+  var np = niveauProgressie_([{ maand: '2026-01', niveau: 25, ftp: 275, gewicht: 72 }], { '2026-01': 40 });
+  assert_(ctx, 'prog lengte', 1, np.length);
+  assertClose_(ctx, 'prog wkg', 3.82, np[0].wkg, 0.001);
+  assert_(ctx, 'prog ctl', 40, np[0].ctl);
+  assert_(ctx, 'prog lege reeks → []', 0, niveauProgressie_([], {}).length);
+  assert_(ctx, 'prog wkg null bij geen gewicht', null, niveauProgressie_([{ maand: 'x', niveau: 10, ftp: 275, gewicht: null }], {})[0].wkg);
 }
 
 // ── computeMacroPhase (puur) — week-offsets + isTestWeek ────────────

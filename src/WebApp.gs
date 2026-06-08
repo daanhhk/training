@@ -312,6 +312,52 @@ function dashNiveauReeks_(ss, actValues) {
   return out;
 }
 
+// ── Niveau-tab (Fase 7) — W/kg- + fitheid(CTL)-progressie (PURE; getest) ──
+// Maandelijkse CTL uit een daily PMC (exp-gewogen TSS, 42d-tau) over de
+// Activiteiten-historie (idx0 datum, idx8 TSS; alle sporten = totale load, net als
+// intervals.icu). CTL[d] = CTL[d-1] + (TSS[d] − CTL[d-1])/42; maand-eind wint.
+// actValues = readActiviteitenValues_()-array. Returnt {'yyyy-MM': ctl} (1 dec).
+var PMC_TAU_ = 42;
+function ctlReeksMaandelijks_(actValues) {
+  if (!actValues || !actValues.length) return {};
+  var byDay = {}, minD = null, maxD = null;
+  actValues.forEach(function (r) {
+    if (!(r[0] instanceof Date)) return;
+    var d = stripTime_(r[0]), t = d.getTime();
+    var tss = (r[8] !== '' && r[8] != null) ? (Number(r[8]) || 0) : 0;
+    byDay[t] = (byDay[t] || 0) + tss;
+    if (minD === null || t < minD.getTime()) minD = d;
+    if (maxD === null || t > maxD.getTime()) maxD = d;
+  });
+  if (minD === null) return {};
+  var out = {}, ctl = 0;
+  var cur = new Date(minD.getFullYear(), minD.getMonth(), minD.getDate());
+  var endT = maxD.getTime();
+  while (cur.getTime() <= endT) {
+    var tss = byDay[cur.getTime()] || 0;
+    ctl = ctl + (tss - ctl) / PMC_TAU_;
+    out[formatDate(cur, 'yyyy-MM')] = Math.round(ctl * 10) / 10;   // maand-eind = laatste dag wint
+    cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);   // DST-immuun
+  }
+  return out;
+}
+
+// niveau-reeks (maand) + ctl-map → progressie-series [{maand, niveau, wkg, ctl}].
+// W/kg = ftp/gewicht (2 dec) per punt; ctl = maand-CTL of null. PURE.
+function niveauProgressie_(niveauReeks, ctlByMonth) {
+  if (!Array.isArray(niveauReeks)) return [];
+  ctlByMonth = ctlByMonth || {};
+  return niveauReeks.map(function (p) {
+    var wkg = (p.ftp && p.gewicht) ? Math.round(p.ftp / p.gewicht * 100) / 100 : null;
+    return {
+      maand: p.maand,
+      niveau: (p.niveau != null) ? p.niveau : null,
+      wkg: wkg,
+      ctl: (ctlByMonth[p.maand] != null) ? ctlByMonth[p.maand] : null
+    };
+  });
+}
+
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
 function dashDayCard_(dISO, wpEntry, actual, rpe) {
   var voorstel = null;
@@ -835,6 +881,9 @@ function getDashboardState() {
     niveauReeks: dashNiveauReeks_(ss, actValues),
     huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null
   };
+  // Niveau-tab progressie-series (W/kg + fitheid·CTL) — hergebruikt vorm.niveauReeks
+  // (maand) + maandelijkse CTL uit de Activiteiten-historie (PURE). Vorm leest dit niet.
+  var niveauProgressie = niveauProgressie_(vorm.niveauReeks, ctlReeksMaandelijks_(actValues));
 
   var gewicht = getGewicht();
   var niv = computeNiveau_(settings.ftp, gewicht);
@@ -920,6 +969,7 @@ function getDashboardState() {
     beginNiveau: beginNiveau,
     beginLabel: beginLabel,
     niveauDelta: niveauDelta,
+    niveauProgressie: niveauProgressie,
     availability: planner.map(function (p) {
       return { train: p.train === true, minuten: p.minuten || 0, dagtype: p.type || '', dagLabel: p.dag };
     }),
