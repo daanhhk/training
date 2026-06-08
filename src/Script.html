@@ -771,7 +771,21 @@
   }
 
   // Dagstrip-dots: zone-getokeniseerd (bucket → --zone-*); 2 dots bij dubbele sessie.
+  // Actieve override → één dot in de override-zone. saveDayOverride replant niet,
+  // dus d.voorstel toont nog 't oude voorstel; lees dezelfde bron als OverriddenDetail:
+  // library-override → categorie-zoneVar (trnCatByType_); free-ride → intensiteit→bucket.
+  var FR_DOT_BUCKET_ = { rustig: 'z2', tempo: 'tempo', stevig: 'drempel' };
+  function overrideDotZone_(ov) {
+    if (!ov) return null;
+    if (ov.type === 'free') return ZONE_VAR[FR_DOT_BUCKET_[ov.intensiteit] || 'z2'] || '--zone-2';
+    var cat = trnCatByType_(ov.workoutType);
+    return (cat && cat.zoneVar) ? cat.zoneVar : null;
+  }
   function stripDots_(d) {
+    if (d.override && (d.status === 'gepland' || d.status === 'vandaag')) {
+      var oz = overrideDotZone_(d.override);
+      if (oz) return '<span class="dot" style="background:var(' + oz + ')"></span>';
+    }
     if (!d.voorstel || (d.status !== 'gepland' && d.status !== 'vandaag')) return '';
     var lists = (d.voorstel.sessies && d.voorstel.sessies.length > 1)
       ? d.voorstel.sessies.map(function (s) { return s.segmenten; })
