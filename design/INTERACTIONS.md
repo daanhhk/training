@@ -414,3 +414,14 @@ Vrijwel alles READ; de enige WRITE-achtige interacties zijn lokale view-state
 | **"Jouw coach" — tekstveld + chips** (Instellingen, sectie 0) | Stelt de coachnaam in. | WRITE · 🌐 | Eén-Opslaan → `saveSettings` → DocProp `coach_naam` (Sheet rij 54); raakt API-key niet. Default "Coach". |
 | **#appbar-wordmark** | Toont de coachnaam (uppercase) naast de CadansMark. | READ · 🌐 | `state.coachName`; default "COACH". |
 | **Coach-callout-overline** | Toont de coachnaam i.p.v. "COACH". | READ · 🌐 | `state.coachName`; impact-variant → "{NAAM} · IMPACT". |
+
+---
+
+<!-- Vorm Variant A — gebouwd (STAP 1 deel B) -->
+## Vorm — Variant A (live)
+
+| Element | Doet | R/W | Effect / voorwaarden |
+| --- | --- | --- | --- |
+| **Deck-LevelCard** (slide 2) | W/kg-hero + W/kg-tier-chip + tier-voortgangsbalk + W/kg-delta. | READ · 🌐 | Tier via `NV_TIERS` (W/kg). Geen "x/50". |
+| **VormLevelSummary → "Progressie →"** | Springt naar de Niveau-tab. | READ · 💻 | `switchTab('niveau')`; toont FTP/Gewicht/Week-TSS. |
+| Niveau-grafiek + MetricRow (Variant B) | — | — | VERVALLEN in Variant A; W/kg-over-tijd op de Niveau-tab. |
