@@ -291,6 +291,12 @@ function testCoach_(ctx) {
   assert_(ctx, 'coach endurance-sub different', 'different', fd.state);
   assert_(ctx, 'coach endurance-sub adapt', true, !!fd.adapt);
   assert_(ctx, 'coach narratief event', true, fd.narrative.indexOf('Girona') >= 0);
+  // Polish — drempel-substitutie op endurance-event = klim-specifiek credit (geen "tilt niet op").
+  assert_(ctx, 'coach drempel-credit klim-framing', true, fd.narrative.indexOf('klim') >= 0);
+  assert_(ctx, 'coach drempel-credit geen "tilt"', true, fd.narrative.indexOf('tilt') < 0);
+  // vo2-substitutie blijft niet-specifiek ("tilt ... niet op").
+  var fv2 = coachFeedback_({ type: 'long_z2', titel: 'Lange Z2', duurMin: 120, tss: 80, segmenten: [] }, { duurMin: 70, tss: 92, ifReal: 96 }, evCtx, false);
+  assert_(ctx, 'coach vo2-sub niet-specifiek', true, fv2.narrative.indexOf('tilt') >= 0);
   // Patroon (≥2 subs) → escalerende tekst.
   var evPat = { fase: 'Build', event: { naam: 'Girona', type: 'trip', isEndurance: true }, patternCount: 3 };
   var fp = coachFeedback_({ type: 'long_z2', titel: 'Lange Z2', duurMin: 120, tss: 80, segmenten: [] }, { duurMin: 90, tss: 95, ifReal: 88 }, evPat, false);

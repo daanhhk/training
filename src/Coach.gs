@@ -177,6 +177,13 @@ function coachCopy_(state, plIntent, acIntent, isKey, ctx) {
           ' — lange dagen — is juist de duur/drempel-basis bepalend; herhaalde losse intensiteit ondermijnt die opbouw.',
           adapt: 'Voorstel: houd de komende ritten bewust Z2/drempel en parkeer de losse intensiteit tot na ' + evNaam + '.' };
       }
+      // Polish — drempel is voor een endurance/klim-event WÉL doel-specifiek
+      // (klim-vermogen): geen "tilt niet op", wel de eerlijke duur/volume-trade-off.
+      // vo2/overige intensiteit blijven niet-specifiek (val door naar de copy hieronder).
+      if (acIntent === 'drempel') {
+        return { narrative: 'Je ruilde je geplande duur voor ' + ac + '. Voor ' + evNaam + ' telt drempel wél mee — het is klim-specifiek vermogen, geen verloren sessie. Je levert wel wat Z2-volume in; houd de duur-basis er deze week bij.',
+          adapt: 'Voorstel: pak de gemiste duur op een verse dag later deze week op en houd ’m bewust Z2.' };
+      }
       return { narrative: 'Je verving je duur-prikkel door ' + ac + '. Voor ' + evNaam + ' is duur/drempel de doel-specifieke prikkel — ' +
         ac + ' is een leuke sessie maar tilt je ' + evNaam + '-vorm niet op. Eén keer is geen probleem.',
         adapt: 'Voorstel: pak de gemiste duur op een verse dag later deze week op en houd ’m bewust Z2.' };
