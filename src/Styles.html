@@ -364,15 +364,20 @@
   .bottomnav {
     position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
     width: 100%; max-width: 100%; display: flex; background: var(--header);
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--tabbar-border);
   }
   .bottomnav button {
-    flex: 1; background: none; border: none; color: var(--muted);
-    padding: 8px 0 10px; font-size: var(--fs-caption); display: flex; flex-direction: column;
-    align-items: center; gap: 3px; cursor: pointer;
+    position: relative; flex: 1; background: none; border: none; color: var(--tabbar-icon);
+    padding: 9px 0 10px; font-size: var(--fs-caption); font-weight: var(--fw-caption);
+    display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer;
+    font-family: var(--font-sans);
   }
-  .bottomnav button span { font-size: 19px; }
-  .bottomnav button.active { color: var(--accent); }
+  .nav-ico { width: 23px; height: 23px; display: block; }
+  .bottomnav button.active { color: var(--tabbar-icon-active); }
+  .bottomnav button.active::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 26px; height: 3px; border-radius: 0 0 3px 3px; background: var(--tabbar-indicator);
+  }
 
   /* Fase 1a — Schema plan-card (PeriodTimeline) */
   .plan-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: var(--card-pad); }
