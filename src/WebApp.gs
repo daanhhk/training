@@ -366,7 +366,12 @@ function coachPatternCount_(actualsByDate, planByDate, today) {
     var k = formatDate(new Date(today.getTime() - i * 86400000), 'yyyy-MM-dd');
     var a = actualsByDate[k], p = planByDate[k];
     if (!a || !p || a.ifReal == null) continue;
-    var plI = intentFromType_(p.workoutType);
+    // FIX 4 — planned-prikkel uit de ECHTE zone-minuten (zelfde route als
+    // Coach.gs:189): een 'duur'-TYPE-dag mét drempel-intervallen telt zo NIET
+    // als duur-substitutie. Lege segmenten → type-label-fallback ongemoeid.
+    var plSegs = segmentsFromBlokken_(p.blokken) || segmentsFromIntent_(p.intent);
+    var plZm = coachZmFromSegs_(plSegs);
+    var plI = (plZm ? coachIntentFromZones_(plZm) : null) || intentFromType_(p.workoutType);
     var acI = intentFromIF_(cfNormIf_(a.ifReal));
     if ((plI === 'duur' || plI === 'herstel') && COACH_INTENSITY_RANK_[acI] > COACH_INTENSITY_RANK_[plI]) n++;
   }
