@@ -130,6 +130,11 @@ componenten + states), `DESIGN.md` (visuele taal), `INTERACTIONS.md`
 - Dedup: Date-object vs text-string consistent typen.
 - ARRAYFORMULA + dropdown-validation kan imports crashen — let op
   reset-volgorde; column count in sync houden met script-logica.
+- **Favicon in HtmlService:** `setFaviconUrl` ondersteunt GÉÉN SVG → THROWT
+  ("afbeeldingstype wordt niet ondersteund") en crasht zo `doGet` — het faalt
+  NIET stil. Werkend = PNG + host met correct content-type (raw.githubusercontent
+  = `text/plain` → genegeerd; jsDelivr = `image/png` → werkt). Wikkel
+  `setFaviconUrl` ALTIJD in try/catch zodat een slecht icoon `doGet` nooit plat legt.
 
 ### Performance (GAS)
 - **PERF-MEETDISCIPLINE:** execution-timing is high-variance; per-run-deltas
