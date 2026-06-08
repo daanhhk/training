@@ -72,15 +72,33 @@ function segmentsFromIntent_(intent) {
 
 // ── Tab-lezers (read-only) ───────────────────────────────────────
 
-/** Activiteiten-tab → map dISO → {naam, duurMin, tss} (cycling, nieuwste wint). */
-function dashActualsByDate_() {
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
-  var map = {};
-  if (!sh) return map;
+// ── PERF: single-read helpers (open-flow) ────────────────────────
+// Lees elke grote tab ÉÉN keer en thread de array door alle consumenten. De
+// arrays zijn EXACT de sub-range die de consumenten vandaag zelf lezen (rij 2..,
+// kolom-cap) — NIET getDataRange(), die de header-rij + (Wellness) de stats-rijen
+// >= WELL_STATS_ROW zou meenemen en getWellnessSignal's ongeguarde map verschuiven.
+function readActiviteitenValues_() {
+  var sh = SpreadsheetApp.getActive().getSheetByName(ACTIVITEITEN_SHEET);
+  if (!sh) return null;
   var last = sh.getLastRow();
-  if (last < 2) return map;
-  var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+  if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+}
+function readWellnessValues_() {
+  var sh = SpreadsheetApp.getActive().getSheetByName(WELLNESS_SHEET);
+  if (!sh) return null;
+  var last = Math.min(sh.getLastRow(), WELL_STATS_ROW - 2);
+  if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, WELL_HEADERS.length).getValues();
+}
+
+/** Activiteiten-tab → map dISO → {naam, duurMin, tss} (cycling, nieuwste wint).
+ *  actValues (optioneel) = voor-gelezen readActiviteitenValues_() — anders zelf-lezen. */
+function dashActualsByDate_(actValues) {
+  if (!actValues) actValues = readActiviteitenValues_();
+  var map = {};
+  if (!actValues) return map;
+  var data = actValues;
   data.forEach(function (r) {
     if (!(r[0] instanceof Date)) return;
     var key = formatDate(r[0], 'yyyy-MM-dd');
@@ -142,14 +160,11 @@ function dashOverridesByDate_() {
 }
 
 /** Wellness-tab CTL/ATL/Vorm reeks (oudste→nieuwste) + stats-bron. */
-function dashVormReeks_() {
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName(WELLNESS_SHEET);
+function dashVormReeks_(wellValues) {
+  if (!wellValues) wellValues = readWellnessValues_();
   var out = [];
-  if (!sh) return out;
-  var last = Math.min(sh.getLastRow(), WELL_STATS_ROW - 2);
-  if (last < 2) return out;
-  var data = sh.getRange(2, 1, last - 1, WELL_HEADERS.length).getValues();
+  if (!wellValues || !wellValues.length) return out;
+  var data = wellValues;
   data.forEach(function (r) {
     if (!(r[0] instanceof Date)) return;
     var ctl = r[8], atl = r[9], vorm = r[10];
@@ -174,16 +189,13 @@ function dashWeekdag_(d) {
 }
 
 // ── Stats (d7/d28/jaar + maandtotalen) ───────────────────────────
-function dashStatsFromActivities_() {
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
+function dashStatsFromActivities_(actValues) {
+  if (!actValues) actValues = readActiviteitenValues_();
   var empty = { tss: 0, tijdMin: 0, ritten: 0 };
   var res = { d7: { tss: 0, tijdMin: 0, ritten: 0 }, d28: { tss: 0, tijdMin: 0, ritten: 0 }, jaar: { tss: 0, tijdMin: 0, ritten: 0 } };
   var maand = {};
-  if (!sh) return { stats: res, maandTotalen: [] };
-  var last = sh.getLastRow();
-  if (last < 2) return { stats: res, maandTotalen: [] };
-  var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+  if (!actValues || !actValues.length) return { stats: res, maandTotalen: [] };
+  var data = actValues;
   var now = stripTime_(new Date()).getTime();
   var oudste = null;
   data.forEach(function (r) {
@@ -216,12 +228,10 @@ function dashStatsFromActivities_() {
 }
 
 /** Som van TSS (Activiteiten kol I) voor alle ritten met datum (kol A) >= startDate. */
-function sumTssVanafDatum_(ss, startDate) {
-  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
-  if (!sh) return 0;
-  var last = sh.getLastRow();
-  if (last < 2) return 0;
-  var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+function sumTssVanafDatum_(ss, startDate, actValues) {
+  if (!actValues) actValues = readActiviteitenValues_();
+  if (!actValues || !actValues.length) return 0;
+  var data = actValues;
   var s0 = stripTime_(startDate).getTime();
   var sum = 0;
   data.forEach(function (r) {
@@ -234,12 +244,10 @@ function sumTssVanafDatum_(ss, startDate) {
 
 /** Oudste Activiteiten-rij (= vroegste datum) → begin-anker voor niveau-historie.
  *  Kolommen: A datum(0), M FTP(12), N Gewicht(13). Null bij ontbreken/pre-backfill. */
-function dashBeginAnker_(ss) {
-  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
-  if (!sh) return null;
-  var last = sh.getLastRow();
-  if (last < 2) return null;
-  var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+function dashBeginAnker_(ss, actValues) {
+  if (!actValues) actValues = readActiviteitenValues_();
+  if (!actValues || !actValues.length) return null;
+  var data = actValues;
   var oudste = null;
   data.forEach(function (r) {
     if (!(r[0] instanceof Date)) return;
@@ -260,12 +268,10 @@ function dashBeginAnker_(ss) {
  * beginNiveau. Ontbrekende maand → niveau:null (chart interpoleert).
  * Shape: [{maand:'yyyy-MM', niveau:Number|null, ftp:Number|null, gewicht:Number|null}].
  */
-function dashNiveauReeks_(ss) {
-  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
-  if (!sh) return [];
-  var last = sh.getLastRow();
-  if (last < 2) return [];
-  var data = sh.getRange(2, 1, last - 1, ACT_HEADERS.length).getValues();
+function dashNiveauReeks_(ss, actValues) {
+  if (!actValues) actValues = readActiviteitenValues_();
+  if (!actValues || !actValues.length) return [];
+  var data = actValues;
 
   var byMonth = {};   // 'yyyy-MM' → { t, ftp, gewicht } (laatste-op-datum met beide gevuld)
   data.forEach(function (r) {
@@ -278,7 +284,7 @@ function dashNiveauReeks_(ss) {
     if (!byMonth[mk] || t > byMonth[mk].t) byMonth[mk] = { t: t, ftp: ftp, gewicht: gew };
   });
 
-  var anker = dashBeginAnker_(ss);
+  var anker = dashBeginAnker_(ss, actValues);
   if (!anker || !anker.datum) return [];
   // Begin-ankermaand overschrijven zodat punt 1 EXACT beginNiveau is.
   if (anker.ftp) {
@@ -619,13 +625,13 @@ function weekPlanSummary_(arr) {
  * stale: F.3-signaal bestaat nog niet → false (TODO).
  * @return {tss, gedaanUur, dagen, geplandTss, geplandUur, geplandDagen, progressPct, stale, lastSync}
  */
-function getWeekLoad_(ss, weekStart) {
+function getWeekLoad_(ss, weekStart, actValues) {
+  if (!actValues) actValues = readActiviteitenValues_();
   var wsT = stripTime_(weekStart).getTime();
   var weT = wsT + 7 * 86400000;
   var tss = 0, minuten = 0, dagen = {};
-  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
-  if (sh && sh.getLastRow() >= 2) {
-    var data = sh.getRange(2, 1, sh.getLastRow() - 1, ACT_HEADERS.length).getValues();
+  if (actValues && actValues.length) {
+    var data = actValues;
     data.forEach(function (r) {
       if (!(r[0] instanceof Date)) return;
       if (CYCLING_TYPES.indexOf(String(r[1] || '')) < 0) return;   // alleen fiets (idx1 = Type)
@@ -659,16 +665,19 @@ function getWeekLoad_(ss, weekStart) {
 function getDashboardState() {
   var ss = SpreadsheetApp.getActive();
   var settings = readSettings(ss);
+  // PERF: lees Activiteiten + Wellness ÉÉN keer; thread door alle consumenten.
+  var actValues = readActiviteitenValues_();
+  var wellValues = readWellnessValues_();
   var weekStart = weekStartDate(new Date());
   var mesoWeek = getMesoWeek();
   var macro = bepaalFaseVoorDatum_(weekStart);
-  var wellness = combineSignals_(getWellnessSignal(ss), rpeSignal_());
+  var wellness = combineSignals_(getWellnessSignal(ss, wellValues), rpeSignal_());
   var fs = getFormScore_();
   var weekTss = _statusWeekTss_(weekStart);
   var garminVerdict = garminHeuristic(weekTss, mesoWeek, macro.fase, fs);
 
   var planner = readPlanner(ss);
-  var actuals = dashActualsByDate_();
+  var actuals = dashActualsByDate_(actValues);
   var wpByDate = dashWeekplanByDate_();
   var disposities = dashDispositionsByDate_();
   var overrides = dashOverridesByDate_();
@@ -808,8 +817,8 @@ function getDashboardState() {
   });
 
   // ── Vorm ──
-  var reeks = dashVormReeks_();
-  var statsBundle = dashStatsFromActivities_();
+  var reeks = dashVormReeks_(wellValues);
+  var statsBundle = dashStatsFromActivities_(actValues);
   // Event-countdown uit bepaalFaseVoorDatum_ (al berekend in `macro`).
   var evDatum = macro.eventDate || (macro.hoofdEvent && macro.hoofdEvent.datum) || null;
   var dagenTot = null;
@@ -822,7 +831,7 @@ function getDashboardState() {
   // reeks/stats blijven lokaal berekend (ctlRef/voortgang/readiness), maar gaan
   // niet meer mee als payload-velden.
   var vorm = {
-    niveauReeks: dashNiveauReeks_(ss),
+    niveauReeks: dashNiveauReeks_(ss, actValues),
     huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null
   };
 
@@ -848,7 +857,7 @@ function getDashboardState() {
   // 2b-3: beginniveau-anker uit de oudste Activiteiten-rij (icu_ftp/icu_weight).
   // conditieModBegin = 0 (data-start = referentie; Wellness-tab reikt niet tot 2024).
   var DASH_MND_ = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
-  var anker = dashBeginAnker_(ss);
+  var anker = dashBeginAnker_(ss, actValues);
   var beginNiveau = null, beginLabel = null, niveauDelta = null;
   if (anker && anker.ftp) {
     var nivBegin = computeNiveau_(anker.ftp, anker.gewicht || gewicht);
@@ -889,7 +898,7 @@ function getDashboardState() {
   if (aantalVoltooideWeken > 0) {
     verwachtTssCum = Math.round(verwachtCum);
     // aftrek-truc: [eersteWeekStart, huidigeWeekStart) = voltooide weken.
-    werkelijkTssCum = sumTssVanafDatum_(ss, eersteWeekStart) - sumTssVanafDatum_(ss, huidigeWeekStart);
+    werkelijkTssCum = sumTssVanafDatum_(ss, eersteWeekStart, actValues) - sumTssVanafDatum_(ss, huidigeWeekStart, actValues);
     voortgangPct = verwachtTssCum > 0 ? Math.round(werkelijkTssCum / verwachtTssCum * 100) : null;
   }
 
@@ -960,7 +969,7 @@ function getDashboardState() {
       });
       return base;
     })(),
-    weekLoad: getWeekLoad_(ss, weekStart),
+    weekLoad: getWeekLoad_(ss, weekStart, actValues),
     vandaag: vandaag,
     dagen: dagen,
     vorm: vorm

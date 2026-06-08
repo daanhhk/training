@@ -931,15 +931,13 @@ function combineSignals_(wellness, rpe) {
  * Returnt object met diagnostiek + signal ∈ {normal, warning, demote, recovery}.
  * Bij ontbrekende wellness-data → signal='normal'.
  */
-function getWellnessSignal(ss) {
-  var sh = ss.getSheetByName(WELLNESS_SHEET);
-  if (!sh) return wellnessFallback_('geen Wellness tab');
+function getWellnessSignal(ss, wellValues) {
+  if (!wellValues) wellValues = readWellnessValues_();
+  if (!wellValues) return wellnessFallback_('geen Wellness tab');
+  if (!wellValues.length) return wellnessFallback_('geen wellness data');
 
-  var maxDataRow = Math.min(sh.getLastRow(), WELL_STATS_ROW - 2);
-  if (maxDataRow < 2) return wellnessFallback_('geen wellness data');
-
-  // Kolommen: A=Datum B=RHR C=HRV D=Slaap
-  var data = sh.getRange(2, 1, maxDataRow - 1, 4).getValues();
+  // Kolommen: A=Datum B=RHR C=HRV D=Slaap (extra kolommen in de array genegeerd)
+  var data = wellValues;
   var hrvSeries = data.map(function (r) {
     var v = Number(r[2]); return isNaN(v) || v === 0 ? null : v;
   });
