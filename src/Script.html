@@ -459,10 +459,50 @@
       row('TSS', (p.tss != null ? Math.round(p.tss) : '–'), (d.tss != null ? Math.round(d.tss) : '–'), null) +
       '</div>';
   }
+  // ZoneCompare (§1bis): één rij per zone — faded gepland-omvang + massieve gedaan-balk
+  // op één minuten-schaal. Hergebruikt de bestaande ZONE_VAR/ZONE_LABEL-buckets.
+  var ZCOMPARE_ZONES_ = [
+    { z: 1, label: 'Herstel', zv: '--zone-1', buckets: ['rust'] },
+    { z: 2, label: 'Duur',    zv: '--zone-2', buckets: ['z2', 'low'] },
+    { z: 3, label: 'Tempo',   zv: '--zone-3', buckets: ['tempo'] },
+    { z: 4, label: 'Drempel', zv: '--zone-4', buckets: ['drempel', 'high'] },
+    { z: 5, label: 'VO2max',  zv: '--zone-5', buckets: ['anaeroob', 'anaerobic'] }
+  ];
+  function zcSumByZone_(segs) {
+    var by = {};
+    (segs || []).forEach(function (s) { by[s.bucket] = (by[s.bucket] || 0) + (s.minuten || 0); });
+    return ZCOMPARE_ZONES_.map(function (zn) { var m = 0; zn.buckets.forEach(function (b) { m += by[b] || 0; }); return Math.round(m); });
+  }
+  function zcRowHtml_(zn, plan, done, maxMin) {
+    var planPct = Math.max(0, Math.min(100, plan / maxMin * 100));
+    var donePct = Math.max(0, Math.min(100, done / maxMin * 100));
+    var unplanned = plan === 0 && done > 0, skipped = plan > 0 && done === 0;
+    var sub = unplanned ? '<span class="zc-tag zc-unplanned">niet gepland</span>'
+            : skipped   ? '<span class="zc-tag zc-skipped">niet gereden</span>'
+            : '<span class="zc-sub">gepland ' + plan + '′</span>';
+    var doneCol = skipped ? 'var(--zcompare-tag-skipped)' : 'var(' + zn.zv + ')';
+    return '<div class="zc-row">' +
+      '<div class="zc-label"><span class="zc-dot" style="background:var(' + zn.zv + ')"></span>Z' + zn.z + ' ' + esc(zn.label) + '</div>' +
+      '<div class="zc-track">' +
+        '<div class="zc-plan" style="width:' + planPct.toFixed(1) + '%;background:color-mix(in srgb, var(' + zn.zv + ') var(--zcompare-plan-strength), transparent)"></div>' +
+        '<div class="zc-done" style="width:' + donePct.toFixed(1) + '%;min-width:' + (done > 0 ? 3 : 0) + 'px;background:var(' + zn.zv + ')"></div>' +
+      '</div>' +
+      '<div class="zc-val"><span class="zc-done-min" style="color:' + doneCol + '">' + done + '′</span>' + sub + '</div></div>';
+  }
   function coachZonesHtml_(c) {
-    return '<div class="rd-overline">Zone-verdeling</div><div class="rd-zones">' +
-      '<div class="rd-zcol"><div class="rd-zbar">' + zoneBar(c.planned.segmenten, true) + '</div><div class="rd-zlbl">Gepland</div></div>' +
-      '<div class="rd-zcol"><div class="rd-zbar">' + zoneBar(c.done.segmenten, true) + '</div><div class="rd-zlbl rd-zlbl-done">Gedaan</div></div></div>';
+    var plan = zcSumByZone_(c.planned ? c.planned.segmenten : null);
+    var done = zcSumByZone_(c.done ? c.done.segmenten : null);
+    var idx = [], maxMin = 1;
+    for (var i = 0; i < ZCOMPARE_ZONES_.length; i++) {
+      if (plan[i] <= 0 && done[i] <= 0) continue;          // alleen zones met gepland óf gedaan > 0
+      idx.push(i); maxMin = Math.max(maxMin, plan[i], done[i]);
+    }
+    if (!idx.length) return '';
+    var rows = idx.map(function (i) { return zcRowHtml_(ZCOMPARE_ZONES_[i], plan[i], done[i], maxMin); }).join('');
+    return '<div class="zc-head"><span class="zc-overline">Zone-vergelijking · min</span>' +
+      '<span class="zc-legend"><span class="zc-leg"><span class="zc-leg-plan"></span>gepland</span>' +
+      '<span class="zc-leg"><span class="zc-leg-done"></span>gedaan</span></span></div>' +
+      '<div class="zc-rows">' + rows + '</div>';
   }
   function coachPctHtml_(c) {
     if (c.state === 'different' || c.state === 'missed' || c.score == null) return '';
@@ -551,9 +591,11 @@
     return '<div class="rd-hero-cell"><div class="rd-hero-lbl">' + lbl + '</div><div class="rd-hero-val' + (acc ? ' rd-hero-acc' : '') +
       '">' + esc(String(val)) + (unit ? '<span class="rd-hero-u"> ' + unit + '</span>' : '') + '</div></div>';
   }
-  function rdMetric_(lbl, val, unit) {
-    return '<div class="rd-tile"><div class="rd-tile-lbl">' + esc(lbl) + '</div><div class="rd-tile-val">' +
-      (val == null ? '–' : esc(String(val)) + (unit ? '<span class="rd-tile-u"> ' + unit + '</span>' : '')) + '</div></div>';
+  function rdMetric_(lbl, val, unit, sub) {
+    var v = (val == null) ? '–' : esc(String(val)) + (unit ? '<span class="rd-tile-u"> ' + unit + '</span>' : '');
+    return '<div class="rd-tile"><div class="rd-tile-lbl">' + esc(lbl) + '</div>' +
+      '<div class="rd-tile-valrow"><div class="rd-tile-val">' + v + '</div>' +
+      (sub ? '<span class="rd-tile-sub">' + esc(sub) + '</span>' : '') + '</div></div>';
   }
   function rdIntervalRow_(b) {
     var meta = [b.durStr, (b.hr != null ? b.hr + ' bpm' : null),
@@ -577,10 +619,12 @@
       rdHeroCell_('TSS', m.tss != null ? m.tss : '–', '', true) + '</div>';
     var g = m.metrics || {};
     var grid = '<div class="rd-grid">' +
-      rdMetric_('Gem. vermogen', g.gemW, 'W') + rdMetric_('Variabiliteit', g.vi != null ? nl(g.vi, 2) : null, '') +
-      rdMetric_('Gem. HR', g.gemHr, 'bpm') + rdMetric_('Max. HR', g.maxHr, 'bpm') +
-      rdMetric_('Cadans', g.cadans, 'rpm') + rdMetric_('Hoogtewinst', g.hoogte, 'm') +
-      rdMetric_('Arbeid', g.arbeidKj, 'kJ') + rdMetric_('Calorieën', g.kcal, 'kcal') + '</div>';
+      rdMetric_('Gem. vermogen', g.gemW, 'W') +
+      rdMetric_('W/kg', g.wkg != null ? nl(g.wkg, 1) : null, 'W/kg') +
+      rdMetric_('Gem. HR', g.gemHr, 'bpm', g.maxHr != null ? 'max ' + g.maxHr : null) +
+      rdMetric_('Hoogtewinst', g.hoogte, 'm') +
+      rdMetric_('Cadans', g.cadans, 'rpm') +
+      rdMetric_('Arbeid', g.arbeidKj, 'kJ') + '</div>';
     var iv = '';
     if (m.intervallen && m.intervallen.length) {
       iv = '<div class="rd-sec-head"><span class="rd-sec-lbl">Intervallen</span>' + (m.ftp ? '<span class="rd-ftp">FTP ' + m.ftp + ' W</span>' : '') + '</div>' +

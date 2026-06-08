@@ -215,6 +215,26 @@
   .rd-zbar .wk-minibar { margin: 0; height: 34px; }
   .rd-zlbl { font-size: var(--fs-caption); color: var(--text-muted); margin-top: 5px; }
   .rd-zlbl-done { color: var(--reading-done); font-weight: 600; }
+  /* ZoneCompare (§1bis) — per-zone gepland-vs-gedaan rijen (vervangt de twee bars) */
+  .zc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: var(--s-3) 0 var(--s-2); }
+  .zc-overline { font-size: var(--fs-caption); font-weight: var(--fw-caption); text-transform: uppercase; letter-spacing: var(--tracking-overline); color: var(--reading-col-label); }
+  .zc-legend { display: flex; gap: var(--s-3); flex: 0 0 auto; }
+  .zc-leg { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-caption); color: var(--reading-planned); }
+  .zc-leg-plan { width: 13px; height: 7px; border-radius: 2px; background: color-mix(in srgb, var(--text-secondary) var(--zcompare-plan-strength), transparent); }
+  .zc-leg-done { width: 13px; height: 7px; border-radius: 999px; background: var(--text-secondary); }
+  .zc-rows { display: flex; flex-direction: column; gap: 9px; }
+  .zc-row { display: grid; grid-template-columns: 96px 1fr 60px; align-items: center; column-gap: var(--s-3); }
+  .zc-label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-label); color: var(--zcompare-label); white-space: nowrap; }
+  .zc-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; }
+  .zc-track { position: relative; height: var(--zcompare-track-h); border-radius: 4px; background: var(--zcompare-track); overflow: hidden; }
+  .zc-plan { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .zc-done { position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: var(--zcompare-done-h); border-radius: 999px; }
+  .zc-val { text-align: right; }
+  .zc-done-min { font-family: var(--font-num); font-size: var(--fs-num-sm); font-weight: var(--fw-num-sm); }
+  .zc-sub { display: block; font-size: 9.5px; color: var(--reading-planned); margin-top: 1px; }
+  .zc-tag { display: block; font-size: 9.5px; font-weight: 600; margin-top: 1px; }
+  .zc-unplanned { color: var(--zcompare-tag-unplanned); }
+  .zc-skipped { color: var(--zcompare-tag-skipped); }
   .rd-pct { margin: var(--s-4) 0 2px; }
   .rd-pct-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
   .rd-pct-lbl { font-size: var(--fs-label); color: var(--text-secondary); }
@@ -268,8 +288,10 @@
   .rd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); margin-bottom: var(--s-4); }
   .rd-tile { background: var(--ride-metric-tile-bg); border: 1px solid var(--ride-divider); border-radius: var(--r-md); padding: 11px var(--s-3); }
   .rd-tile-lbl { font-size: var(--fs-caption); font-weight: var(--fw-caption); text-transform: uppercase; letter-spacing: var(--tracking-overline); color: var(--ride-metric-label); }
-  .rd-tile-val { font-family: var(--font-num); font-size: var(--fs-num-md); font-weight: var(--fw-num-md); color: var(--ride-metric-value); margin-top: 3px; }
+  .rd-tile-valrow { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-top: 3px; }
+  .rd-tile-val { font-family: var(--font-num); font-size: var(--fs-num-md); font-weight: var(--fw-num-md); color: var(--ride-metric-value); }
   .rd-tile-u { font-size: var(--fs-caption); color: var(--ride-metric-unit); font-family: var(--font-sans); }
+  .rd-tile-sub { font-size: var(--fs-caption); color: var(--text-muted); font-family: var(--font-num); white-space: nowrap; }
   .rd-sec-head { display: flex; align-items: baseline; justify-content: space-between; margin: var(--s-2) 0; }
   .rd-sec-lbl { font-size: var(--fs-caption); font-weight: var(--fw-caption); text-transform: uppercase; letter-spacing: var(--tracking-overline); color: var(--ride-section-label); }
   .rd-ftp { font-size: var(--fs-caption); color: var(--text-muted); font-family: var(--font-num); }

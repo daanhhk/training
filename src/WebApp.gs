@@ -442,6 +442,11 @@ var RD_BUCKET_Z_ = {
 var RD_ZTIME_ = { Z1: '--zone-1', Z2: '--zone-2', Z3: '--zone-3', Z4: '--zone-4', Z5: '--zone-5', Z6: '--zone-6', Z7: '--zone-6' };
 function rdField_(o, keys) { for (var i = 0; i < keys.length; i++) { var v = o ? o[keys[i]] : null; if (v != null) return v; } return null; }
 function rdNum_(v) { return v != null ? Math.round(Number(v)) : null; }
+function rdFloat_(v) { return (v != null && v !== '') ? Number(v) : null; }
+function rdWkg_(avgWatts, gewicht) {              // W/kg op 1 decimaal; null bij ontbrekend gewicht
+  if (avgWatts == null || !gewicht || gewicht <= 0) return null;
+  return Math.round(Number(avgWatts) / gewicht * 10) / 10;
+}
 
 function rideTimeInZone_(activity) {               // icu_zone_times → balk-segmenten
   var zt = activity && activity.icu_zone_times;
@@ -476,7 +481,7 @@ function rideIntervals_(ivs, ftp) {                 // /intervals → per-blok-r
   });
   return out;
 }
-function rideDetailModel_(hit, detail, ivs, ftp) {  // → client-model voor §1ter
+function rideDetailModel_(hit, detail, ivs, ftp, gewicht) {  // → client-model voor §1ter
   var d = detail || hit || {};
   var start = (hit && hit.start_date_local) ? new Date(hit.start_date_local) : null;
   var ifRaw = rdField_(d, ['icu_intensity', 'intensity']);
@@ -485,7 +490,7 @@ function rideDetailModel_(hit, detail, ivs, ftp) {  // → client-model voor §1
   var distM = rdField_(d, ['distance']);
   var movS = rdField_(d, ['moving_time', 'elapsed_time']);
   var joules = rdField_(d, ['icu_joules', 'icu_work']);
-  var vi = rdField_(d, ['icu_variability_index']);
+  var gemW = rdNum_(rdField_(d, ['average_watts', 'icu_average_watts']));
   return {
     klasseLabel: COACH_INTENT_LABEL_[klasse] || 'Rit', klasseZone: COACH_INTENT_ZONE_[klasse] || '--zone-2',
     datum: start ? (dashKort_(start) + ' ' + start.getFullYear()) : '',
@@ -496,15 +501,15 @@ function rideDetailModel_(hit, detail, ivs, ftp) {  // → client-model voor §1
     np: rdNum_(rdField_(d, ['icu_np', 'icu_weighted_avg_watts'])),
     ifv: ifNorm != null ? Math.round(ifNorm * 100) / 100 : null,
     tss: rdNum_(rdField_(d, ['icu_training_load', 'training_load'])),
+    gewicht: gewicht || null,
     metrics: {
-      gemW: rdNum_(rdField_(d, ['average_watts', 'icu_average_watts'])),
-      vi: vi != null ? Math.round(Number(vi) * 100) / 100 : null,
+      gemW: gemW,
+      wkg: rdWkg_(gemW, gewicht),               // W/kg = gem. vermogen ÷ gewicht (niet NP)
       gemHr: rdNum_(rdField_(d, ['average_heartrate', 'average_hr'])),
       maxHr: rdNum_(rdField_(d, ['max_heartrate', 'max_hr'])),
       cadans: rdNum_(rdField_(d, ['average_cadence', 'icu_average_cadence'])),
       hoogte: rdNum_(rdField_(d, ['total_elevation_gain', 'icu_elevation_gain'])),
-      arbeidKj: joules != null ? Math.round(Number(joules) / 1000) : null,
-      kcal: rdNum_(rdField_(d, ['calories', 'icu_calories']))
+      arbeidKj: joules != null ? Math.round(Number(joules) / 1000) : null
     },
     ftp: ftp || null,
     intervallen: rideIntervals_(ivs, ftp)
@@ -532,7 +537,10 @@ function getRideDetail(dISO) {
   try { detail = intervalsRequest_('/activity/' + hit.id); } catch (e) { detail = null; }
   try { ivs = intervalsRequest_('/activity/' + hit.id + '/intervals'); } catch (e) { ivs = null; }
   ftp = rdNum_(rdField_(detail || {}, ['icu_ftp'])) || ftp;   // FTP zoals die VOOR die rit gold
-  var model = rideDetailModel_(hit, detail, ivs, ftp);
+  // Gewicht (voor W/kg): detail → hit → settings (spiegelt de FTP-vóór-de-rit-resolutie).
+  var gewicht = rdFloat_(rdField_(detail || {}, ['icu_weight'])) || rdFloat_(rdField_(hit, ['icu_weight']));
+  if (!gewicht) { try { gewicht = Number(getGewicht()) || null; } catch (e) {} }
+  var model = rideDetailModel_(hit, detail, ivs, ftp, gewicht);
   if (detail) { try { setDocProp(cacheKey, JSON.stringify(model)); } catch (e) {} }   // cache alleen bij geslaagde detail-fetch
   return model;
 }

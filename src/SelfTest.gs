@@ -345,4 +345,9 @@ function testRideDetail_(ctx) {
   assert_(ctx, 'rd dur 180', '3:00', rdDurMs_(180));
   assert_(ctx, 'rd dur ms 1u', '1:08:03', rdDurMs_(4083));
   assert_(ctx, 'rd dur hms', '0:58:32', rdDurHms_(3512));
+  // W/kg = gem. vermogen ÷ gewicht (1 decimaal; null bij ontbrekend/0-gewicht).
+  assert_(ctx, 'rd wkg 3.0', 3, rdWkg_(210, 70));
+  assertClose_(ctx, 'rd wkg 3.5', 3.5, rdWkg_(245, 70), 0.001);
+  assert_(ctx, 'rd wkg geen gewicht', null, rdWkg_(200, 0));
+  assert_(ctx, 'rd wkg geen watt', null, rdWkg_(null, 70));
 }
