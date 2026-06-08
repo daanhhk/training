@@ -298,6 +298,23 @@ function testCoach_(ctx) {
   // Gemiste sleutelprikkel → missed + aanpassing-voorstel.
   var fm = coachFeedback_({ type: 'vo2max', titel: 'VO2max 5x4', duurMin: 70, tss: 92, segmenten: [] }, null, evCtx, true);
   assert_(ctx, 'coach missed adapt', true, !!fm.adapt);
+  // FIX 4 — planned-prikkel uit de GEPLANDE zone-minuten: 'duur'-type met een
+  // significant Z4-blok + Z2-basis → 'drempel' (niet 'duur'); lege segmenten →
+  // type-fallback ongemoeid.
+  var fa = coachFeedback_({ type: 'long_z2', titel: 'Lange Z2 + blok', duurMin: 120, tss: 90,
+    segmenten: [{ minuten: 90, bucket: 'z2' }, { minuten: 24, bucket: 'drempel' }] }, null, evCtx, true);
+  assert_(ctx, 'coach planned uit zones', 'drempel', fa.planned.intent);
+  var fb2 = coachFeedback_({ type: 'long_z2', titel: 'Lange Z2', duurMin: 120, tss: 80, segmenten: [] }, null, evCtx, true);
+  assert_(ctx, 'coach planned type-fallback', 'duur', fb2.planned.intent);
+  // FIX 4 — zelfde-intent 'different' (plIntent==acIntent='drempel', |ΔIF|≥0,10,
+  // TSS net boven plan): nieuwe onder-volume-branch — géén swap-frasering ('i.p.v.'),
+  // wél event-bewust, geen adapt/patroon-escalatie.
+  var fc = coachFeedback_({ type: 'threshold', titel: 'Drempel 3x10', duurMin: 90, tss: 85, segmenten: [] },
+    { duurMin: 75, tss: 88, ifReal: 88, zoneMin: { rust: 3, z2: 50, tempo: 3, drempel: 20, anaeroob: 0 } }, evCtx, false);
+  assert_(ctx, 'coach same-intent different', 'different', fc.state);
+  assert_(ctx, 'coach same-intent geen swap', true, fc.narrative.indexOf('i.p.v.') < 0);
+  assert_(ctx, 'coach same-intent event-bewust', true, fc.narrative.indexOf('Girona') >= 0);
+  assert_(ctx, 'coach same-intent geen adapt', null, fc.adapt);
 }
 
 // ── coachAdaptatie_ (puur) — make-up-payload deterministisch + GELDIGE variant ──

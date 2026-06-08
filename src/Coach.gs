@@ -80,6 +80,23 @@ function coachIntentFromZones_(zm) {
   return 'herstel';
 }
 
+// FIX 4 — GEPLANDE zone-balk-segmenten → {rust,z2,tempo,drempel,anaeroob} minuten,
+// zodat de planned-prikkel net als de done-kant uit de ECHTE zone-minuten volgt
+// (i.p.v. het grove type-label). 5-bucket (segmentsFromBlokken_) of 3-bucket
+// fallback (segmentsFromIntent_): low→z2, high→drempel, anaerobic→anaeroob.
+function coachZmFromSegs_(segs) {
+  if (!segs || !segs.length) return null;
+  var BUCKET = { rust: 'rust', z2: 'z2', tempo: 'tempo', drempel: 'drempel', anaeroob: 'anaeroob',
+                 low: 'z2', high: 'drempel', anaerobic: 'anaeroob' };
+  var zm = { rust: 0, z2: 0, tempo: 0, drempel: 0, anaeroob: 0 }, any = false;
+  segs.forEach(function (s) {
+    var b = BUCKET[s && s.bucket]; if (!b) return;
+    var m = Number(s.minuten) || 0; if (m <= 0) return;
+    zm[b] += m; any = true;
+  });
+  return any ? zm : null;
+}
+
 // FIX 2 — reële zone-minuten → zone-balk-segmenten (zone-volgorde, met track-
 // hoogte/kleur uit DASH_BUCKET_STYLE_ in WebApp.gs). Zelfde vorm als de geplande bar.
 function coachSegsFromZones_(zm) {
@@ -144,6 +161,16 @@ function coachCopy_(state, plIntent, acIntent, isKey, ctx) {
       ' dan gepland — op een drukke dag prima. De lijn richting ' + evNaam + ' blijft kloppen.', adapt: null };
   }
   if (state === 'different') {
+    // FIX 4 — zelfde prikkel geraakt, maar IF/TSS week genoeg af voor 'different'
+    // (meestal: korter gereden → hogere IF, minder Z2/totaaltijd). Geen
+    // intensiever/lichter, geen swap-frasering, geen patroon-escalatie — de
+    // prikkel klopt, alleen het duur/volume bleef achter.
+    if (plIntent === acIntent) {
+      var volSpec = endur
+        ? (' Richting ' + evNaam + ' — lange dagen — telt juist die duur/Z2-basis; pak het volume op een verse dag terug.')
+        : ' Op een drukke dag is dat prima.';
+      return { narrative: 'Je raakte de ' + pl + '-prikkel, maar reed korter dan gepland — minder Z2/totaaltijd dan de sessie vroeg.' + volSpec, adapt: null };
+    }
     if (dir === 'intensiever' && endur && plIsEndur) {
       if (pat >= 2) {
         return { narrative: 'Je koos nu ' + pat + '× intensiteit (' + ac + ') i.p.v. de geplande duur. Voor ' + evNaam +
@@ -186,7 +213,10 @@ function coachFeedback_(planned, actual, ctx, isMissed) {
   if (typeof ctx === 'string') ctx = { fase: ctx };   // backward-compat
   ctx = ctx || {};
   var cc = { fase: ctx.fase || 'Build', event: ctx.event || null, patternCount: ctx.patternCount || 0 };
-  var plIntent = intentFromType_(planned.type);
+  // FIX 4: planned-prikkel uit de ECHTE zone-minuten (IDENTIEKE significantie-
+  // regel + rust-exclusie als de done-kant); type-label alleen als fallback.
+  var plZm = coachZmFromSegs_(planned.segmenten);
+  var plIntent = (plZm ? coachIntentFromZones_(plZm) : null) || intentFromType_(planned.type);
   var plDur = planned.duurMin || 0, plTss = planned.tss || 0;
   var plIf = cfIf_(plTss, plDur);
   var isKey = !!COACH_KEY_INTENTS_[plIntent];
