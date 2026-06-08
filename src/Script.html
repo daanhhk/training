@@ -51,6 +51,7 @@
     document.getElementById('bottomnav').style.display = 'flex';
     var ab = document.getElementById('appbar'); if (ab) ab.style.display = 'flex';
     var aw = document.getElementById('appbar-week'); if (aw) aw.textContent = 'Week ' + isoWeek_(new Date());
+    var an = document.getElementById('appbar-name'); if (an) an.textContent = (s.coachName || 'Coach');   // CSS uppercaset
     renderSchema();
     renderWeekLoad();
     renderVorm();
@@ -139,6 +140,7 @@
   }
   function settingsSetBool(k, v) { settingsSel[k] = v; }
   function settingsSetDoel(v) { settingsSel.doel = v; settingsRender_(); }
+  function settingsSetCoach(v) { settingsSel.coachName = v; settingsRender_(); }
   function settingsRender_() { var c = document.getElementById('overlay-content'); if (c) c.innerHTML = settingsDrawerHtml(); }
   function setTgl_(k, on) {
     return '<label class="tgl"><input type="checkbox"' + (on ? ' checked' : '') +
@@ -152,8 +154,16 @@
     var presetOpts = (ks.profielOpties || []).map(function (p) {
       return '<option value="' + esc(p) + '"' + (s.profielPreset === p ? ' selected' : '') + '>' + esc(p) + '</option>';
     }).join('');
+    var coachVal = (s.coachName != null ? s.coachName : 'Coach');
+    var coachChips = ['Coach', 'Daan', 'Merckx', 'Sven', 'Anna'].map(function (n) {
+      var on = (String(coachVal).trim().toLowerCase() === n.toLowerCase());
+      return '<button type="button" class="set-chip' + (on ? ' is-on' : '') + '" onclick="settingsSetCoach(\'' + n + '\')">' + esc(n) + '</button>';
+    }).join('');
     return '<div class="set-head"><div class="set-title">Instellingen</div>' +
         '<button type="button" class="set-close" data-overlay-close aria-label="Sluiten">✕</button></div>' +
+      '<div class="set-sec">Jouw coach</div>' +
+      '<div class="set-row"><span class="set-lbl">Naam van je coach</span><input type="text" class="set-input set-coach-input" maxlength="24" value="' + esc(coachVal) + '" oninput="settingsSet(\'coachName\',this.value)" placeholder="Coach"></div>' +
+      '<div class="set-chips">' + coachChips + '</div>' +
       '<div class="set-sec">Profiel</div>' +
       '<div class="set-row"><span class="set-lbl">Naam</span><span class="set-ro">' + esc(ks.naam || '—') + '</span></div>' +
       '<div class="set-row"><span class="set-lbl">FTP</span><span class="set-ctl"><input type="number" class="set-input" value="' + (s.ftp != null ? s.ftp : '') + '" oninput="settingsSet(\'ftp\',this.value)"><span class="set-unit">W</span></span></div>' +
@@ -179,7 +189,8 @@
   function openSettings() {
     var ks = state.settings || {};
     settingsSel = { ftp: ks.ftp, gewicht: ks.gewicht, ftpAuto: ks.ftpAuto === true, profielPreset: ks.profielPreset,
-      doel: ks.doel, doelStart: ks.doelStart, doelDuur: ks.doelDuur, sundayReminder: ks.sundayReminder === true };
+      doel: ks.doel, doelStart: ks.doelStart, doelDuur: ks.doelDuur, sundayReminder: ks.sundayReminder === true,
+      coachName: ks.coachName != null ? ks.coachName : 'Coach' };
     eventsSel = (state.events || []).map(function (e) {
       return { datum: e.datum, naam: e.naam, type: e.type, prioriteit: e.prioriteit, klimType: e.klimType, afstandKm: e.afstandKm, hm: e.hm, notitie: e.notitie };
     });
@@ -448,7 +459,8 @@
   }
   function coachCallout_(c) {
     var border = c.isImpact ? 'var(--coach-border-impact)' : 'var(--coach-border)';
-    var label = c.isImpact ? 'COACH · IMPACT' : 'COACH';
+    var nm = ((state && state.coachName) || 'Coach').toUpperCase();
+    var label = c.isImpact ? (nm + ' · IMPACT') : nm;
     var h = '<div class="coach-callout" style="background:var(--coach-bg);border-color:' + border + '">' +
       '<div class="coach-head"><span class="coach-mark" style="background:var(--coach-mark-bg);color:var(--coach-mark)">' + COACH_GLYPH_ + '</span>' +
       '<span class="coach-label" style="color:var(--coach-label)">' + label + '</span></div>' +

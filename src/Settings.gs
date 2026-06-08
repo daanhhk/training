@@ -37,7 +37,9 @@ var SETTINGS_FIELDS = {
   WEIGHT_LAST_SYNC:  { row: 50, label: 'Gewicht laatst gesynct', unit: '' },
   // ── v2b-B multi-session (pendel) ──
   PENDEL_DUUR:       { row: 52, label: 'Pendel duur per rit',   unit: 'min' },
-  PENDEL_AANTAL:     { row: 53, label: 'Pendel ritten per dag', unit: ''    }
+  PENDEL_AANTAL:     { row: 53, label: 'Pendel ritten per dag', unit: ''    },
+  // ── Cadans: door de gebruiker instelbare coachnaam (header-wordmark + coach-callout) ──
+  COACH_NAAM:        { row: 54, label: 'Naam van je coach',     unit: ''    }
 };
 
 /** Rij → docprop key. Alleen velden die de gebruiker kan bewerken.

@@ -13,7 +13,8 @@
 function doGet(e) {
   var t = HtmlService.createTemplateFromFile('Index');
   return t.evaluate()
-    .setTitle('FTP Coach')
+    .setTitle('Cadans')
+    .setFaviconUrl('https://raw.githubusercontent.com/daanhhk/training/main/favicon.svg')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -988,8 +989,10 @@ function getDashboardState() {
       gekoppeld: !!settings.athleteId,
       athleteId: settings.athleteId || null,
       garminLastSync: getDocProp('last_sync', '') || null,
-      sundayReminder: getDocProp('sunday_reminder', '') === 'true'
+      sundayReminder: getDocProp('sunday_reminder', '') === 'true',
+      coachName: loadSettingValue('coach_naam') || 'Coach'
     },
+    coachName: loadSettingValue('coach_naam') || 'Coach',
     events: eventsData.map(function (e) {
       return { datum: formatDate(e.datum, 'yyyy-MM-dd'), naam: e.naam, type: e.type, prioriteit: e.prioriteit,
                afstandKm: e.afstandKm, hm: e.hm, klimType: e.klimType, notitie: e.notitie };
@@ -1147,6 +1150,10 @@ function saveSettings(updates) {
     writeField('doel_duur', 13, Math.max(1, Math.round(Number(updates.doelDuur))), 'num');
   if (typeof updates.ftpAuto === 'boolean')        writeField('ftp_auto_update', 47, updates.ftpAuto, 'bool');
   if (typeof updates.sundayReminder === 'boolean') setDocProp('sunday_reminder', updates.sundayReminder ? 'true' : 'false');
+  if (updates.coachName != null) {
+    var cn = String(updates.coachName).trim().slice(0, 24) || 'Coach';   // Cadans-coachnaam; raakt API_KEY niet
+    writeField('coach_naam', SETTINGS_FIELDS.COACH_NAAM.row, cn, 'str');
+  }
   SpreadsheetApp.flush();
   return getDashboardState();
 }

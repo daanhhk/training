@@ -403,3 +403,14 @@ Vrijwel alles READ; de enige WRITE-achtige interacties zijn lokale view-state
 > gelabelde band met zichtbare aannames, géén vals-precieze enkel-getal-belofte.
 
 ---
+
+---
+
+<!-- Cadans-rebrand (STAP 1 deel A) — gefold -->
+## Cadans — coachnaam (Instellingen + header)
+
+| Element | Doet | R/W | Effect / voorwaarden |
+| --- | --- | --- | --- |
+| **"Jouw coach" — tekstveld + chips** (Instellingen, sectie 0) | Stelt de coachnaam in. | WRITE · 🌐 | Eén-Opslaan → `saveSettings` → DocProp `coach_naam` (Sheet rij 54); raakt API-key niet. Default "Coach". |
+| **#appbar-wordmark** | Toont de coachnaam (uppercase) naast de CadansMark. | READ · 🌐 | `state.coachName`; default "COACH". |
+| **Coach-callout-overline** | Toont de coachnaam i.p.v. "COACH". | READ · 🌐 | `state.coachName`; impact-variant → "{NAAM} · IMPACT". |

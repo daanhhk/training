@@ -438,3 +438,12 @@ binnenkort-conventie als de vermogenscurve-placeholder in het rit-detail.
 > de diepe view zelfstandig.
 
 ---
+
+---
+
+<!-- Cadans-rebrand (STAP 1 deel A) — gefold -->
+## Cadans — merk + coachnaam (app-header)
+
+**CadansMark (in-app):** inline SVG, 3 stijgende `skewX(-12)`-balken, `fill` = gradient `--accent`→`--accent-strong`, géén achtergrond-tile, 22px (`.appbar-mark`). Vervangt de oude `▌`-skew-balk in `#appbar`. App-naam = **Cadans** (`<title>`); favicon/app-icoon = rounded-rect tile (gradient #FF6A2A→#FF2E22, `favicon.svg`). De header-wordmark is de **coachnaam**, niet "Cadans".
+
+**Coachnaam:** default "Coach", getoond in de #appbar-wordmark (uppercase) + als coach-callout-overline. Instelbaar via **Instellingen → "Jouw coach"** (tekstveld + quick-pick-chips Coach/Daan/Merckx/Sven/Anna). Server-persistent: `SETTINGS_FIELDS.COACH_NAAM` (rij 54) → DocProp `coach_naam` via `saveSettings` (géén API-key) → `state.coachName`.
