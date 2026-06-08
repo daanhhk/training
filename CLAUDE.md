@@ -131,6 +131,18 @@ componenten + states), `DESIGN.md` (visuele taal), `INTERACTIONS.md`
 - ARRAYFORMULA + dropdown-validation kan imports crashen — let op
   reset-volgorde; column count in sync houden met script-logica.
 
+### Performance (GAS)
+- **PERF-MEETDISCIPLINE:** execution-timing is high-variance; per-run-deltas
+  <~1s zijn onbetrouwbaar onder load. Meet op off-peak; gebruik een
+  pure-compute-functie (`getTrainingLibrary_` §3) als CPU-canary om server-load
+  te detecteren (~650ms kalm vs >1100ms belast). Verifieer perf-refactors
+  STRUCTUREEL (read-tellingen + selftest + /dev), niet puur op de klok.
+- **READ-ONCE-THREAD-PATROON:** om redundante Sheet-reads/API-calls in een
+  assembly-functie (bv. `getDashboardState`) te collapsen: geef consumenten een
+  OPTIONELE TRAILING-param (de voor-gelezen array/data), default = huidig
+  zelf-lezen/live-pad. De assembly leest 1× bovenaan en threaded door. Alle
+  andere callers + `runSelfTest` blijven byte-identiek.
+
 ### Security
 - API-keys NOOIT in chat. Bij blootstelling: meteen regenereren
   (intervals.icu Developer Settings).
