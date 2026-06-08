@@ -387,6 +387,7 @@
             : 'Precies op verwachting');
       h += '<div class="rpe-feedback">' + t + '</div>';
     }
+    if (dateISO) h += rideAffordanceHtml_(dateISO);
     h += '</div>';
     return h;
   }
@@ -477,7 +478,8 @@
       '<div class="dd-overline"><span class="dd-date">' + esc(d.kort) + ' · Voltooid</span>' + alignChip_(c.state, c.chipLabel) + '</div>' +
       '<div class="dd-badge">' + coachBadge_(c.done.typeLabel, c.done.badgeZone) + '</div>' +
       '<div class="wk-name">' + esc(coachTitle_(c)) + '</div>' +
-      coachReadingHtml_(c) + coachZonesHtml_(c) + coachPctHtml_(c) + coachCallout_(c) + coachAdaptBtn_(d) + '</div>';
+      coachReadingHtml_(c) + coachZonesHtml_(c) + coachPctHtml_(c) + coachCallout_(c) + coachAdaptBtn_(d) +
+      rideAffordanceHtml_(d.dateISO) + '</div>';
   }
   function gemistDetailHtml_(d) {
     var c = d.coach, p = c.planned;
@@ -519,6 +521,90 @@
     google.script.run.withSuccessHandler(onState).withFailureHandler(showError).saveDayOverride(ad.dISO, payload);
   }
   window.planAdaptatie_ = planAdaptatie_;
+
+  // ══ Rit-detail (Fase 1ter) — lazy activiteit-statistieken in een overlay-sheet ══
+  var rideCache_ = {};   // dISO → model (client-cache; heropenen = instant)
+  function rideAffordanceHtml_(dISO) {
+    return '<button type="button" class="ride-open" onclick="openRideDetail(\'' + dISO + '\')">Bekijk ritdetails<span class="ride-open-chev">›</span></button>';
+  }
+  function openRideDetail(dISO) {
+    var cached = rideCache_[dISO];
+    openDrawer({ variant: 'sheet', html: cached ? rideSheetHtml_(cached) : rideLoadingHtml_() });
+    if (cached) return;
+    google.script.run
+      .withSuccessHandler(function (m) {
+        if (m && !m.error) rideCache_[dISO] = m;
+        var el = document.getElementById('overlay-content');
+        if (el) el.innerHTML = (m && !m.error) ? rideSheetHtml_(m) : rideErrorHtml_(dISO);
+      })
+      .withFailureHandler(function () {
+        var el = document.getElementById('overlay-content'); if (el) el.innerHTML = rideErrorHtml_(dISO);
+      })
+      .getRideDetail(dISO);
+  }
+  function tizBar_(zones) {
+    var bar = zones.map(function (z) { return '<div class="tiz-seg" style="flex:' + Math.max(1, z.pct) + ';background:var(' + z.zoneVar + ')"></div>'; }).join('');
+    var leg = zones.map(function (z) { return '<span class="tiz-leg"><span class="tiz-dot" style="background:var(' + z.zoneVar + ')"></span>' + esc(z.z) + ' ' + z.pct + '%</span>'; }).join('');
+    return '<div class="tiz-bar">' + bar + '</div><div class="tiz-legend">' + leg + '</div>';
+  }
+  function rdHeroCell_(lbl, val, unit, acc) {
+    return '<div class="rd-hero-cell"><div class="rd-hero-lbl">' + lbl + '</div><div class="rd-hero-val' + (acc ? ' rd-hero-acc' : '') +
+      '">' + esc(String(val)) + (unit ? '<span class="rd-hero-u"> ' + unit + '</span>' : '') + '</div></div>';
+  }
+  function rdMetric_(lbl, val, unit) {
+    return '<div class="rd-tile"><div class="rd-tile-lbl">' + esc(lbl) + '</div><div class="rd-tile-val">' +
+      (val == null ? '–' : esc(String(val)) + (unit ? '<span class="rd-tile-u"> ' + unit + '</span>' : '')) + '</div></div>';
+  }
+  function rdIntervalRow_(b) {
+    var meta = [b.durStr, (b.hr != null ? b.hr + ' bpm' : null),
+      (b.pctFtp != null ? '<span style="color:var(' + b.zoneVar + ')">' + b.pctFtp + '% FTP</span>' : null)].filter(Boolean).join(' · ');
+    return '<div class="iv-row' + (b.isWork ? ' iv-work' : '') + '" style="border-left-color:var(' + b.zoneVar + ')">' +
+      '<div class="iv-main"><div class="iv-head"><span class="iv-label">' + esc(b.label) + '</span>' +
+      '<span class="zbadge iv-z" style="color:var(' + b.zoneVar + ');border-color:var(' + b.zoneVar + ')">' + esc(b.zone) + '</span></div>' +
+      '<div class="iv-meta">' + meta + '</div></div>' +
+      '<div class="iv-power">' + (b.watt != null ? b.watt : '–') + '<span class="iv-power-u"> W</span></div></div>';
+  }
+  function rideSheetHtml_(m) {
+    var kop = '<button type="button" class="rd-close" data-overlay-close aria-label="Sluiten">×</button>' +
+      '<div class="rd-kop"><span class="zbadge rd-klasse" style="color:var(' + m.klasseZone + ');border-color:var(' + m.klasseZone + ')">' + esc(m.klasseLabel) + '</span>' +
+      '<span class="rd-datum">' + esc(m.datum) + (m.tijd ? ' · ' + esc(m.tijd) : '') + '</span></div>' +
+      '<div class="rd-headline">' + (m.afstandKm != null ? '<span class="rd-afst">' + nl(m.afstandKm, 1) + '<span class="rd-u"> km</span></span><span class="rd-sep">|</span>' : '') +
+      '<span class="rd-duur">' + esc(m.duurStr || '–') + '</span></div>';
+    var tiz = m.tiz ? tizBar_(m.tiz) : '';
+    var hero = '<div class="rd-hero">' +
+      rdHeroCell_('NP', m.np != null ? m.np : '–', 'W', false) +
+      rdHeroCell_('IF', m.ifv != null ? nl(m.ifv, 2) : '–', '', false) +
+      rdHeroCell_('TSS', m.tss != null ? m.tss : '–', '', true) + '</div>';
+    var g = m.metrics || {};
+    var grid = '<div class="rd-grid">' +
+      rdMetric_('Gem. vermogen', g.gemW, 'W') + rdMetric_('Variabiliteit', g.vi != null ? nl(g.vi, 2) : null, '') +
+      rdMetric_('Gem. HR', g.gemHr, 'bpm') + rdMetric_('Max. HR', g.maxHr, 'bpm') +
+      rdMetric_('Cadans', g.cadans, 'rpm') + rdMetric_('Hoogtewinst', g.hoogte, 'm') +
+      rdMetric_('Arbeid', g.arbeidKj, 'kJ') + rdMetric_('Calorieën', g.kcal, 'kcal') + '</div>';
+    var iv = '';
+    if (m.intervallen && m.intervallen.length) {
+      iv = '<div class="rd-sec-head"><span class="rd-sec-lbl">Intervallen</span>' + (m.ftp ? '<span class="rd-ftp">FTP ' + m.ftp + ' W</span>' : '') + '</div>' +
+        m.intervallen.map(rdIntervalRow_).join('');
+    }
+    return '<div class="rd-sheet">' + kop + tiz + hero + grid + iv +
+      '<div class="rd-curve">Vermogenscurve · binnenkort</div></div>';
+  }
+  function rideLoadingHtml_() {
+    function sk(c) { return '<div class="rd-sk ' + c + '"></div>'; }
+    return '<div class="rd-sheet rd-loading"><button type="button" class="rd-close" data-overlay-close aria-label="Sluiten">×</button>' +
+      sk('rd-sk-kop') + sk('rd-sk-bar') + sk('rd-sk-hero') +
+      '<div class="rd-grid">' + sk('rd-sk-tile') + sk('rd-sk-tile') + sk('rd-sk-tile') + sk('rd-sk-tile') + '</div>' +
+      sk('rd-sk-row') + sk('rd-sk-row') + sk('rd-sk-row') +
+      '<div class="rd-loading-txt">Statistieken laden…</div></div>';
+  }
+  function rideErrorHtml_(dISO) {
+    return '<div class="rd-sheet rd-state"><button type="button" class="rd-close" data-overlay-close aria-label="Sluiten">×</button>' +
+      '<div class="rd-state-mid"><div class="rd-state-icon">⚠</div>' +
+      '<div class="rd-state-title">Statistieken niet beschikbaar</div>' +
+      '<div class="rd-state-body">De ritdata kon niet bij intervals.icu worden opgehaald. Controleer je verbinding en probeer opnieuw.</div>' +
+      '<button type="button" class="rd-retry" onclick="openRideDetail(\'' + dISO + '\')"><span class="rd-retry-icon">↻</span> Opnieuw proberen</button></div></div>';
+  }
+  window.openRideDetail = openRideDetail;
 
   // FIX 2 — lazy reële zone-verdeling: vervang de IF-benadering door echte
   // power-time-in-zone zodra een voltooide dag bekeken wordt (gecachet per dag).

@@ -414,6 +414,129 @@ function getDayCoachZones(dISO) {
   return coachFeedback_(card.voorstel, card.actual, ctx, false);
 }
 
+// ════════════════════════════════════════════════════════════════
+// RIT-DETAIL (Fase 1ter) — lazy activiteit-statistieken uit intervals.icu.
+// Resolveert de activity-id via match-by-date (getRideDetail-patroon = getDay-
+// CoachZones), fetcht /activity/<id> + /activity/<id>/intervals, cachet per
+// activity-id (DocProps, jaar-immutable). PURE afgeleide helpers = getest.
+// ════════════════════════════════════════════════════════════════
+function rdPctFtp_(watts, ftp) {                 // %FTP uit watt (fallback-bron)
+  if (watts == null || !ftp || ftp <= 0) return null;
+  return Math.round(Number(watts) / ftp * 100);
+}
+function rdPad2_(n) { return (n < 10 ? '0' : '') + n; }
+function rdDurMs_(secs) {                          // "8:03" (m:ss); ≥1u → "1:08:03"
+  secs = Math.max(0, Math.round(Number(secs) || 0));
+  var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  return (h > 0 ? (h + ':' + rdPad2_(m)) : ('' + m)) + ':' + rdPad2_(s);
+}
+function rdDurHms_(secs) {                         // "0:58:32" (altijd h:mm:ss)
+  secs = Math.max(0, Math.round(Number(secs) || 0));
+  var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  return h + ':' + rdPad2_(m) + ':' + rdPad2_(s);
+}
+var RD_BUCKET_Z_ = {
+  rust: { z: 'Z1', v: '--zone-1' }, z2: { z: 'Z2', v: '--zone-2' }, tempo: { z: 'Z3', v: '--zone-3' },
+  drempel: { z: 'Z4', v: '--zone-4' }, anaeroob: { z: 'Z5', v: '--zone-5' }
+};
+var RD_ZTIME_ = { Z1: '--zone-1', Z2: '--zone-2', Z3: '--zone-3', Z4: '--zone-4', Z5: '--zone-5', Z6: '--zone-6', Z7: '--zone-6' };
+function rdField_(o, keys) { for (var i = 0; i < keys.length; i++) { var v = o ? o[keys[i]] : null; if (v != null) return v; } return null; }
+function rdNum_(v) { return v != null ? Math.round(Number(v)) : null; }
+
+function rideTimeInZone_(activity) {               // icu_zone_times → balk-segmenten
+  var zt = activity && activity.icu_zone_times;
+  if (!Array.isArray(zt) || !zt.length) return null;
+  var total = 0; zt.forEach(function (z) { if (z && RD_ZTIME_[z.id]) total += Number(z.secs) || 0; });
+  if (total <= 0) return null;
+  var segs = [];
+  zt.forEach(function (z) {
+    if (!z || !RD_ZTIME_[z.id]) return;
+    var secs = Number(z.secs) || 0; if (secs <= 0) return;
+    segs.push({ z: z.id, zoneVar: RD_ZTIME_[z.id], pct: Math.round(secs / total * 100) });
+  });
+  return segs.length ? segs : null;
+}
+function rideIntervals_(ivs, ftp) {                 // /intervals → per-blok-rijen
+  var arr = (ivs && Array.isArray(ivs.icu_intervals)) ? ivs.icu_intervals : (Array.isArray(ivs) ? ivs : []);
+  var out = [];
+  arr.forEach(function (iv, n) {
+    var watt = rdField_(iv, ['average_watts', 'icu_average_watts', 'avg_watts']);
+    var dur = rdField_(iv, ['moving_time', 'elapsed_time', 'secs']);
+    if (watt == null && dur == null) return;
+    var pct = rdPctFtp_(watt, ftp);
+    var bucket = (pct != null) ? pctZoneBucket_(pct) : 'z2';
+    var zi = RD_BUCKET_Z_[bucket] || RD_BUCKET_Z_.z2;
+    out.push({
+      label: String(rdField_(iv, ['label', 'name']) || ('Blok ' + (n + 1))),
+      zone: zi.z, zoneVar: zi.v, durStr: rdDurMs_(dur),
+      hr: rdNum_(rdField_(iv, ['average_hr', 'average_heartrate', 'avg_hr'])),
+      pctFtp: pct, watt: rdNum_(watt),
+      isWork: (bucket === 'tempo' || bucket === 'drempel' || bucket === 'anaeroob')
+    });
+  });
+  return out;
+}
+function rideDetailModel_(hit, detail, ivs, ftp) {  // → client-model voor §1ter
+  var d = detail || hit || {};
+  var start = (hit && hit.start_date_local) ? new Date(hit.start_date_local) : null;
+  var ifRaw = rdField_(d, ['icu_intensity', 'intensity']);
+  var ifNorm = (ifRaw != null) ? (ifRaw > 3 ? ifRaw / 100 : ifRaw) : null;   // % → 0–1
+  var klasse = (ifNorm != null) ? intentFromIF_(ifNorm) : 'onbekend';
+  var distM = rdField_(d, ['distance']);
+  var movS = rdField_(d, ['moving_time', 'elapsed_time']);
+  var joules = rdField_(d, ['icu_joules', 'icu_work']);
+  var vi = rdField_(d, ['icu_variability_index']);
+  return {
+    klasseLabel: COACH_INTENT_LABEL_[klasse] || 'Rit', klasseZone: COACH_INTENT_ZONE_[klasse] || '--zone-2',
+    datum: start ? (dashKort_(start) + ' ' + start.getFullYear()) : '',
+    tijd: start ? (rdPad2_(start.getHours()) + ':' + rdPad2_(start.getMinutes())) : '',
+    afstandKm: distM != null ? Math.round(distM / 100) / 10 : null,
+    duurStr: movS != null ? rdDurHms_(movS) : null,
+    tiz: rideTimeInZone_(hit),
+    np: rdNum_(rdField_(d, ['icu_np', 'icu_weighted_avg_watts'])),
+    ifv: ifNorm != null ? Math.round(ifNorm * 100) / 100 : null,
+    tss: rdNum_(rdField_(d, ['icu_training_load', 'training_load'])),
+    metrics: {
+      gemW: rdNum_(rdField_(d, ['average_watts', 'icu_average_watts'])),
+      vi: vi != null ? Math.round(Number(vi) * 100) / 100 : null,
+      gemHr: rdNum_(rdField_(d, ['average_heartrate', 'average_hr'])),
+      maxHr: rdNum_(rdField_(d, ['max_heartrate', 'max_hr'])),
+      cadans: rdNum_(rdField_(d, ['average_cadence', 'icu_average_cadence'])),
+      hoogte: rdNum_(rdField_(d, ['total_elevation_gain', 'icu_elevation_gain'])),
+      arbeidKj: joules != null ? Math.round(Number(joules) / 1000) : null,
+      kcal: rdNum_(rdField_(d, ['calories', 'icu_calories']))
+    },
+    ftp: ftp || null,
+    intervallen: rideIntervals_(ivs, ftp)
+  };
+}
+
+/** Lazy callable: rit-detail voor een gereden dag. null/{error} → RideError-state. */
+function getRideDetail(dISO) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dISO))) return null;
+  var acts = [];
+  try { acts = getActivities(40) || []; } catch (e) { return { error: true }; }
+  var hit = null;
+  for (var i = 0; i < acts.length; i++) {
+    var a = acts[i];
+    if (!a.start_date_local || CYCLING_TYPES.indexOf(String(a.type || '')) < 0) continue;
+    if (formatDate(stripTime_(new Date(a.start_date_local)), 'yyyy-MM-dd') === dISO) { hit = a; break; }
+  }
+  if (!hit || !hit.id) return null;                       // geen gekoppelde activiteit
+  var ftp = rdNum_(rdField_(hit, ['icu_ftp']));
+  if (!ftp) { try { ftp = readSettings(SpreadsheetApp.getActive()).ftp || null; } catch (e) {} }
+  var cacheKey = 'ridedetail_' + hit.id;
+  var cached = getDocProp(cacheKey, '');
+  if (cached) { try { var m = JSON.parse(cached); if (m && !m.error) return m; } catch (e) {} }
+  var detail = null, ivs = null;
+  try { detail = intervalsRequest_('/activity/' + hit.id); } catch (e) { detail = null; }
+  try { ivs = intervalsRequest_('/activity/' + hit.id + '/intervals'); } catch (e) { ivs = null; }
+  ftp = rdNum_(rdField_(detail || {}, ['icu_ftp'])) || ftp;   // FTP zoals die VOOR die rit gold
+  var model = rideDetailModel_(hit, detail, ivs, ftp);
+  if (detail) { try { setDocProp(cacheKey, JSON.stringify(model)); } catch (e) {} }   // cache alleen bij geslaagde detail-fetch
+  return model;
+}
+
 /**
  * W/kg-anker → niveau (0–50). Bewust stabiel: beweegt alleen op FTP/gewicht.
  * De taper-bewuste conditie-modifier komt pas in 2b. Pure helper.

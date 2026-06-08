@@ -33,6 +33,7 @@ function runSelfTest() {
   testDayOverride_(ctx);
   testCoach_(ctx);
   testCoachAdaptatie_(ctx);
+  testRideDetail_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -325,4 +326,23 @@ function testCoachAdaptatie_(ctx) {
   // (iii) null: geen target / intent zonder deterministische make-up.
   assert_(ctx, 'adapt geen target', null, coachAdaptatie_({ intent: 'duur', duurMin: 120 }, lib, null, '', '2026-06-07'));
   assert_(ctx, 'adapt vrij null', null, coachAdaptatie_({ intent: 'vrij', duurMin: 90 }, lib, '2026-06-12', 'vr', '2026-06-07'));
+}
+
+// ── Rit-detail (puur) — %FTP + zone-bucket + duur-format ──
+function testRideDetail_(ctx) {
+  // %FTP uit watt (fallback-bron): round(watt/ftp*100).
+  assert_(ctx, 'rd pctFtp 103', 103, rdPctFtp_(283, 275));
+  assert_(ctx, 'rd pctFtp 61', 61, rdPctFtp_(168, 275));
+  assert_(ctx, 'rd pctFtp geen ftp', null, rdPctFtp_(200, 0));
+  // zone-bucket-grenzen (pctZoneBucket_: <56 rust / ≤75 z2 / ≤90 tempo / ≤105 drempel / >105 anaeroob).
+  assert_(ctx, 'rd zone 55', 'rust', pctZoneBucket_(55));
+  assert_(ctx, 'rd zone 75', 'z2', pctZoneBucket_(75));
+  assert_(ctx, 'rd zone 90', 'tempo', pctZoneBucket_(90));
+  assert_(ctx, 'rd zone 105', 'drempel', pctZoneBucket_(105));
+  assert_(ctx, 'rd zone 110', 'anaeroob', pctZoneBucket_(110));
+  // duur-format: m:ss; ride-totaal h:mm:ss.
+  assert_(ctx, 'rd dur 483', '8:03', rdDurMs_(483));
+  assert_(ctx, 'rd dur 180', '3:00', rdDurMs_(180));
+  assert_(ctx, 'rd dur ms 1u', '1:08:03', rdDurMs_(4083));
+  assert_(ctx, 'rd dur hms', '0:58:32', rdDurHms_(3512));
 }

@@ -126,6 +126,17 @@ server-geleid.
 | **Adaptatie-regel** ("Voorstel: …") | Toont wat de coach voorstelt (verplaatsen / inkorten / niets). | READ · 🌐 | **Server-geleid** (coach-engine). NB: in deze pass een VOORSTEL (uitleg); auto-executie via de override-replanner = toekomst. |
 | **Skip-reden** (Geen tijd / Bewust gerust / Iets anders — alleen `Missed`) | Legt de reden van de gemiste dag vast. | WRITE · 🌐 | Eén actief; voedt de coach-engine. |
 
+**C-ter. Rit-detail / activiteit-statistieken** (`RideLoaded` / `RideLoading` /
+`RideError` — zie export-doc §1ter). Opent als overlay-sheet vanuit een
+voltooide rit; de detaildata wordt lazy opgehaald.
+| Element | Doet | R/W | Effect / voorwaarden |
+| --- | --- | --- | --- |
+| **Tik-affordance op gereden rit** ("Bekijk ritdetails") | Opent de rit-detail-sheet. | 💻 | Mount de overlay (`--scrim` + sheet) en triggert `getRideDetail(dISO)`. Alleen op dagen met een gekoppelde activiteit. |
+| **Lazy-load** (`getRideDetail`) | Haalt summary-metrics + interval-structuur op bij intervals.icu. | READ · 🌐 | Tijdens het ophalen → `RideLoading` (skeleton). Resultaat gecachet per activiteit (DocProps `ridedetail_<id>` + client-cache); heropenen toont direct de geladen sheet. |
+| **Sheet-inhoud** (kop, tijd-in-zone, hero-metrics, metric-grid, intervallen) | Toont de statistieken. | READ · 🌐 | Alles server-data; puur lezen. |
+| **Sluiten** (✕ of tik op scrim / sleep omlaag) | Sluit de sheet. | 💻 | Unmount overlay; geen server-call. |
+| **"Opnieuw proberen"** (alleen `RideError`) | Herhaalt `getRideDetail`. | READ · 🌐 | Bij mislukte/lege respons; klik → terug naar `RideLoading`. |
+
 **D. Rustdag (`RecoveryCard`) / Niet beschikbaar (`UnavailableCard`)**
 | Element | Doet | R/W | Effect |
 | --- | --- | --- | --- |

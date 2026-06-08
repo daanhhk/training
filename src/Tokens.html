@@ -289,6 +289,42 @@
   --badge-good-bg:   var(--success-soft);
   --badge-good-text: var(--success);
 
+  /* ─── Ride detail (activity statistics sheet) ───────────────────────────────
+     COMPONENT. Tap a completed ride → overlay sheet with the real activity
+     stats from intervals.icu: summary metrics + interval structure. Reuses the
+     bottom-sheet (--scrim/--sheet-*), zone (--zone-*) and reading layers. */
+  --ride-metric-tile-bg: var(--bg-sunken);     /* secondary metric tile         */
+  --ride-metric-label:   var(--text-muted);    /* metric caption                */
+  --ride-metric-value:   var(--text-primary);  /* metric figure (font-num)      */
+  --ride-metric-unit:    var(--text-muted);    /* unit suffix (w, bpm, kJ…)     */
+  --ride-hero-bg:        var(--bg-sunken);      /* NP/IF/TSS hero strip          */
+  --ride-hero-value:     var(--text-primary);   /* hero figure                   */
+  --ride-hero-accent:    var(--accent);         /* the single key hero (TSS)     */
+  --ride-divider:        var(--border-subtle);  /* section + tile hairlines      */
+  --ride-section-label:  var(--text-muted);     /* "Intervallen" overline        */
+
+  /* Time-in-zone overview bar (segments sized by time, colored --zone-1..6) */
+  --tiz-track:       var(--bg-sunken);
+  --tiz-gap:         2px;                        /* hairline between zone blocks  */
+  --tiz-legend-text: var(--text-secondary);
+
+  /* Interval blocks list (the core) */
+  --interval-row-bg:    var(--bg-sunken);        /* work-interval row             */
+  --interval-rest-bg:   var(--bg-app);           /* recovery row (lower contrast) */
+  --interval-stripe-w:  3px;                      /* zone-colored left stripe      */
+  --interval-label:     var(--text-primary);     /* "Interval 1" / "Herstel"      */
+  --interval-sub:       var(--text-muted);       /* duur · HR · %FTP meta line    */
+  --interval-power:     var(--text-primary);     /* watt figure (row hero)        */
+  --interval-power-unit:var(--text-muted);
+
+  /* Lazy-load skeleton + empty/error state */
+  --skeleton-base:   var(--bg-elevated);
+  --skeleton-sheen:  color-mix(in srgb, var(--white) 7%, transparent);
+  --state-icon:      var(--text-muted);          /* error/empty glyph             */
+  --state-icon-bg:   var(--bg-elevated);         /* glyph disc                    */
+  --state-title:     var(--text-secondary);
+  --state-body:      var(--text-muted);
+
   /* ─── Execution alignment (day-level: planned vs done) ──────────────────────
      SEMANTIC. How closely a completed day followed the plan, or that it was
      missed. Never punishing — "missed" is neutral grey, not danger-red.

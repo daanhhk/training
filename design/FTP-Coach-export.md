@@ -184,6 +184,50 @@ icoon (`--coach-adapt-icon`) + label "AANPASSING" (`--coach-adapt-label`).
 
 ---
 
+## 1ter. Schema · rit-detail (activiteit-statistieken)
+
+Tik op een **gereden** rit in de voltooide dag-detail → een **overlay-sheet**
+(de bestaande sheet-variant: `--scrim` + `--sheet-bg/radius/handle/shadow`,
+92% hoogte) met de échte activiteit-statistieken uit intervals.icu: de
+interval-structuur + vermogensverdeling per blok. Mobiel, scrollbaar. Drie
+states: geladen · laden · error.
+
+### Geladen (`RideLoaded`, `11-rit-detail.png`)
+Opbouw top → onder:
+1. **Kop** — klasse-badge (zone-gekleurd, bv. "Drempel" `--zone-4`) + datum/tijd
+   (`--text-muted`), daaronder groot `afstand · duur` (`--font-num`, scheider
+   `--ride-divider`).
+2. **Tijd-in-zone-balk** (`TimeInZoneBar`) — gestapelde balk, segmenten op
+   tijd-aandeel, kleur `--zone-1…6`, spoor `--tiz-track`, hairline-gap
+   `--tiz-gap`; legenda eronder (zone-stip + `Z*` + % in `--tiz-legend-text`).
+3. **Hero-strip** — drie cellen NP · IF · TSS op `--ride-hero-bg`, scheiders
+   `--ride-divider`, waarden `--ride-hero-value`; TSS als enige accent
+   (`--ride-hero-accent`).
+4. **Metric-grid** (`Metric`, 2 kolommen) — Gem. vermogen, Variabiliteit,
+   Gem. HR, Max. HR, Cadans, Hoogtewinst, Arbeid, Calorieën. Tegel
+   `--ride-metric-tile-bg`, label `--ride-metric-label`, waarde
+   `--ride-metric-value`, eenheid `--ride-metric-unit`.
+5. **Intervallen** (`IntervalRow`) — de kern. Sectie-overline
+   `--ride-section-label` + "FTP {n} w". Per blok: zone-gekleurde linker-stripe
+   (`--interval-stripe-w`, `--zone-*`), label (`--interval-label`) + `Z*`-badge,
+   meta-regel duur · HR · %FTP (`--interval-sub`, %FTP in zonekleur), rechts het
+   vermogen groot (`--interval-power` + `--interval-power-unit`). Werk-intervallen
+   `--interval-row-bg`, herstel/WU/CD `--interval-rest-bg` (lager contrast).
+6. **Gereserveerd** — gestippelde placeholder "Vermogenscurve · binnenkort"
+   (`--border-strong` op `--bg-sunken`) — ruimte voor fase 2 (nog niet gebouwd).
+
+### Laden (`RideLoading`, `11b-rit-detail-laden.png`)
+Skeleton met dezelfde layout-ritmes: balken `--skeleton-base` + shimmer-sweep
+(`--skeleton-sheen`, `prefers-reduced-motion`-gated). Onderaan "Statistieken
+laden…" (`--text-muted`). Toont terwijl `getRideDetail` loopt.
+
+### Error / geen data (`RideError`, `11c-rit-detail-error.png`)
+Gecentreerde lege-staat: glyph-disc (`--state-icon` op `--state-icon-bg`), titel
+(`--state-title`), uitleg (`--state-body`), secundaire knop "Opnieuw proberen"
+(`--btn-secondary-*`, refresh-icoon `--accent`).
+
+---
+
 ## 3. Trainingen
 
 Status-deck bovenaan; daaronder een drill-down in drie views (`TrainingenTab`):
@@ -242,3 +286,6 @@ Exporteer deze naar `design/screenshots/` (390×844, tenzij anders):
 | `08-dag-voltooid-match.png` | Dag-detail coach-feedback — voltooid, uitvoering matcht plan |
 | `09-dag-voltooid-afwijking.png` | Dag-detail coach-feedback — voltooid, afwijking + impact + adaptatie |
 | `10-dag-gemist.png` | Dag-detail coach-feedback — gemist, skip-reden + impact + adaptatie |
+| `11-rit-detail.png` | Rit-detail sheet — geladen (tijd-in-zone, hero-metrics, metric-grid, intervallen) |
+| `11b-rit-detail-laden.png` | Rit-detail sheet — laden (skeleton, `getRideDetail` loopt) |
+| `11c-rit-detail-error.png` | Rit-detail sheet — error / geen data + "Opnieuw proberen" |
