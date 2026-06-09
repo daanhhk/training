@@ -318,6 +318,9 @@ function testPowerCurve_(ctx) {
   assert_(ctx, 'riderType Daan pos<=hi', true, rtD.pos <= 0.58);
   assert_(ctx, 'riderType sprint label', 'Sprinter', riderTypeFromCurve_(20, 10, 3.5, 2.9).label);   // hoog kort, laag lang
   assert_(ctx, 'riderType diesel label', 'Diesel · klimmer', riderTypeFromCurve_(10, 5.6, 7, 6).label); // laag kort, hoog lang
+  // Live 1-jaars-cijfers (5s/60s/5m/eFTP-W/kg): pint de classificatie van het ECHTE live-pad, niet alleen 42d.
+  var rtL = riderTypeFromCurve_(15.6, 6.5, 4.6, 3.71);
+  assert_(ctx, 'riderType live All-rounder+band', true, rtL.label === 'All-rounder' && rtL.pos >= 0.42 && rtL.pos <= 0.58);
   var c = { label: '1y', days: 365, weight: 72,
     secs: [5, 60, 120, 300, 1200, 3600, 7200], values: [980, 560, 0, 372, 312, 276, 250],
     watts_per_kg: [16, 9, 0, 5.5, 4.6, 4.1, 3.7], activity_id: ['a', 'a', 'a', 'a3', 'a', 'a', 'a'] };
