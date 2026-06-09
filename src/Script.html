@@ -1010,17 +1010,17 @@
     if (!d) { el.innerHTML = ''; return; }
     var h = '<div class="muted" style="text-transform:capitalize;margin-bottom:6px">' + esc(d.weekdag) + ' ' + esc(d.kort) + '</div>';
 
-    // TEMP rdydemo — verwijder bij close-out: ?rdydemo=caution|rest injecteert een synthetische suggest-coach op vandaag.
+    // TEMP rdydemo — verwijder bij close-out: ?rdydemo=caution|rest injecteert een synthetische suggest-coach op elke plannbare dag.
     (function () {
       var m = /[?&]rdydemo=(caution|rest)/.exec(window.location.search || '');
-      if (m && d.status === 'vandaag' && !d.override && !d.coach) {
-        var rd = m[1], vv = state.vandaag && state.vandaag.voorstel;
+      if (m && trnPlannable_(d) && !d.override && !d.coach) {
+        var rd = m[1];
         d.coach = { kind: 'readiness', status: rd, gereedheid: (rd === 'rest' ? 42 : 54), reden: (rd === 'rest' ? 'rest_key' : 'caution_key'),
           fromType: 'vo2max', toType: (rd === 'rest' ? 'recovery' : 'tempo'),
-          fromNaam: ((vv && vv.titel) || 'VO2max 5×4min'), toNaam: (rd === 'rest' ? 'Herstelrit' : 'Tempo-rit'),
+          fromNaam: 'VO2max 5×4min', toNaam: (rd === 'rest' ? 'Herstelrit' : 'Tempo-rit'),
           regel: 'Demo — gereedheid laag; sessie verlicht voor beter herstel.',
           adaptatie: { dISO: d.dateISO, type: 'free', ritType: 'vrij', intensiteit: (rd === 'rest' ? 'rustig' : 'tempo'),
-            durMin: ((vv && vv.duurMin) || 75), src: 'readiness', label: 'Verlicht vandaag' } };
+            durMin: 75, src: 'readiness', label: 'Verlicht vandaag' } };
       }
     })();
     // STAP 2 mount — boven álle takken (suggest boven voorstelKaart; committed boven overrideKaart_).
