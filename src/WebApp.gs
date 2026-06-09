@@ -697,17 +697,19 @@ function getRideDetail(dISO) {
 /**
  * Niveau Fase-2 §c — power-curve (mean-max) voor de Rijdersprofiel-kaart. LAZY web-callable
  * (GEEN open-flow). intervals.icu /power-curves?type=Ride (type VERPLICHT → 422 zonder).
- * Cache de RAUWE respons onder powercurve_raw_<yyyyMMdd> (dag-bucket), ALLEEN na succes;
- * pcNormalize_ draait bij ELKE read → classificatie volgt altijd de huidige code.
- * Returnt 't genormaliseerde model | {empty:true} | {error:true}.
+ * window-id ('90d' | '1y', default '1y') → API-param curves=<window> (start/end worden GENEGEERD;
+ * curves=<id> is de enige venster-control). Cache de RAUWE respons onder
+ * powercurve_raw_<window>_<yyyyMMdd> (dag-bucket, per-venster), ALLEEN na succes; pcNormalize_ draait
+ * bij ELKE read → classificatie volgt altijd de huidige code. Returnt model | {empty:true} | {error:true}.
  */
-function getPowerCurve() {
-  var key = 'powercurve_raw_' + formatDate(stripTime_(new Date()), 'yyyyMMdd');
+function getPowerCurve(window) {
+  window = (window === '90d') ? '90d' : '1y';   // whitelisted venster-id; default 1y
+  var key = 'powercurve_raw_' + window + '_' + formatDate(stripTime_(new Date()), 'yyyyMMdd');
   var raw = null;
   var cached = getDocProp(key, '');
   if (cached) { try { raw = JSON.parse(cached); } catch (e) { raw = null; } }
   if (!raw) {
-    try { raw = intervalsRequest_('/athlete/{id}/power-curves?type=Ride', {}); } catch (e) { return { error: true }; }
+    try { raw = intervalsRequest_('/athlete/{id}/power-curves?type=Ride&curves=' + window, {}); } catch (e) { return { error: true }; }
     if (raw && raw.list && raw.list[0] && raw.list[0].secs && raw.list[0].secs.length) {
       try { setDocProp(key, JSON.stringify(raw)); } catch (e) {}   // raw cachen, alleen na succes-fetch met data
     }
@@ -716,7 +718,7 @@ function getPowerCurve() {
   if (!curve || !curve.secs || !curve.secs.length) return { empty: true };
   var ftp = null;
   try { ftp = readSettings(SpreadsheetApp.getActive()).ftp || null; } catch (e) {}
-  return pcNormalize_(curve, raw.activities || {}, ftp);   // elke call genormaliseerd (puur, goedkoop)
+  return pcNormalize_(curve, raw.activities || {}, ftp);   // window-label uit curve.label; elke call genormaliseerd
 }
 
 /**
