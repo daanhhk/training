@@ -33,6 +33,7 @@ function runSelfTest() {
   testDayOverride_(ctx);
   testCoach_(ctx);
   testReadinessAdjust_(ctx);
+  testPowerCurve_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -302,6 +303,29 @@ function testReadinessAdjust_(ctx) {
   assert_(ctx, 'rdyAdj caution Taper keep', 'keep', adj('vo2max', true, 'caution', 'Taper').action);
   assert_(ctx, 'rdyAdj rest Recovery keep', 'keep', adj('vo2max', true, 'rest', 'Recovery').action);
   assert_(ctx, 'rdyAdj caution not-in-map keep', 'keep', adj('taper_openers', true, 'caution', 'Build').action);
+}
+
+// ── Niveau Fase-2 §c — power-curve normalisatie (puur) ──
+function testPowerCurve_(ctx) {
+  var S = [5, 60, 300, 1200, 3600], V = [980, 560, 372, 312, 276], WK = [16, 9, 5.5, 4.6, 4.1], A = ['a', 'a', 'a3', 'a', 'a'];
+  assert_(ctx, 'pcMarkerAt exact 60', 60, pcMarkerAt_(S, V, WK, A, 60).secs);
+  assert_(ctx, 'pcMarkerAt nearest 100→300', 300, pcMarkerAt_(S, V, WK, A, 100).secs);
+  assert_(ctx, 'pcMarkerAt none→null', null, pcMarkerAt_(S, V, WK, A, 7200));
+  function mk(w5, w20) { return [{ label: '5s', wkg: w5 }, { label: '20m', wkg: w20 }]; }
+  assert_(ctx, 'riderType diesel pos', 0, riderTypeFromCurve_(mk(9.6, 4.8)).pos);   // ratio 2.0 ≤2.4
+  assert_(ctx, 'riderType diesel label', 'Diesel · klimmer', riderTypeFromCurve_(mk(9.6, 4.8)).label);
+  assert_(ctx, 'riderType sprint pos', 1, riderTypeFromCurve_(mk(16, 4)).pos);       // ratio 4.0 ≥4.0
+  assert_(ctx, 'riderType sprint label', 'Sprinter', riderTypeFromCurve_(mk(16, 4)).label);
+  assert_(ctx, 'riderType allround label', 'Allrounder', riderTypeFromCurve_(mk(13, 4)).label);  // ratio 3.25 → 0.53
+  var c = { label: '1y', days: 365, weight: 72,
+    secs: [5, 60, 120, 300, 1200, 3600, 7200], values: [980, 560, 0, 372, 312, 276, 250],
+    watts_per_kg: [16, 9, 0, 5.5, 4.6, 4.1, 3.7], activity_id: ['a', 'a', 'a', 'a3', 'a', 'a', 'a'] };
+  var n = pcNormalize_(c, { a3: { start_date_local: '2026-03-10' } });
+  assert_(ctx, 'pcNorm curve cap+skip', 5, n.curve.length);          // 7200 capped, 120/0-watt skipped
+  assert_(ctx, 'pcNorm markers', 5, n.markers.length);
+  var m5m = null; n.markers.forEach(function (m) { if (m.label === '5m') m5m = m; });
+  assert_(ctx, 'pcNorm 5m date', '2026-03-10', m5m.date);
+  assert_(ctx, 'pcNorm empty', true, pcNormalize_({ secs: [], values: [] }).empty);
 }
 
 function testCoach_(ctx) {

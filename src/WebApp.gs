@@ -362,6 +362,85 @@ function niveauProgressie_(niveauReeks, ctlByMonth) {
   });
 }
 
+// ════════════════════════════════════════════════════════════════
+// NIVEAU FASE-2 §c — power-curve (mean-max) normalisatie (PUUR; getest).
+// ════════════════════════════════════════════════════════════════
+var PC_MARKERS_ = [
+  { sec: 5, label: '5s', key: false }, { sec: 60, label: '1m', key: false },
+  { sec: 300, label: '5m', key: true }, { sec: 1200, label: '20m', key: true }, { sec: 3600, label: '60m', key: true }
+];
+var RIDER_RATIO_DIESEL_ = 2.4, RIDER_RATIO_SPRINT_ = 4.0;   // wkg(5s)/wkg(20m): ≤diesel→pos0 · ≥sprint→pos1 (tunebaar)
+
+// Marker op de duur >= targetSec dichtstbij (exact of eerstvolgende); null als geen.
+function pcMarkerAt_(secs, values, wkg, actIds, targetSec) {
+  if (!secs || !secs.length) return null;
+  for (var i = 0; i < secs.length; i++) {
+    if (secs[i] >= targetSec) {
+      var w = (values && values[i] != null) ? values[i] : null;
+      if (w == null) return null;
+      return { secs: secs[i], watts: Math.round(w),
+               wkg: (wkg && wkg[i] != null) ? Math.round(wkg[i] * 100) / 100 : null,
+               activityId: (actIds && actIds[i] != null) ? actIds[i] : null };
+    }
+  }
+  return null;
+}
+
+// wkg@5s / wkg@20min → rijderstype-positie 0..1 (0=Diesel·klimmer .. 1=Sprinter) + label.
+function riderTypeFromCurve_(markers) {
+  if (!markers || !markers.length) return null;
+  var m5 = null, m20 = null;
+  markers.forEach(function (m) { if (m.label === '5s') m5 = m; else if (m.label === '20m') m20 = m; });
+  if (!m5 || !m20 || m5.wkg == null || m20.wkg == null || !m20.wkg) return null;
+  var ratio = m5.wkg / m20.wkg;
+  var pos = Math.max(0, Math.min(1, (ratio - RIDER_RATIO_DIESEL_) / (RIDER_RATIO_SPRINT_ - RIDER_RATIO_DIESEL_)));
+  var label = (pos < 0.34) ? 'Diesel · klimmer' : (pos > 0.66 ? 'Sprinter' : 'Allrounder');
+  return { pos: Math.round(pos * 100) / 100, label: label };
+}
+
+// power-curves list[0] (+ activities-map) → genormaliseerd profiel (PUUR). curve = punten
+// secs<=3600 (60min-cap), null/≤0-watt overgeslagen; markers op PC_MARKERS_; date per marker
+// uit activities[activityId] (start_date_local → date → null).
+function pcNormalize_(c, activities) {
+  if (!c || !c.secs || !c.secs.length || !c.values) return { empty: true };
+  activities = activities || {};
+  var secs = c.secs, vals = c.values, wkg = c.watts_per_kg || [], actIds = c.activity_id || [];
+  var curve = [];
+  for (var i = 0; i < secs.length; i++) {
+    if (secs[i] > 3600) break;                       // 60min-cap (secs oplopend)
+    var w = vals[i];
+    if (w == null || w <= 0) continue;               // null/0-watt overslaan
+    curve.push({ secs: secs[i], watts: Math.round(w) });
+  }
+  if (!curve.length) return { empty: true };
+  var markers = [];
+  PC_MARKERS_.forEach(function (M) {
+    var mk = pcMarkerAt_(secs, vals, wkg, actIds, M.sec);
+    if (!mk || mk.watts == null || mk.watts <= 0) return;
+    var date = null;
+    if (mk.activityId != null && activities[mk.activityId]) {
+      var am = activities[mk.activityId];
+      date = am.start_date_local || am.date || null;
+    }
+    markers.push({ secs: mk.secs, label: M.label, key: M.key, watts: mk.watts, wkg: mk.wkg, activityId: mk.activityId, date: date });
+  });
+  return {
+    window: { label: c.label || null, days: c.days || null, start: c.start_date_local || null, end: c.end_date_local || null },
+    weight: (c.weight != null) ? c.weight : null,
+    curve: curve, markers: markers, riderType: riderTypeFromCurve_(markers)
+  };
+}
+
+// eFTP (API-vrij): recentste niet-lege idx14 ("Rolling FTP") uit de Activiteiten-array (newest-first).
+function eftpFromActivities_(actValues) {
+  if (!actValues || !actValues.length) return null;
+  for (var i = 0; i < actValues.length; i++) {
+    var v = actValues[i][14];
+    if (v !== '' && v != null && !isNaN(Number(v)) && Number(v) > 0) return Math.round(Number(v));
+  }
+  return null;
+}
+
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
 function dashDayCard_(dISO, wpEntry, actual, rpe) {
   var voorstel = null;
@@ -603,6 +682,25 @@ function getRideDetail(dISO) {
   if (!gewicht) { try { gewicht = Number(getGewicht()) || null; } catch (e) {} }
   var model = rideDetailModel_(hit, detail, ivs, ftp, gewicht);
   if (detail) { try { setDocProp(cacheKey, JSON.stringify(model)); } catch (e) {} }   // cache alleen bij geslaagde detail-fetch
+  return model;
+}
+
+/**
+ * Niveau Fase-2 §c — power-curve (mean-max) voor de Rijdersprofiel-kaart. LAZY web-callable
+ * (GEEN open-flow). intervals.icu /power-curves?type=Ride (type VERPLICHT → 422 zonder).
+ * Cache DocProp powercurve_ride_<yyyyMMdd> (dag-bucket, zelf-verversend), ALLEEN na succes
+ * (spiegelt ridedetail_<id>). Returnt 't genormaliseerde model | {empty:true} | {error:true}.
+ */
+function getPowerCurve() {
+  var key = 'powercurve_ride_' + formatDate(stripTime_(new Date()), 'yyyyMMdd');
+  var cached = getDocProp(key, '');
+  if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+  var resp;
+  try { resp = intervalsRequest_('/athlete/{id}/power-curves?type=Ride', {}); } catch (e) { return { error: true }; }
+  var curve = (resp && resp.list && resp.list[0]) ? resp.list[0] : null;
+  if (!curve || !curve.secs || !curve.secs.length) return { empty: true };
+  var model = pcNormalize_(curve, resp.activities || {});
+  if (model && !model.empty) { try { setDocProp(key, JSON.stringify(model)); } catch (e) {} }
   return model;
 }
 
@@ -1011,6 +1109,7 @@ function getDashboardState() {
     beginLabel: beginLabel,
     niveauDelta: niveauDelta,
     niveauProgressie: niveauProgressie,
+    eftp: eftpFromActivities_(actValues),
     availability: planner.map(function (p) {
       return { train: p.train === true, minuten: p.minuten || 0, dagtype: p.type || '', dagLabel: p.dag };
     }),
