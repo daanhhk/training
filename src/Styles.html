@@ -675,4 +675,60 @@
   .nv-type-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 13px; height: 13px; border-radius: 999px; background: var(--curve-type-marker); border: 3px solid var(--bg-surface); box-shadow: 0 0 0 1px var(--accent); }
   .nv-type-duiding { font-size: var(--fs-label); line-height: 1.5; margin-top: 12px; }
   .nv-eftp { font-family: var(--font-sans); font-size: var(--fs-caption); color: var(--text-muted); margin-top: 2px; }
+  /* Niveau Fase-2 §d — DoelProjectie */
+  .nvd-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .nvd-sub { font-size: var(--fs-label); margin-top: 3px; }
+  .nvd-gaps { display: flex; flex-direction: column; gap: 11px; margin-top: 14px; }
+  .nvd-gap { display: flex; align-items: center; gap: 10px; }
+  .nvd-gap-main { flex: 1; min-width: 0; }
+  .nvd-gap-lbl { font-family: var(--font-sans); font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+  .nvd-gap-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 1px; }
+  .nvd-gap-num { display: flex; align-items: baseline; gap: 3px; }
+  .nvd-gap-cur { font-family: var(--font-num); font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .nvd-gap-doel { font-family: var(--font-sans); font-size: 10px; color: var(--text-muted); }
+  .nvd-gap-stat { flex-shrink: 0; width: 76px; text-align: right; font-family: var(--font-sans); font-size: 10.5px; font-weight: 600; }
+  .nvd-gap-stat.ok { color: var(--goal-ontrack); }
+  .nvd-gap-stat.gap { color: var(--goal-gap); }
+  .nvd-callout { margin-top: 14px; display: flex; align-items: center; gap: 8px; border-radius: var(--r-md); padding: 9px 12px; font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
+  .nvd-callout.ok { background: var(--goal-ontrack-soft); border: 1px solid color-mix(in srgb, var(--good) 30%, transparent); }
+  .nvd-callout.neutral { background: var(--bg-sunken); border: 1px solid var(--border-subtle); }
+  .nvd-callout strong { color: var(--text-primary); }
+  .nvd-callout-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--good); flex-shrink: 0; }
+  .nvd-callout.neutral .nvd-callout-dot { background: var(--text-muted); }
+  .nvd-whatif { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+  .nvd-whatif-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .nvd-hours-wrap { display: flex; align-items: baseline; gap: 4px; }
+  .nvd-hours-n { font-family: var(--font-num); font-size: 18px; font-weight: 600; color: var(--accent); }
+  .nvd-hours-u { font-size: 11px; color: var(--text-muted); }
+  .nvd-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px; background: var(--slider-track); margin: 10px 0 1px; cursor: pointer; outline: none; }
+  .nvd-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 999px; background: var(--slider-thumb); border: 3px solid var(--bg-surface); box-shadow: 0 1px 4px rgba(0,0,0,0.5); cursor: pointer; }
+  .nvd-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 999px; background: var(--slider-thumb); border: 3px solid var(--bg-surface); box-shadow: 0 1px 4px rgba(0,0,0,0.5); cursor: pointer; }
+  .nvd-slider-ends { display: flex; justify-content: space-between; font-family: var(--font-num); font-size: 9.5px; color: var(--text-muted); margin-top: 1px; }
+  .nvd-proj-lbl { display: flex; align-items: center; gap: 6px; margin: 12px 0 6px; font-family: var(--font-sans); font-size: 10.5px; font-weight: 600; color: var(--text-secondary); }
+  .nvd-proj-lbl .muted { font-weight: 400; }
+  .nvd-proj-swatch { width: 14px; height: 3px; border-radius: 2px; background: var(--proj-solid); }
+  .nvd-chart { width: 100%; min-height: 156px; }
+  .nvd-readout { margin-top: 10px; border-radius: var(--r-md); padding: 11px 13px; }
+  .nvd-readout.ok { background: var(--bg-sunken); border: 1px solid var(--border-subtle); }
+  .nvd-readout.warn { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); display: flex; align-items: flex-start; gap: 8px; }
+  .nvd-readout-main { font-size: 13px; color: var(--text-secondary); }
+  .nvd-readout-n { font-family: var(--font-num); font-size: 20px; font-weight: 600; color: var(--good); }
+  .nvd-readout-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+  .nvd-readout-sub strong { color: var(--accent); }
+  .nvd-readout.warn .nvd-readout-bang { font-family: var(--font-num); font-size: 14px; color: var(--warn); line-height: 1.3; }
+  .nvd-readout.warn strong { color: var(--text-primary); }
+  .nvd-band { margin-top: 10px; border: 1px solid var(--proj-band-border); border-radius: var(--r-md); overflow: hidden; }
+  .nvd-band-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px 7px; }
+  .nvd-band-t { font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+  .nvd-pill { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--proj-estimate-text); }
+  .nvd-band-fig { position: relative; height: 34px; margin: 0 12px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; gap: 5px; background: var(--proj-band-fill); background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, var(--proj-band-hatch) 5px, var(--proj-band-hatch) 6px); }
+  .nvd-band-lo, .nvd-band-hi { font-family: var(--font-num); font-size: 17px; font-weight: 600; color: var(--proj-estimate-text); }
+  .nvd-band-dash { font-size: 12px; color: var(--proj-estimate-text); }
+  .nvd-band-u { font-size: 11px; color: var(--proj-estimate-text); margin-left: 2px; }
+  .nvd-assum-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 5px; background: none; border: none; cursor: pointer; padding: 8px 0 9px; font-family: var(--font-sans); font-size: 10.5px; font-weight: 600; color: var(--text-muted); }
+  .nvd-assum-chev { transition: transform .2s; }
+  .nvd-assum-btn.open .nvd-assum-chev { transform: rotate(180deg); }
+  .nvd-assum-list { padding: 0 12px 11px; flex-direction: column; gap: 5px; }
+  .nvd-assum-item { display: flex; gap: 7px; align-items: flex-start; font-size: 11px; color: var(--text-muted); line-height: 1.45; }
+  .nvd-assum-dot { width: 4px; height: 4px; border-radius: 999px; background: var(--text-muted); margin-top: 6px; flex-shrink: 0; }
 </style>

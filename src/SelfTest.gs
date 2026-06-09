@@ -34,6 +34,7 @@ function runSelfTest() {
   testCoach_(ctx);
   testReadinessAdjust_(ctx);
   testPowerCurve_(ctx);
+  testGoalProjection_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -330,6 +331,37 @@ function testPowerCurve_(ctx) {
   var m5m = null; n.markers.forEach(function (m) { if (m.label === '5m') m5m = m; });
   assert_(ctx, 'pcNorm 5m date', '2026-03-10', m5m.date);
   assert_(ctx, 'pcNorm empty', true, pcNormalize_({ secs: [], values: [] }).empty);
+}
+
+// ── Niveau Fase-2 §d — doel-gereedheid + projectie (puur) ──
+function testGoalProjection_(ctx) {
+  // goalGap_ — op-koers (>=target) · nog-te-gaan + gap-waarde · grens (==target).
+  assert_(ctx, 'goalGap op-koers', true, goalGap_(4.1, 4.0, 'up').onTrack);
+  assert_(ctx, 'goalGap te-gaan onTrack', false, goalGap_(58, 65, 'up').onTrack);
+  assert_(ctx, 'goalGap te-gaan gap', 7, goalGap_(58, 65, 'up').gap);
+  assert_(ctx, 'goalGap grens onTrack', true, goalGap_(65, 65, 'up').onTrack);
+  // ctlPlateauFromVolume_ = uren*tss/7 + 0-guard.
+  assert_(ctx, 'ctlPlateau 8x56', 64, ctlPlateauFromVolume_(8, 56));
+  assert_(ctx, 'ctlPlateau 0-guard', 0, ctlPlateauFromVolume_(0, 56));
+  // ctlApproachWeeks_ — bereikbaar (>0) · onbereikbaar (plateau<=doel→null) · al-bereikt (cur>=doel→0).
+  assert_(ctx, 'ctlWeeks bereikbaar>0', true, ctlApproachWeeks_(45, 80, 65) > 0);
+  assert_(ctx, 'ctlWeeks onbereikbaar', null, ctlApproachWeeks_(45, 60, 65));
+  assert_(ctx, 'ctlWeeks al-bereikt', 0, ctlApproachWeeks_(70, 80, 65));
+  // ftpBandFromProjection_ — low<high · aannames aanwezig · band breder bij grotere ΔCTL.
+  var b1 = ftpBandFromProjection_(275, 50, 60), b2 = ftpBandFromProjection_(275, 50, 90);
+  assert_(ctx, 'ftpBand low<high', true, b1.lowW < b1.highW);
+  assert_(ctx, 'ftpBand aannames', true, b1.aannames.length > 0);
+  assert_(ctx, 'ftpBand breder ΔCTL', true, (b2.highW - b2.lowW) > (b1.highW - b1.lowW));
+  // recent-window helpers (newest-first; idx0 datum, idx3 duur-min, idx8 TSS). Anker = 2026-06-08.
+  var AV = [
+    ['2026-06-08', 'Ride', '', 120, 0, 0, 0, 0, 110],   // 2u · 110 TSS (binnen 42d)
+    ['2026-06-05', 'Ride', '', 60, 0, 0, 0, 0, 55],     // 1u · 55 TSS  (binnen 42d)
+    ['2026-04-01', 'Ride', '', 240, 0, 0, 0, 0, 200]    // 4u · 200 TSS (buiten 42d, binnen 90d)
+  ];
+  assert_(ctx, 'maxRecentRideH 90d', 4, maxRecentRideH_(AV, 90));
+  assert_(ctx, 'maxRecentRideH 42d', 2, maxRecentRideH_(AV, 42));
+  assert_(ctx, 'tssPerHourRecent 42d', 55, tssPerHourRecent_(AV, 42));
+  assert_(ctx, 'weeklyHoursRecent 42d', 0.5, weeklyHoursRecent_(AV, 42));
 }
 
 function testCoach_(ctx) {

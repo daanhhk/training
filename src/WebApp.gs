@@ -450,6 +450,134 @@ function eftpFromActivities_(actValues) {
   return null;
 }
 
+// ════════════════════════════════════════════════════════════════
+// NIVEAU FASE-2 §d — doel-gereedheid + projectie (PUUR; getest).
+// Eerlijkheid = ontwerp-eis: SOLIDE volume→CTL-ramp vs SPECULATIEVE FTP-band.
+// ════════════════════════════════════════════════════════════════
+// Swap-able doel-seam: generaliseert voorbij Girona. Per dim {metric, target, unit, dir}.
+var GOAL_PROFILES_ = {
+  girona: { label: 'Girona', dims: [
+    { key: 'klim', label: 'Klimvermogen', metric: 'ftpWkg', target: 4.0, unit: 'W/kg', dir: 'up' },
+    { key: 'duur', label: 'Duurvermogen', metric: 'ctl', target: 65, unit: 'CTL', dir: 'up' },
+    { key: 'lang', label: 'Lange-rit', metric: 'longRideH', target: 4.0, unit: 'u', dir: 'up' }
+  ] }
+};
+var FTP_GAIN_PER_CTL_ = 0.004, FTP_GAIN_CAP_ = 0.08;   // speculatieve FTP-winst (tunebaar)
+var PROJ_TAU_DAYS_ = 42;                               // PMC-tijdconstante (CTL-ramp)
+
+// Actief doelprofiel. Seam: later mappen uit settings.doel / A-event — nu altijd Girona.
+function activeGoalProfile_(settings) { return GOAL_PROFILES_.girona; }
+
+// gap t.o.v. target; dir 'up' = hoger is beter. onTrack = doel gehaald; pct = voortgang 0..1.
+function goalGap_(current, target, dir) {
+  if (current == null || target == null) return { gap: null, onTrack: false, pct: null };
+  var up = (dir !== 'down');
+  var onTrack = up ? (current >= target) : (current <= target);
+  var gap = up ? (target - current) : (current - target);
+  var pct = null;
+  if (target > 0 && current >= 0) pct = up ? (current / target) : (target / Math.max(current, 1e-9));
+  if (pct != null) pct = Math.max(0, Math.min(1, pct));
+  return { gap: Math.round(gap * 100) / 100, onTrack: onTrack, pct: (pct != null ? Math.round(pct * 100) / 100 : null) };
+}
+
+// plateau-CTL bij gegeven weekvolume: uren*tss/uur, verspreid over 7 dagen.
+function ctlPlateauFromVolume_(weeklyHours, tssPerHour) {
+  if (!weeklyHours || !tssPerHour) return 0;
+  return Math.round((weeklyHours * tssPerHour / 7) * 10) / 10;
+}
+
+// weken tot targetCtl via exp. PMC-benadering (tau 42d). null = onbereikbaar; 0 = al bereikt.
+function ctlApproachWeeks_(currentCtl, plateauCtl, targetCtl) {
+  if (currentCtl == null || plateauCtl == null || targetCtl == null) return null;
+  if (currentCtl >= targetCtl) return 0;
+  if (plateauCtl <= targetCtl) return null;            // plafond onder doel → onbereikbaar
+  var tDays = -PROJ_TAU_DAYS_ * Math.log((targetCtl - plateauCtl) / (currentCtl - plateauCtl));
+  if (!isFinite(tDays) || tDays < 0) return null;
+  return Math.round((tDays / 7) * 10) / 10;
+}
+
+// SPECULATIEF FTP-bereik (NOOIT één getal). low = currentFtp (eerlijke vloer: winst niet gegarandeerd);
+// high = currentFtp*(1 + min(cap, perCtl*max(0, plateau-current))). gewicht (optioneel) → W/kg-bereik.
+function ftpBandFromProjection_(currentFtp, currentCtl, plateauCtl, gewicht) {
+  if (!currentFtp) return null;
+  var dCtl = Math.max(0, (plateauCtl != null && currentCtl != null) ? (plateauCtl - currentCtl) : 0);
+  var gain = Math.min(FTP_GAIN_CAP_, FTP_GAIN_PER_CTL_ * dCtl);
+  var lowW = Math.round(currentFtp), highW = Math.round(currentFtp * (1 + gain));
+  return {
+    lowW: lowW, highW: highW,
+    lowWkg: gewicht ? Math.round(lowW / gewicht * 100) / 100 : null,
+    highWkg: gewicht ? Math.round(highW / gewicht * 100) / 100 : null,
+    aannames: [
+      '2 sleutelsessies per week, consequent',
+      'Regelmaat ≥ 90% — geen lange onderbrekingen',
+      'Herstel & voeding op orde',
+      'FTP-winst vlakt af richting je plafond'
+    ]
+  };
+}
+
+// ── Activiteiten-array recent-window helpers (newest-first; idx0=datum, idx3=duur-min, idx8=TSS).
+// Anker = nieuwste rit-datum (deterministisch/testbaar); venster = [anker − days, anker].
+function actParseDate_(v) {
+  if (v instanceof Date) return stripTime_(v);
+  if (v == null || v === '') return null;
+  var d = new Date(v); return isNaN(d.getTime()) ? null : stripTime_(d);
+}
+function actAnchorDate_(actValues) {
+  for (var i = 0; i < actValues.length; i++) { var d = actParseDate_(actValues[i][0]); if (d) return d; }
+  return null;
+}
+// max moving-time (uren) over ritten in laatste `days`.
+function maxRecentRideH_(actValues, days) {
+  if (!actValues || !actValues.length) return null;
+  var anchor = actAnchorDate_(actValues); if (!anchor) return null;
+  var floor = anchor.getTime() - days * 86400000, maxMin = 0, seen = false;
+  for (var i = 0; i < actValues.length; i++) {
+    var d = actParseDate_(actValues[i][0]); if (!d || d.getTime() < floor) continue;
+    var mins = Number(actValues[i][3]); if (isNaN(mins) || mins <= 0) continue;
+    seen = true; if (mins > maxMin) maxMin = mins;
+  }
+  return seen ? Math.round(maxMin / 60 * 10) / 10 : null;
+}
+// Σtss / Σuren over laatste `days` (TSS-dichtheid).
+function tssPerHourRecent_(actValues, days) {
+  if (!actValues || !actValues.length) return null;
+  var anchor = actAnchorDate_(actValues); if (!anchor) return null;
+  var floor = anchor.getTime() - days * 86400000, sumTss = 0, sumH = 0;
+  for (var i = 0; i < actValues.length; i++) {
+    var d = actParseDate_(actValues[i][0]); if (!d || d.getTime() < floor) continue;
+    var mins = Number(actValues[i][3]), tss = Number(actValues[i][8]);
+    if (isNaN(mins) || mins <= 0) continue;
+    sumH += mins / 60; if (!isNaN(tss) && tss > 0) sumTss += tss;
+  }
+  return sumH > 0 ? Math.round(sumTss / sumH * 10) / 10 : null;
+}
+// gem. uren/week over laatste `days`.
+function weeklyHoursRecent_(actValues, days) {
+  if (!actValues || !actValues.length) return null;
+  var anchor = actAnchorDate_(actValues); if (!anchor) return null;
+  var floor = anchor.getTime() - days * 86400000, sumH = 0;
+  for (var i = 0; i < actValues.length; i++) {
+    var d = actParseDate_(actValues[i][0]); if (!d || d.getTime() < floor) continue;
+    var mins = Number(actValues[i][3]); if (isNaN(mins) || mins <= 0) continue;
+    sumH += mins / 60;
+  }
+  return Math.round((sumH / (days / 7)) * 10) / 10;
+}
+
+// state.goalProfile (per-dim {current,target,gap,onTrack,pct}) + state.projection-inputs. PUUR.
+// inputs = { ftpWkg, ctl, longRideH }; settings selecteert 't profiel (nu altijd Girona).
+function buildGoalProfile_(settings, inputs) {
+  var prof = activeGoalProfile_(settings);
+  var dims = prof.dims.map(function (d) {
+    var cur = (inputs && inputs[d.metric] != null) ? inputs[d.metric] : null;
+    var g = goalGap_(cur, d.target, d.dir);
+    return { key: d.key, label: d.label, metric: d.metric, unit: d.unit, dir: d.dir,
+             target: d.target, current: cur, gap: g.gap, onTrack: g.onTrack, pct: g.pct };
+  });
+  return { key: 'girona', label: prof.label, dims: dims };
+}
+
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
 function dashDayCard_(dISO, wpEntry, actual, rpe) {
   var voorstel = null;
@@ -1055,6 +1183,15 @@ function getDashboardState() {
     head.forEach(function (r) { if (r.ctl != null) { sum += r.ctl; cnt++; } });
     if (cnt) ctlRef = sum / cnt;
   }
+  // §d Doel-projectie: actieve doel-assen + projectie-inputs (PURE; client recomputet what-if inline).
+  var projLongRideH = maxRecentRideH_(actValues, 90);
+  var goalProfile = buildGoalProfile_(settings, { ftpWkg: niv.wkg, ctl: ctlNow, longRideH: projLongRideH });
+  var projection = {
+    currentCtl: (ctlNow != null ? Math.round(ctlNow * 10) / 10 : null),
+    tssPerHour: tssPerHourRecent_(actValues, 42),
+    weeklyHoursDefault: weeklyHoursRecent_(actValues, 42),
+    ftp: settings.ftp || null, gewicht: gewicht || null
+  };
   var niveauBasis = niv.niveau;
   var conditieMod = computeConditieMod_(ctlNow, ctlRef);
   var niveauLevend = (niveauBasis == null) ? null
@@ -1127,6 +1264,8 @@ function getDashboardState() {
     niveauDelta: niveauDelta,
     niveauProgressie: niveauProgressie,
     eftp: eftpFromActivities_(actValues),
+    goalProfile: goalProfile,
+    projection: projection,
     availability: planner.map(function (p) {
       return { train: p.train === true, minuten: p.minuten || 0, dagtype: p.type || '', dagLabel: p.dag };
     }),

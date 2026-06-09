@@ -1418,7 +1418,7 @@
     return nl(v, 1);
   }
 
-  function renderNiveau() { renderNiveauSnapshot_(); renderNiveauProg_(); renderNiveauProfile_(); renderNiveauSoon_(); }
+  function renderNiveau() { renderNiveauSnapshot_(); renderNiveauProg_(); renderNiveauProfile_(); renderNiveauDoel_(); }
 
   function renderNiveauSnapshot_() {
     var el = document.getElementById('niveau-snapshot'); if (!el) return;
@@ -1493,12 +1493,169 @@
   function setNvWindow(k) { nvWindow = k; renderNiveauProg_(); }
   function toggleNvCtl() { nvCtlOverlay = !nvCtlOverlay; renderNiveauProg_(); }
 
-  // Element 4 (doel-projectie) = Fase 2 → binnenkort-kaart (plak 2). §c Rijdersprofiel is nu live.
-  function renderNiveauSoon_() {
-    var el = document.getElementById('niveau-soon'); if (!el) return;
-    el.innerHTML = '<div class="rc-card nv-soon"><span class="nv-soon-tag">Fase 2</span>' +
-      '<div class="nv-soon-t">Doel-projectie</div>' +
-      '<div class="nv-soon-s muted">Girona-gereedheid met uren→potentieel-projectie (eerlijke schatting-band) volgt in een latere fase.</div></div>';
+  // ── Niveau Fase-2 §d — DoelProjectie: gap-rijen + uren→potentieel what-if.
+  // SOLIDE volume→CTL-ramp (berekend) vs SPECULATIEVE FTP-band (schatting). Slider recomputet
+  // CLIENT-side met dezelfde formules als de server (géén google.script.run per slide). ──
+  var nvDoelHours = null;     // what-if uren/week
+  var nvDoelAssum = false;    // aannames uitgeklapt
+  function nvHoursHuman_(h) {
+    if (h == null) return '–';
+    var whole = Math.floor(h), mins = Math.round((h - whole) * 60);
+    if (mins === 60) { whole += 1; mins = 0; }
+    return mins ? (whole + 'u' + (mins < 10 ? '0' + mins : mins)) : (whole + 'u');
+  }
+  function nvDoelDuurTarget_() {
+    var dims = (state.goalProfile && state.goalProfile.dims) ? state.goalProfile.dims : [];
+    var d = dims.filter(function (x) { return x.key === 'duur'; })[0];
+    return d ? d.target : 65;
+  }
+  // Inline-spiegels van de server-calcs (consts gelijk: tau 42d · gain 0,004/CTL · cap 8%).
+  function nvCtlPlateau_(h, tssPerH) { return (!h || !tssPerH) ? 0 : Math.round((h * tssPerH / 7) * 10) / 10; }
+  function nvCtlWeeks_(cur, plateau, target) {
+    if (cur == null || plateau == null || target == null) return null;
+    if (cur >= target) return 0;
+    if (plateau <= target) return null;
+    var t = -42 * Math.log((target - plateau) / (cur - plateau));
+    return (!isFinite(t) || t < 0) ? null : t / 7;
+  }
+  function nvFtpBand_(ftp, cur, plateau) {
+    if (!ftp) return null;
+    var d = Math.max(0, (plateau != null && cur != null) ? (plateau - cur) : 0);
+    var gain = Math.min(0.08, 0.004 * d);
+    return { lowW: Math.round(ftp), highW: Math.round(ftp * (1 + gain)) };
+  }
+  function nvDoelChartSvg_(hours, w) {
+    var p = state.projection, target = nvDoelDuurTarget_();
+    var cur0 = p.currentCtl, tssPerH = p.tssPerHour;
+    if (cur0 == null) return '';
+    var H = 156, padT = 12, padB = 24, padL = 4, padR = 6, WEEKS = 16, TAU = 42;
+    var pw = Math.max(40, w - padL - padR), ph = H - padT - padB;
+    var ceil = nvCtlPlateau_(hours, tssPerH);
+    var vals = [cur0, ceil, target].filter(function (v) { return v != null; });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var pad = (hi - lo) * 0.18 || 4, ylo = lo - pad, yhi = hi + pad;
+    if (yhi <= ylo) yhi = ylo + 1;
+    var X = function (t) { return padL + (t / WEEKS) * pw; };
+    var Y = function (v) { var y = padT + (1 - (v - ylo) / (yhi - ylo)) * ph; return Math.max(padT, Math.min(padT + ph, y)); };
+    var cSolid = cssColor_('var(--proj-solid)'), cFill = cssColor_('var(--proj-solid-fill)'),
+        cTarget = cssColor_('var(--goal-target-line)'), cReady = cssColor_('var(--proj-ready-marker)'),
+        cTxt = cssColor_('var(--text-secondary)'), cMut = cssColor_('var(--text-muted)'),
+        cPt = cssColor_('var(--text-primary)'), cSurf = cssColor_('var(--bg-surface)'), cAcc = cssColor_('var(--accent)');
+    var pts = []; for (var t = 0; t <= WEEKS; t++) { var v = ceil - (ceil - cur0) * Math.exp(-(t * 7) / TAU); pts.push([X(t), Y(v)]); }
+    var rampD = pts.map(function (q, i) { return (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' ');
+    var area = rampD + ' L' + X(WEEKS).toFixed(1) + ' ' + (padT + ph).toFixed(1) + ' L' + X(0).toFixed(1) + ' ' + (padT + ph).toFixed(1) + ' Z';
+    var wk = nvCtlWeeks_(cur0, ceil, target), readyX = (wk != null && wk <= WEEKS) ? X(wk) : null;
+    var s = '<svg width="' + w + '" height="' + H + '" style="display:block;overflow:visible">';
+    s += '<line x1="' + padL + '" x2="' + (w - padR) + '" y1="' + Y(target).toFixed(1) + '" y2="' + Y(target).toFixed(1) + '" stroke="' + cTarget + '" stroke-width="1.5" stroke-dasharray="5 4"/>';
+    s += '<text x="' + (w - padR) + '" y="' + (Y(target) - 5).toFixed(1) + '" text-anchor="end" fill="' + cTxt + '" font-size="10">duurdoel ' + Math.round(target) + '</text>';
+    s += '<line x1="' + padL + '" x2="' + (w - padR) + '" y1="' + Y(ceil).toFixed(1) + '" y2="' + Y(ceil).toFixed(1) + '" stroke="' + cSolid + '" stroke-width="1" stroke-dasharray="2 3" opacity="0.5"/>';
+    s += '<text x="' + (padL + 2) + '" y="' + (Y(ceil) - 4).toFixed(1) + '" fill="' + cAcc + '" font-size="9.5">plafond ' + Math.round(ceil) + '</text>';
+    s += '<path d="' + area + '" fill="' + cFill + '"/>';
+    s += '<path d="' + rampD + '" fill="none" stroke="' + cSolid + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    s += '<circle cx="' + X(0).toFixed(1) + '" cy="' + Y(cur0).toFixed(1) + '" r="3.5" fill="' + cPt + '"/>';
+    if (readyX != null) {
+      s += '<line x1="' + readyX.toFixed(1) + '" x2="' + readyX.toFixed(1) + '" y1="' + Y(target).toFixed(1) + '" y2="' + (padT + ph).toFixed(1) + '" stroke="' + cReady + '" stroke-width="1.5"/>';
+      s += '<circle cx="' + readyX.toFixed(1) + '" cy="' + Y(target).toFixed(1) + '" r="5" fill="' + cReady + '" stroke="' + cSurf + '" stroke-width="2"/>';
+    }
+    [0, 4, 8, 12, 16].forEach(function (t) {
+      var x = Math.max(padL + 6, Math.min(w - padR - 6, X(t))), anc = t === 0 ? 'start' : (t === 16 ? 'end' : 'middle');
+      s += '<text x="' + x.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anc + '" fill="' + cMut + '" font-size="10">' + (t === 0 ? 'nu' : '+' + t + 'w') + '</text>';
+    });
+    return s + '</svg>';
+  }
+  function nvDoelReadoutHtml_(hours) {
+    var p = state.projection, target = nvDoelDuurTarget_(), ceil = nvCtlPlateau_(hours, p.tssPerHour);
+    var wk = nvCtlWeeks_(p.currentCtl, ceil, target);
+    if (wk != null) {
+      var b = nvCtlWeeks_(p.currentCtl, nvCtlPlateau_(hours + 2, p.tssPerHour), target);
+      var sooner = (b != null) ? Math.max(0, Math.round(wk - b)) : 0;
+      var h = '<div class="nvd-readout ok"><div class="nvd-readout-main">Duurdoel bereikt over <span class="nvd-readout-n">~' + Math.round(wk) + '</span> weken</div>';
+      if (sooner > 0) h += '<div class="nvd-readout-sub">+2u/week ≈ <strong>' + sooner + (sooner === 1 ? ' week' : ' weken') + '</strong> eerder klaar.</div>';
+      return h + '</div>';
+    }
+    return '<div class="nvd-readout warn"><span class="nvd-readout-bang">!</span><span>Bij <strong>' + hours + 'u/week</strong> blijft je fitheid-plafond onder je duurdoel — zo niet haalbaar. Verhoog het volume.</span></div>';
+  }
+  function nvDoelBandFigHtml_(hours) {
+    var p = state.projection, band = nvFtpBand_(p.ftp, p.currentCtl, nvCtlPlateau_(hours, p.tssPerHour));
+    if (!band) return '';
+    return '<span class="nvd-band-lo">' + band.lowW + '</span><span class="nvd-band-dash">–</span>' +
+      '<span class="nvd-band-hi">' + band.highW + '</span><span class="nvd-band-u">W over 12 wk</span>';
+  }
+  function nvDoelSliderFill_(sl) {
+    var pct = ((sl.value - sl.min) / (sl.max - sl.min)) * 100;
+    sl.style.background = 'linear-gradient(90deg, var(--slider-fill) ' + pct + '%, var(--slider-track) ' + pct + '%)';
+  }
+  function nvDoelRecompute_(hours) {
+    var hEl = document.getElementById('nvd-hours'); if (hEl) hEl.textContent = hours;
+    var sl = document.getElementById('nvd-slider'); if (sl) { if (Number(sl.value) !== hours) sl.value = hours; nvDoelSliderFill_(sl); }
+    var cEl = document.getElementById('nvd-chart'); if (cEl) cEl.innerHTML = nvDoelChartSvg_(hours, cEl.clientWidth || 320);
+    var rEl = document.getElementById('nvd-readout'); if (rEl) rEl.innerHTML = nvDoelReadoutHtml_(hours);
+    var bEl = document.getElementById('nvd-bandfig'); if (bEl) bEl.innerHTML = nvDoelBandFigHtml_(hours);
+  }
+  function nvDoelSetHours_(v) { nvDoelHours = Math.round(Number(v)); nvDoelRecompute_(nvDoelHours); }
+  window.nvDoelSetHours_ = nvDoelSetHours_;
+  function nvDoelToggleAssum_() {
+    nvDoelAssum = !nvDoelAssum;
+    var l = document.getElementById('nvd-assum-list'), lbl = document.getElementById('nvd-assum-lbl'), btn = document.getElementById('nvd-assum-btn');
+    if (l) l.style.display = nvDoelAssum ? 'flex' : 'none';
+    if (lbl) lbl.textContent = nvDoelAssum ? 'Aannames verbergen' : 'Aannames tonen';
+    if (btn) btn.classList.toggle('open', nvDoelAssum);
+  }
+  window.nvDoelToggleAssum_ = nvDoelToggleAssum_;
+  function renderNiveauDoel_() {
+    var el = document.getElementById('niveau-doel'); if (!el) return;
+    var gp = state.goalProfile, p = state.projection;
+    if (!gp || !gp.dims || !gp.dims.length || !p || p.currentCtl == null || p.ftp == null) {
+      el.innerHTML = '<div class="rc-card"><div class="nvd-head"><div class="rc-overline">Doel-gereedheid</div><span class="nv-soon-tag">Visie</span></div>' +
+        '<div class="nv-empty muted">Stel je Girona-doel in en verbind je historie — dan projecteren we je gereedheid.</div></div>';
+      return;
+    }
+    if (nvDoelHours == null) {
+      var def = (p.weeklyHoursDefault != null) ? Math.round(p.weeklyHoursDefault) : 8;
+      nvDoelHours = Math.max(4, Math.min(14, def));
+    }
+    var subByKey = { klim: 'W/kg · 20 min', duur: 'fitheid · CTL', lang: 'langste recente rit' };
+    var rows = gp.dims.map(function (d) {
+      var curTxt, doelTxt;
+      if (d.key === 'lang') { curTxt = (d.current != null ? nvHoursHuman_(d.current) : '–'); doelTxt = '/ ' + nvHoursHuman_(d.target); }
+      else if (d.metric === 'ftpWkg') { curTxt = (d.current != null ? nl(d.current, 1) : '–'); doelTxt = '/ ' + nl(d.target, 1) + ' ' + d.unit; }
+      else { curTxt = (d.current != null ? Math.round(d.current).toString() : '–'); doelTxt = '/ ' + Math.round(d.target) + ' ' + d.unit; }
+      var stat = d.onTrack ? '<span class="nvd-gap-stat ok">✓ op koers</span>' : '<span class="nvd-gap-stat gap">nog te gaan</span>';
+      return '<div class="nvd-gap"><div class="nvd-gap-main"><div class="nvd-gap-lbl">' + esc(d.label) + '</div>' +
+        '<div class="nvd-gap-sub">' + esc(subByKey[d.key] || '') + '</div></div>' +
+        '<div class="nvd-gap-num"><span class="nvd-gap-cur">' + curTxt + '</span><span class="nvd-gap-doel">' + doelTxt + '</span></div>' + stat + '</div>';
+    }).join('');
+    var onT = gp.dims.filter(function (d) { return d.onTrack; });
+    var gaps = gp.dims.filter(function (d) { return !d.onTrack; }).sort(function (a, b) { return (a.pct == null ? 2 : a.pct) - (b.pct == null ? 2 : b.pct); });
+    var sumTxt, sumMod;
+    if (!gaps.length) { sumTxt = 'Alle assen op koers — je bent <strong>Girona-klaar</strong>.'; sumMod = 'ok'; }
+    else if (onT.length) { sumTxt = esc(onT.map(function (d) { return d.label; }).join(' & ')) + ' op koers — <strong>' + esc(gaps[0].label.toLowerCase()) + '</strong> is je laatste stap.'; sumMod = 'ok'; }
+    else { sumTxt = 'Nog werk op alle assen — focus op <strong>' + esc(gaps[0].label.toLowerCase()) + '</strong>.'; sumMod = 'neutral'; }
+    var aannames = ['2 sleutelsessies per week, consequent', 'Regelmaat ≥ 90% — geen lange onderbrekingen', 'Herstel & voeding op orde', 'FTP-winst vlakt af richting je plafond'];
+    var assumItems = aannames.map(function (a) { return '<div class="nvd-assum-item"><span class="nvd-assum-dot"></span><span>' + esc(a) + '</span></div>'; }).join('');
+    var pill = '<span class="nvd-pill"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1L1 10.5h10L6 1z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6 5v2.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><circle cx="6" cy="8.8" r="0.6" fill="currentColor"/></svg>schatting</span>';
+    el.innerHTML = '<div class="rc-card">' +
+      '<div class="nvd-head"><div><div class="rc-overline">Doel-gereedheid · Girona</div>' +
+        '<div class="nvd-sub muted">~90 km · 1200 hm/dag · lange klimmen</div></div><span class="nv-soon-tag">Visie</span></div>' +
+      '<div class="nvd-gaps">' + rows + '</div>' +
+      '<div class="nvd-callout ' + sumMod + '"><span class="nvd-callout-dot"></span><span>' + sumTxt + '</span></div>' +
+      '<div class="nvd-whatif">' +
+        '<div class="nvd-whatif-head"><span class="rc-overline">Uren → potentieel</span>' +
+          '<span class="nvd-hours-wrap"><span id="nvd-hours" class="nvd-hours-n">' + nvDoelHours + '</span><span class="nvd-hours-u">u/week</span></span></div>' +
+        '<input type="range" id="nvd-slider" class="nvd-slider" min="4" max="14" step="1" value="' + nvDoelHours + '" oninput="nvDoelSetHours_(this.value)">' +
+        '<div class="nvd-slider-ends"><span>4u</span><span>14u</span></div>' +
+        '<div class="nvd-proj-lbl"><span class="nvd-proj-swatch"></span>Fitheid-projectie<span class="muted"> · berekend uit volume</span></div>' +
+        '<div id="nvd-chart" class="nvd-chart"></div>' +
+        '<div id="nvd-readout"></div>' +
+        '<div class="nvd-band">' +
+          '<div class="nvd-band-head"><span class="nvd-band-t">Geschat FTP-effect</span>' + pill + '</div>' +
+          '<div id="nvd-bandfig" class="nvd-band-fig"></div>' +
+          '<button type="button" id="nvd-assum-btn" class="nvd-assum-btn" onclick="nvDoelToggleAssum_()"><span id="nvd-assum-lbl">Aannames tonen</span><span class="nvd-assum-chev">▾</span></button>' +
+          '<div id="nvd-assum-list" class="nvd-assum-list" style="display:none">' + assumItems + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    nvDoelRecompute_(nvDoelHours);
   }
 
   // ── Niveau Fase-2 §c — Rijdersprofiel (power-curve + type-schaal + PR's). LAZY fetch
@@ -2034,7 +2191,7 @@
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === name);
     });
-    if (name === 'niveau') { drawNvTraj_(); nvProfileEnsure_(); var pc = nvProfCur_(); if (pc.state === 'loaded') drawNvCurve_(pc.model); }
+    if (name === 'niveau') { drawNvTraj_(); nvProfileEnsure_(); var pc = nvProfCur_(); if (pc.state === 'loaded') drawNvCurve_(pc.model); if (nvDoelHours != null) nvDoelRecompute_(nvDoelHours); }
     // Schema opent op vandaag: scroll de geselecteerde chip in beeld zodra
     // de container zichtbaar is (scrollIntoView werkt niet op display:none).
     if (name === 'schema') setTimeout(scrollSelectedChip, 30);
