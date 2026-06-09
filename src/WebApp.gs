@@ -872,32 +872,41 @@ function getDashboardState() {
   var statsBundle = dashStatsFromActivities_(actValues);
 
   // ── STAP 2: readiness→plan-overlay (read-side) ──────────────────────────────
-  // Zet een readiness-coach op de VANDAAG-PLANNED dag als de ochtend-gereedheid een
-  // harde sessie moet verlichten. macro.fase draagt Taper/Recovery (engine-fase incl.
-  // taper). Los van de completed/missed coach (wederzijds exclusieve dag-staten); de
-  // C12-post-pass (hierboven) raakt 'm niet (geen .adapt-veld). Override aanwezig → geen coach.
+  // Zet een readiness-coach (kind:'readiness') op de VANDAAG-dag. macro.fase draagt
+  // Taper/Recovery (engine-fase incl. taper). Los van de completed/missed coach
+  // (wederzijds exclusief; de C12-post-pass raakt 'm niet — geen .adapt-veld).
+  //   - readiness-make-up actief (override.src==='readiness') → COMMITTED-coach (bevestigd).
+  //   - handmatige override → géén coach.  - anders → SUGGEST-coach bij demote.
   var readinessState = getReadinessScore_(fs, wellness, reeks);
-  (function () {
+  var rdyCoach = (function () {
+    if (actuals[todayISO]) return null;                                  // al gereden
     var wp = wpByDate[todayISO];
-    if (!wp || !wp.workoutType || wp.workoutType === 'free') return;     // geen geplande engine-sessie vandaag
-    if (actuals[todayISO] || overrides[todayISO]) return;               // al gereden / al gewijzigd
-    if (wp.sessies && wp.sessies.length > 1) return;                    // multi-sessie overslaan
-    if (!readinessState || !readinessState.band) return;
+    if (!wp || !wp.workoutType || wp.workoutType === 'free') return null; // geen geplande engine-sessie vandaag
+    if (!readinessState || !readinessState.band) return null;
+    var fromNaam = wp.naam || COACH_INTENT_LABEL_[intentFromType_(wp.workoutType)] || 'je sessie';
+    var ovToday = overrides[todayISO];
+    if (ovToday) {
+      if (ovToday.src === 'readiness') {
+        return { kind: 'readiness', committed: true, gereedheid: readinessState.score,
+                 status: readinessState.band, regel: readinessRegelDone_(fromNaam) };
+      }
+      return null;                                                       // handmatige override → geen coach
+    }
+    if (wp.sessies && wp.sessies.length > 1) return null;               // multi-sessie overslaan
     var zs = workoutZones(wp.workoutType, settings.doel);
     var isHard = zs.indexOf('high') >= 0 || zs.indexOf('anaerobic') >= 0;
     var adj = readinessAdjust_({ type: wp.workoutType, isHard: isHard }, readinessState.band, macro.fase);
-    if (adj.action !== 'demote') return;
+    if (adj.action !== 'demote') return null;
     var toNaam = readinessEaseNaam_(adj.toType);
-    var fromNaam = wp.naam || COACH_INTENT_LABEL_[intentFromType_(wp.workoutType)] || 'je sessie';
-    var rc = {
-      gereedheid: readinessState.score, status: readinessState.band, reden: adj.reden,
+    return {
+      kind: 'readiness', gereedheid: readinessState.score, status: readinessState.band, reden: adj.reden,
       fromType: adj.fromType, toType: adj.toType, fromNaam: fromNaam, toNaam: toNaam,
       regel: readinessRegel_(readinessState.band, readinessState.score, fromNaam, toNaam),
       adaptatie: { dISO: todayISO, type: 'free', ritType: 'vrij', intensiteit: adj.intensiteit,
                    durMin: Math.round(wp.minuten || 0), src: 'readiness', label: 'Verlicht naar ' + toNaam }
     };
-    for (var i = 0; i < dagen.length; i++) { if (dagen[i].dateISO === todayISO) { dagen[i].coach = rc; break; } }
   })();
+  if (rdyCoach) { for (var rdi = 0; rdi < dagen.length; rdi++) { if (dagen[rdi].dateISO === todayISO) { dagen[rdi].coach = rdyCoach; break; } } }
   // Event-countdown uit bepaalFaseVoorDatum_ (al berekend in `macro`).
   var evDatum = macro.eventDate || (macro.hoofdEvent && macro.hoofdEvent.datum) || null;
   var dagenTot = null;

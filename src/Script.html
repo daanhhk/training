@@ -586,12 +586,38 @@
     var d = dagByISO_(srcISO), ad = d && d.coach && d.coach.adaptatie;
     if (!ad || ad.planned) return;
     var payload = (ad.type === 'free')
-      ? { type: 'free', ritType: ad.ritType, intensiteit: ad.intensiteit, durMin: ad.durMin, from: ad.from }
-      : { type: 'library', workoutType: ad.workoutType, variantId: ad.variantId, durMin: ad.durMin, from: ad.from };
+      ? { type: 'free', ritType: ad.ritType, intensiteit: ad.intensiteit, durMin: ad.durMin, from: ad.from, src: ad.src }
+      : { type: 'library', workoutType: ad.workoutType, variantId: ad.variantId, durMin: ad.durMin, from: ad.from, src: ad.src };
     var btn = document.querySelector('.coach-adapt-btn'); if (btn) btn.disabled = true;
     google.script.run.withSuccessHandler(onState).withFailureHandler(showError).saveDayOverride(ad.dISO, payload);
   }
   window.planAdaptatie_ = planAdaptatie_;
+
+  // STAP 2 — CoachReadinessBanner (Vorm→Schema-brug, op de VANDAAG-dag). Reuse de
+  // coach-callout-classes + --coach-*/--readiness-*-tokens. d.coach.kind==='readiness'
+  // (los van de done/missed coach). committed = make-up al ingepland (geen knop).
+  function readinessBannerHtml_(d) {
+    var c = d.coach, coachNm = ((state && state.coachName) || 'Coach').toUpperCase();
+    var head = '<div class="coach-head"><span class="coach-mark" style="background:var(--coach-mark-bg);color:var(--coach-mark)">' + COACH_GLYPH_ + '</span>' +
+      '<span class="coach-label" style="color:var(--coach-label)">' + coachNm + '</span></div>';
+    if (c.committed) {
+      return '<div class="coach-callout" style="background:var(--coach-bg);border-color:var(--coach-border)">' + head +
+        '<div class="coach-text" style="color:var(--coach-text)">✓ ' + esc(c.regel) + '</div></div>';
+    }
+    var woord = (c.status === 'rest') ? 'laag' : 'matig';
+    var dotVar = (c.status === 'rest') ? '--readiness-rest' : '--readiness-caution';
+    return '<div class="coach-callout" style="background:var(--coach-bg);border-color:var(--coach-border)">' + head +
+      '<div class="coach-text" style="color:var(--coach-text)">' +
+        '<span style="display:inline-block;width:7px;height:7px;border-radius:999px;margin-right:6px;background:var(' + dotVar + ')"></span>' +
+        '<strong>Gereedheid ' + esc(c.gereedheid) + ' &middot; ' + woord + '</strong></div>' +
+      '<div class="coach-text" style="color:var(--coach-text)">' + esc(c.regel) + '</div>' +
+      '<div class="coach-adapt" style="border-top-color:var(--coach-divider)">' +
+        '<div class="coach-adapt-head"><span class="coach-adapt-icon" style="color:var(--coach-adapt-icon)">' + ADAPT_GLYPH_ + '</span>' +
+        '<span class="coach-adapt-label" style="color:var(--coach-adapt-label)">VERLICHT</span></div>' +
+        '<div class="coach-adapt-text" style="color:var(--coach-text)">' + esc(c.fromNaam) + ' &rarr; ' + esc(c.toNaam) + '</div></div>' +
+      '<button type="button" class="coach-adapt-btn" onclick="planAdaptatie_(\'' + d.dateISO + '\')"><span class="coach-adapt-main">Verlicht vandaag</span></button>' +
+    '</div>';
+  }
 
   // ══ Rit-detail (Fase 1ter) — lazy activiteit-statistieken in een overlay-sheet ══
   var rideCache_ = {};   // dISO → model (client-cache; heropenen = instant)
@@ -983,6 +1009,22 @@
     var el = document.getElementById('dag-detail');
     if (!d) { el.innerHTML = ''; return; }
     var h = '<div class="muted" style="text-transform:capitalize;margin-bottom:6px">' + esc(d.weekdag) + ' ' + esc(d.kort) + '</div>';
+
+    // TEMP rdydemo — verwijder bij close-out: ?rdydemo=caution|rest injecteert een synthetische suggest-coach op vandaag.
+    (function () {
+      var m = /[?&]rdydemo=(caution|rest)/.exec(window.location.search || '');
+      if (m && d.status === 'vandaag' && !d.override && !d.coach) {
+        var rd = m[1], vv = state.vandaag && state.vandaag.voorstel;
+        d.coach = { kind: 'readiness', status: rd, gereedheid: (rd === 'rest' ? 42 : 54), reden: (rd === 'rest' ? 'rest_key' : 'caution_key'),
+          fromType: 'vo2max', toType: (rd === 'rest' ? 'recovery' : 'tempo'),
+          fromNaam: ((vv && vv.titel) || 'VO2max 5×4min'), toNaam: (rd === 'rest' ? 'Herstelrit' : 'Tempo-rit'),
+          regel: 'Demo — gereedheid laag; sessie verlicht voor beter herstel.',
+          adaptatie: { dISO: d.dateISO, type: 'free', ritType: 'vrij', intensiteit: (rd === 'rest' ? 'rustig' : 'tempo'),
+            durMin: ((vv && vv.duurMin) || 75), src: 'readiness', label: 'Verlicht vandaag' } };
+      }
+    })();
+    // STAP 2 mount — boven álle takken (suggest boven voorstelKaart; committed boven overrideKaart_).
+    if (d.coach && d.coach.kind === 'readiness') h += readinessBannerHtml_(d);
 
     var ov = d.override || null;
     var plannable = trnPlannable_(d);

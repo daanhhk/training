@@ -331,3 +331,8 @@ function readinessRegel_(band, score, fromNaam, toNaam) {
   }
   return 'Je gereedheid is laag (' + score + '). Een zware sessie stapelt nu vooral vermoeidheid. Ik heb ' + fromNaam + ' naar een rustige rit gezet; volledige rust mag ook.';
 }
+
+// Bevestigd-regel nadat de readiness-make-up is ingepland (committed-banner).
+function readinessRegelDone_(fromNaam) {
+  return 'Je ' + fromNaam + ' is vandaag verlicht — fris voor de kwaliteit later.';
+}
