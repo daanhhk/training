@@ -1418,7 +1418,7 @@
     return nl(v, 1);
   }
 
-  function renderNiveau() { renderNiveauSnapshot_(); renderNiveauProg_(); renderNiveauSoon_(); }
+  function renderNiveau() { renderNiveauSnapshot_(); renderNiveauProg_(); renderNiveauProfile_(); renderNiveauSoon_(); }
 
   function renderNiveauSnapshot_() {
     var el = document.getElementById('niveau-snapshot'); if (!el) return;
@@ -1438,7 +1438,8 @@
         '<span class="nv-tier-chip">' + esc(NV_TIERS[ti].l) + '</span></div>' +
       '<div class="nv-snap-hero">' +
         '<div class="nv-ftp"><div class="nv-ftp-num">' + Math.round(ftp) + '<span class="nv-ftp-unit">W</span></div>' +
-          '<div class="nv-ftp-lbl">FTP</div></div>' +
+          '<div class="nv-ftp-lbl">FTP</div>' +
+          (state.eftp != null ? '<div class="nv-eftp">eFTP ~' + Math.round(state.eftp) + ' W</div>' : '') + '</div>' +
         '<div class="nv-wkg-pill"><div class="nv-wkg-over">Klimvermogen</div>' +
           '<div class="nv-wkg-row"><span class="nv-wkg-num">' + nl(wkg, 2) + '</span><span class="nv-wkg-unit">W/kg</span></div>' +
           (gewicht != null ? '<div class="nv-wkg-kg">' + nl(gewicht, 1) + ' kg</div>' : '') + '</div>' +
@@ -1492,12 +1493,95 @@
   function setNvWindow(k) { nvWindow = k; renderNiveauProg_(); }
   function toggleNvCtl() { nvCtlOverlay = !nvCtlOverlay; renderNiveauProg_(); }
 
-  // Elementen 3 (rijdersprofiel) + 4 (doel-projectie) = Fase 2 → binnenkort-kaart (geen backing-logica).
+  // Element 4 (doel-projectie) = Fase 2 → binnenkort-kaart (plak 2). §c Rijdersprofiel is nu live.
   function renderNiveauSoon_() {
     var el = document.getElementById('niveau-soon'); if (!el) return;
     el.innerHTML = '<div class="rc-card nv-soon"><span class="nv-soon-tag">Fase 2</span>' +
-      '<div class="nv-soon-t">Rijdersprofiel &amp; doel-projectie</div>' +
-      '<div class="nv-soon-s muted">Power-duration-curve (sprinter↔klimmer) en Girona-gereedheid met uren→potentieel-projectie volgen in een latere fase.</div></div>';
+      '<div class="nv-soon-t">Doel-projectie</div>' +
+      '<div class="nv-soon-s muted">Girona-gereedheid met uren→potentieel-projectie (eerlijke schatting-band) volgt in een latere fase.</div></div>';
+  }
+
+  // ── Niveau Fase-2 §c — Rijdersprofiel (power-curve + type-schaal + PR's). LAZY fetch
+  // (getPowerCurve), spiegelt openRideDetail; sessie-cache via nvProfile. ──
+  var nvProfile = null, nvProfileState = 'idle';   // idle|loading|loaded|error|empty
+  function nvProfileEnsure_() {
+    if (nvProfileState !== 'idle') return;
+    nvProfileState = 'loading'; renderNiveauProfile_();
+    google.script.run
+      .withSuccessHandler(function (m) {
+        nvProfile = m || null;
+        nvProfileState = (!m || m.error) ? 'error' : (m.empty ? 'empty' : 'loaded');
+        renderNiveauProfile_();
+      })
+      .withFailureHandler(function () { nvProfileState = 'error'; renderNiveauProfile_(); })
+      .getPowerCurve();
+  }
+  function nvProfileRetry_() { nvProfileState = 'idle'; nvProfileEnsure_(); }
+  window.nvProfileRetry_ = nvProfileRetry_;
+  function nvTypeDuiding_(rt) {
+    if (rt.label === 'Sprinter') return 'Sterke korte pieken, bescheiden duurvermogen — explosief.';
+    if (rt.label === 'Diesel · klimmer') return 'Sterke 20 min &amp; duur, bescheiden sprint — past bij Girona’s lange klimmen.';
+    return 'In balans tussen sprint en duur — een allrounder.';
+  }
+  function renderNiveauProfile_() {
+    var el = document.getElementById('niveau-profile'); if (!el) return;
+    var head = '<div class="rc-overline">Rijdersprofiel</div><div class="nv-sub muted">Beste inspanning per duur</div>';
+    if (nvProfileState === 'idle' || nvProfileState === 'loading') {
+      el.innerHTML = '<div class="rc-card">' + head + '<div class="nv-skel nv-skel-chart"></div><div class="nv-skel nv-skel-row"></div></div>';
+      return;
+    }
+    if (nvProfileState === 'error') {
+      el.innerHTML = '<div class="rc-card nv-state"><div class="nv-state-icon">!</div>' +
+        '<div class="nv-state-t">Rijdersprofiel niet geladen</div>' +
+        '<button type="button" class="nv-retry" onclick="nvProfileRetry_()">Opnieuw proberen</button></div>';
+      return;
+    }
+    if (nvProfileState === 'empty' || !nvProfile || !nvProfile.markers || !nvProfile.markers.length) {
+      el.innerHTML = '<div class="rc-card">' + head + '<div class="nv-empty muted">Verschijnt zodra er ritten met vermogen binnen zijn.</div></div>';
+      return;
+    }
+    var p = nvProfile;
+    var prs = p.markers.map(function (m) {
+      var dt = m.date ? '<div class="nv-pr-date">' + esc(nlMaandLabel_(String(m.date).slice(0, 7))) + '</div>' : '';
+      return '<div class="nv-pr' + (m.key ? ' nv-pr-key' : '') + '"><div class="nv-pr-dur">' + esc(m.label) + '</div>' +
+        '<div class="nv-pr-w">' + m.watts + '<span class="nv-pr-u">W</span></div>' +
+        '<div class="nv-pr-wkg">' + (m.wkg != null ? nl(m.wkg, 1) + ' W/kg' : '–') + '</div>' + dt + '</div>';
+    }).join('');
+    var typeHtml = '';
+    var rt = p.riderType;
+    if (rt && rt.pos != null) {
+      var leftPct = Math.round((1 - rt.pos) * 100);   // pos 1=Sprinter→links · pos 0=Diesel→rechts (label-volgorde)
+      typeHtml = '<div class="nv-type"><div class="nv-type-lbls"><span>Sprinter</span><span>Allrounder</span><span>Diesel · klimmer</span></div>' +
+        '<div class="nv-type-track"><div class="nv-type-marker" style="left:' + leftPct + '%"></div></div>' +
+        '<div class="nv-type-duiding muted">' + nvTypeDuiding_(rt) + '</div></div>';
+    }
+    el.innerHTML = '<div class="rc-card">' + head +
+      '<div class="nv-curve-chart" id="niveau-curve-chart"></div>' +
+      '<div class="nv-pr-grid">' + prs + '</div>' + typeHtml + '</div>';
+    drawNvCurve_(p);
+  }
+  function drawNvCurve_(p) {
+    if (!chartsReady) return;
+    var el = document.getElementById('niveau-curve-chart'); if (!el || !p || !p.markers || !p.markers.length) return;
+    var dt = new google.visualization.DataTable();
+    dt.addColumn('number', 'Duur'); dt.addColumn('number', 'Watt');
+    dt.addColumn({ type: 'string', role: 'tooltip' }); dt.addColumn({ type: 'string', role: 'style' });
+    var ticks = [];
+    p.markers.forEach(function (m) {
+      var style = m.key ? ('point { size: 7; fill-color: ' + cssColor_('var(--curve-point-key)') + '; }')
+                        : ('point { size: 4; fill-color: ' + cssColor_('var(--curve-point)') + '; }');
+      dt.addRow([m.secs, m.watts, m.label + ': ' + m.watts + ' W' + (m.wkg != null ? ' · ' + nl(m.wkg, 1) + ' W/kg' : ''), style]);
+      ticks.push({ v: m.secs, f: m.label });
+    });
+    var opt = {
+      backgroundColor: 'transparent', legend: 'none', height: 170, fontName: 'var(--font-sans)',
+      chartArea: { left: 42, top: 12, right: 12, bottom: 26 },
+      hAxis: { logScale: true, ticks: ticks, textStyle: { color: cssColor_('var(--curve-axis)'), fontSize: 10 }, gridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
+      vAxis: { textStyle: { color: cssColor_('var(--curve-axis)'), fontSize: 10 }, gridlines: { color: cssColor_('var(--chart-grid)') }, minorGridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
+      series: { 0: { color: cssColor_('var(--curve-line)'), lineWidth: 2.5, pointSize: 0 } },
+      interpolateNulls: true
+    };
+    new google.visualization.LineChart(el).draw(dt, opt);
   }
 
   function drawNvTraj_() {
@@ -1931,7 +2015,7 @@
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === name);
     });
-    if (name === 'niveau') { drawNvTraj_(); }
+    if (name === 'niveau') { drawNvTraj_(); nvProfileEnsure_(); if (nvProfileState === 'loaded') drawNvCurve_(nvProfile); }
     // Schema opent op vandaag: scroll de geselecteerde chip in beeld zodra
     // de container zichtbaar is (scrollIntoView werkt niet op display:none).
     if (name === 'schema') setTimeout(scrollSelectedChip, 30);
