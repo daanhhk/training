@@ -311,12 +311,13 @@ function testPowerCurve_(ctx) {
   assert_(ctx, 'pcMarkerAt exact 60', 60, pcMarkerAt_(S, V, WK, A, 60).secs);
   assert_(ctx, 'pcMarkerAt nearest 100→300', 300, pcMarkerAt_(S, V, WK, A, 100).secs);
   assert_(ctx, 'pcMarkerAt none→null', null, pcMarkerAt_(S, V, WK, A, 7200));
-  function mk(w5, w20) { return [{ label: '5s', wkg: w5 }, { label: '20m', wkg: w20 }]; }
-  assert_(ctx, 'riderType diesel pos', 0, riderTypeFromCurve_(mk(9.6, 4.8)).pos);   // ratio 2.0 ≤2.4
-  assert_(ctx, 'riderType diesel label', 'Diesel · klimmer', riderTypeFromCurve_(mk(9.6, 4.8)).label);
-  assert_(ctx, 'riderType sprint pos', 1, riderTypeFromCurve_(mk(16, 4)).pos);       // ratio 4.0 ≥4.0
-  assert_(ctx, 'riderType sprint label', 'Sprinter', riderTypeFromCurve_(mk(16, 4)).label);
-  assert_(ctx, 'riderType allround label', 'Allrounder', riderTypeFromCurve_(mk(13, 4)).label);  // ratio 3.25 → 0.53
+  // Daan-fixture (intervals.icu-cijfers 5s/60s/5m/eFTP-W/kg): pint de fix op echte data → All-rounder.
+  var rtD = riderTypeFromCurve_(15.56, 5.59, 4.27, 3.67);
+  assert_(ctx, 'riderType Daan label', 'All-rounder', rtD.label);
+  assert_(ctx, 'riderType Daan pos>=lo', true, rtD.pos >= 0.42);
+  assert_(ctx, 'riderType Daan pos<=hi', true, rtD.pos <= 0.58);
+  assert_(ctx, 'riderType sprint label', 'Sprinter', riderTypeFromCurve_(20, 10, 3.5, 2.9).label);   // hoog kort, laag lang
+  assert_(ctx, 'riderType diesel label', 'Diesel · klimmer', riderTypeFromCurve_(10, 5.6, 7, 6).label); // laag kort, hoog lang
   var c = { label: '1y', days: 365, weight: 72,
     secs: [5, 60, 120, 300, 1200, 3600, 7200], values: [980, 560, 0, 372, 312, 276, 250],
     watts_per_kg: [16, 9, 0, 5.5, 4.6, 4.1, 3.7], activity_id: ['a', 'a', 'a', 'a3', 'a', 'a', 'a'] };

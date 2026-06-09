@@ -369,7 +369,10 @@ var PC_MARKERS_ = [
   { sec: 5, label: '5s', key: false }, { sec: 60, label: '1m', key: false },
   { sec: 300, label: '5m', key: true }, { sec: 1200, label: '20m', key: true }, { sec: 3600, label: '60m', key: true }
 ];
-var RIDER_RATIO_DIESEL_ = 2.4, RIDER_RATIO_SPRINT_ = 4.0;   // wkg(5s)/wkg(20m): ≤diesel→pos0 · ≥sprint→pos1 (tunebaar)
+// Coggan-stijl rijderstype: per-duur W/kg → score t.o.v. [recreatief, wereldklasse]; korte vs lange duren.
+// Referentieparen + gevoeligheid/banden TUNEBAAR (sluit aan op intervals.icu's 4-anker-profiel).
+var PP_REF_5S_ = [9.7, 24.0], PP_REF_60S_ = [5.5, 11.5], PP_REF_5M_ = [3.4, 7.6], PP_REF_FT_ = [2.8, 6.4];
+var PP_SENS_ = 2.0, PP_BAND_LO_ = 0.42, PP_BAND_HI_ = 0.58;
 
 // Marker op de duur >= targetSec dichtstbij (exact of eerstvolgende); null als geen.
 function pcMarkerAt_(secs, values, wkg, actIds, targetSec) {
@@ -386,22 +389,22 @@ function pcMarkerAt_(secs, values, wkg, actIds, targetSec) {
   return null;
 }
 
-// wkg@5s / wkg@20min → rijderstype-positie 0..1 (0=Diesel·klimmer .. 1=Sprinter) + label.
-function riderTypeFromCurve_(markers) {
-  if (!markers || !markers.length) return null;
-  var m5 = null, m20 = null;
-  markers.forEach(function (m) { if (m.label === '5s') m5 = m; else if (m.label === '20m') m20 = m; });
-  if (!m5 || !m20 || m5.wkg == null || m20.wkg == null || !m20.wkg) return null;
-  var ratio = m5.wkg / m20.wkg;
-  var pos = Math.max(0, Math.min(1, (ratio - RIDER_RATIO_DIESEL_) / (RIDER_RATIO_SPRINT_ - RIDER_RATIO_DIESEL_)));
-  var label = (pos < 0.34) ? 'Diesel · klimmer' : (pos > 0.66 ? 'Sprinter' : 'Allrounder');
+// 4 anker-W/kg (5s/60s/5m/eFTP) → rijderstype-positie 0..1 (0=Diesel·klimmer .. 1=Sprinter) + label.
+// Coggan-stijl: korte duren (5s+60s) vs lange (5m+eFTP), elk gescoord t.o.v. recreatief↔wereldklasse.
+function riderTypeFromCurve_(wkg5, wkg60, wkg300, ftWkg) {
+  if (wkg5 == null || wkg60 == null || wkg300 == null || ftWkg == null) return null;
+  function score(w, ref) { return Math.max(0, Math.min(1, (w - ref[0]) / (ref[1] - ref[0]))); }
+  var shortAvg = (score(wkg5, PP_REF_5S_) + score(wkg60, PP_REF_60S_)) / 2;
+  var longAvg = (score(wkg300, PP_REF_5M_) + score(ftWkg, PP_REF_FT_)) / 2;
+  var pos = Math.max(0, Math.min(1, 0.5 + (shortAvg - longAvg) * PP_SENS_));
+  var label = (pos < PP_BAND_LO_) ? 'Diesel · klimmer' : (pos > PP_BAND_HI_ ? 'Sprinter' : 'All-rounder');
   return { pos: Math.round(pos * 100) / 100, label: label };
 }
 
 // power-curves list[0] (+ activities-map) → genormaliseerd profiel (PUUR). curve = punten
 // secs<=3600 (60min-cap), null/≤0-watt overgeslagen; markers op PC_MARKERS_; date per marker
 // uit activities[activityId] (start_date_local → date → null).
-function pcNormalize_(c, activities) {
+function pcNormalize_(c, activities, ftp) {
   if (!c || !c.secs || !c.secs.length || !c.values) return { empty: true };
   activities = activities || {};
   var secs = c.secs, vals = c.values, wkg = c.watts_per_kg || [], actIds = c.activity_id || [];
@@ -424,10 +427,16 @@ function pcNormalize_(c, activities) {
     }
     markers.push({ secs: mk.secs, label: M.label, key: M.key, watts: mk.watts, wkg: mk.wkg, activityId: mk.activityId, date: date });
   });
+  // Rijderstype op 4 ankers (W/kg): 5s/60s/5m uit de markers; eFTP-W/kg = ftp/gewicht,
+  // null-guard → val terug op de 20min-marker-wkg (≈ FTP-proxy).
+  function mwkg_(lbl) { var f = null; markers.forEach(function (m) { if (m.label === lbl) f = m; }); return (f && f.wkg != null) ? f.wkg : null; }
+  var ftWkg = (ftp && c.weight) ? (ftp / c.weight) : null;
+  if (ftWkg == null) ftWkg = mwkg_('20m');
   return {
     window: { label: c.label || null, days: c.days || null, start: c.start_date_local || null, end: c.end_date_local || null },
     weight: (c.weight != null) ? c.weight : null,
-    curve: curve, markers: markers, riderType: riderTypeFromCurve_(markers)
+    curve: curve, markers: markers,
+    riderType: riderTypeFromCurve_(mwkg_('5s'), mwkg_('1m'), mwkg_('5m'), ftWkg)
   };
 }
 
@@ -699,7 +708,9 @@ function getPowerCurve() {
   try { resp = intervalsRequest_('/athlete/{id}/power-curves?type=Ride', {}); } catch (e) { return { error: true }; }
   var curve = (resp && resp.list && resp.list[0]) ? resp.list[0] : null;
   if (!curve || !curve.secs || !curve.secs.length) return { empty: true };
-  var model = pcNormalize_(curve, resp.activities || {});
+  var ftp = null;
+  try { ftp = readSettings(SpreadsheetApp.getActive()).ftp || null; } catch (e) {}
+  var model = pcNormalize_(curve, resp.activities || {}, ftp);
   if (model && !model.empty) { try { setDocProp(key, JSON.stringify(model)); } catch (e) {} }
   return model;
 }
