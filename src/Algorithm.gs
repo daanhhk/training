@@ -105,7 +105,6 @@ function generateProposal() {
 
   var klimType = (macro.hoofdEvent && macro.hoofdEvent.klimType) || null;
   var isTripEvent = !!(macro.hoofdEvent && macro.hoofdEvent.type === 'trip');
-  var eventDate = macro.eventDate || (macro.hoofdEvent && macro.hoofdEvent.datum) || null;
   var recentHard = recentHardDayDate_(ss);
   // Taper-overlay (Deel 2): per-dag-gating rond het taper-event (A/trip 7 d of
   // near-B 3 d). macro.macroFase = de onderliggende periodisering (nooit Taper),
@@ -113,7 +112,7 @@ function generateProposal() {
   var taperCtx = macro.taperEventDate
     ? { datum: macro.taperEventDate, venster: macro.taperVenster, isTrip: !!macro.taperIsTrip }
     : null;
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.macroFase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, eventDate, taperCtx, days);
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.macroFase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, taperCtx, days);
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
@@ -896,7 +895,7 @@ function gatherWeekplanEntries_(horizonWeeks, baseMonday) {
   return out;
 }
 
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate, taperCtx, weekDays) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, taperCtx, weekDays) {
   var doel = settings.doel;
   // Taper is een per-dag-overlay (Deel 2): taperCtx = { datum, venster, isTrip }
   // of null. macroFase is hier ALTIJD de onderliggende fase (nooit 'Taper').
