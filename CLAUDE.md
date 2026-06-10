@@ -67,7 +67,7 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 commit: pusht de huidige source (`clasp push -f`) + draait de selftest remote
 (`clasp run-function runSelfTest`), parset de envelope `{ failures, passed, failed }`, en
 exit non-zero als `failed > 0` OF `passed < BASELINE`. Geen commit tenzij de gate exit 0
-geeft. BASELINE (479) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
+geeft. BASELINE (631) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
 niet; verhoog BASELINE alleen om te ratelen ná een feature die tests toevoegt. De oude
 handmatige selftest-loop (Daan draait `runSelfTest` in de editor) is VERVALLEN.
 
@@ -84,7 +84,7 @@ credential. Bij twijfel: stoppen boven improviseren.
 
 **Run-log (autonome runs).** Rapporteer: gedraaide stappen, gate-uitslag
 (`passed`/`failed`), commit-hash(es), eerlijke afwijkingen. Max 200 woorden prose;
-literals (bestandsnamen/hashes/URLs) los + exact; plain text óf één code-blok.
+literals (bestandsnamen/hashes/URLs) los + exact; platte tekst, GEEN code-fences (geen triple-backtick-blokken).
 
 **Handmatig blijft: visuele /dev-verificatie.** CC heeft geen browser → visuele
 checkpoints doet Daan op /dev. Krimp die stap via (a) meer pure-function-dekking onder de
@@ -147,6 +147,23 @@ componenten + states), `DESIGN.md` (visuele taal), `INTERACTIONS.md`
 - `icu_sweet_spot_min/max` op athlete = vaak NULL; aanwezig op activity met
   power. Fallback 84/97.
 - 999 in zone-array = onbegrensd → render als ∞.
+
+### Archetype-records (Archetypes.gs)
+- `ARCHETYPES`-record `duurRange.min` ≈ structuur-totaal (warmup+core+cooldown), ±1.5 —
+  getest via `lib <id> min~core` (SelfTest.gs). Bereken 'm deterministisch uit de core; NIET schatten.
+- `structuurtype` = METADATA. `expandArchetype_` vertakt op core-`kind` (`steady`/`int`),
+  NIET op structuurtype → een nieuwe vorm (incl. `sandwich`/`race_sim`) vergt alléén een record,
+  geen expander-tak.
+- int-velden: minuten = `onMin`/`offMin`; SECONDEN = `onSec`/`offSec` (zie vo2_microburst).
+  steady = `durMin`/`pct`/`note`. over-under + piramide = steady-sequentie. Elk int-werkblok =
+  een echte range (`onPctLo` < `onPctHi`, getest via `lib <id> werk-range`).
+- **Selector-rotatie** (`goalWorkout_`): per-intent recency-VENSTER + LRU (ongebruikte vormen
+  eerst, stalest-first bij uitputting; `archetypeVoorkeuren` = zachte bias). Cross-week-diepte
+  hangt op `RECENCY_HORIZON_WEEKS` (8, Algorithm.gs); één-week-generatie zónder diepe seed →
+  wekelijkse herhaling.
+- **Trainingen-bibliotheek-cache** (`trainlib_v*`, `getTrainingLibraryCached_`) keyt ALLEEN op
+  ftp/lthr → elke segment/structuur-SHAPE-wijziging vereist een cache-versie-bump (`v1_`→`v2_`),
+  anders serveert /dev een stale shape (de selftest mist 't — die roept de verse builder).
 
 ### Code-stijl & Apps Script gotchas
 - Engelse code + commits; Nederlandse UI-strings.
