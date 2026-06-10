@@ -43,6 +43,7 @@ function runSelfTest() {
   testKeyIntensityInplug_(ctx);
   testGoalInplugWeekSim_(ctx);
   testAllocateQualityWeek_(ctx);
+  testGatherWeekplanEntries_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -572,6 +573,33 @@ function testGoalWorkoutRotatie_(ctx) {
   });
   assert_(ctx, 'rot bias boosted >= elke andere', true, boostOk);
   assert_(ctx, 'rot bias élke vorm >=1', true, eachOk);
+}
+
+// ── Fase 1b — cross-week recency-seed (gatherWeekplanEntries_) ──
+function testGatherWeekplanEntries_(ctx) {
+  // Synthetische base in jaar 2000 → raakt geen echte weekplan_-sleutels. Week k=2 blijft ONGEZET
+  // (gat) zodat we bewijzen dat lege/ontbrekende weken niets bijdragen. try/finally ruimt op, ook
+  // bij assert-falen.
+  var props = PropertiesService.getDocumentProperties();
+  var base = new Date(2000, 0, 3);
+  function key(d) { return 'weekplan_' + formatDate(d, 'yyyy-MM-dd'); }
+  var d1 = new Date(base.getFullYear(), base.getMonth(), base.getDate() - 7);
+  var k0 = key(base), k1 = key(d1);
+  try {
+    props.setProperty(k0, JSON.stringify([{ datum: '2000-01-03', workoutType: 'vo2max', archetypeId: 'vo2_long' }]));
+    props.setProperty(k1, JSON.stringify([
+      { datum: '1999-12-27', workoutType: 'threshold', archetypeId: 'threshold_long' },
+      { datum: '1999-12-28', workoutType: 'sweet_spot', archetypeId: 'sweetspot_long' }
+    ]));
+    var res = gatherWeekplanEntries_(8, base);
+    var ids = res.map(function (e) { return e.archetypeId; });
+    assert_(ctx, 'gather len 1+2+gat==3', 3, res.length);
+    assert_(ctx, 'gather week0-id aanwezig', true, ids.indexOf('vo2_long') >= 0);
+    assert_(ctx, 'gather week1-id aanwezig', true, ids.indexOf('threshold_long') >= 0);
+  } finally {
+    props.deleteProperty(k0);
+    props.deleteProperty(k1);
+  }
 }
 
 // ── Fase 1 deel 2b.2 commit 1 — plumbing: buildWorkout-routing + recency-extractor ──

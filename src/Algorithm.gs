@@ -873,6 +873,28 @@ function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recent
   return plan;
 }
 
+// Recency-seed-horizon (weken): hoeveel opgeslagen weekplan-snapshots worden samengevoegd tot
+// de cross-week archetype-recency. Instelbaar.
+var RECENCY_HORIZON_WEEKS = 8;
+
+// Verzamelt weekplan-entries over de laatste `horizonWeeks` (incl. de week van baseMonday) via
+// kalender-rekenkunde (DST-veilig, geen ms-aftrek). Zelfde DocProp-accessor (getDocProp) +
+// formatDate als de seed-read. Ontbrekende/lege/corrupte weken dragen niets bij; recencyFromWeekplan_
+// filtert + sorteert de samengevoegde lijst zelf op datum + kwaliteit.
+function gatherWeekplanEntries_(horizonWeeks, baseMonday) {
+  var monday = baseMonday || weekStartDate(new Date());
+  var out = [];
+  for (var k = 0; k < horizonWeeks; k++) {
+    var d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 7 * k);
+    var raw = getDocProp('weekplan_' + formatDate(d, 'yyyy-MM-dd'), '');
+    if (!raw) continue;
+    var arr;
+    try { arr = JSON.parse(raw); } catch (e) { continue; }
+    if (Array.isArray(arr)) out = out.concat(arr);
+  }
+  return out;
+}
+
 function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate, taperCtx, weekDays) {
   var doel = settings.doel;
   // Taper is een per-dag-overlay (Deel 2): taperCtx = { datum, venster, isTrip }
@@ -900,8 +922,10 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   // vul in-loop aan met elke toegewezen kwaliteitsdag (ma→zo). Deterministisch (geen Math.random).
   var qualityRecency = [];
   try {
-    var wpRaw0 = getDocProp('weekplan_' + formatDate(weekStartDate(new Date()), 'yyyy-MM-dd'), '');
-    if (wpRaw0) qualityRecency = recencyFromWeekplan_(JSON.parse(wpRaw0), null);
+    // Cross-week seed: voeg de laatste RECENCY_HORIZON_WEEKS weekplan-snapshots samen (niet enkel
+    // deze week) zodat de archetype-rotatie ook over weekgrenzen heen mijdt. Een lege huidige week
+    // mag de seed niet blokkeren → geen wpRaw0-guard meer (die las alleen deze week).
+    qualityRecency = recencyFromWeekplan_(gatherWeekplanEntries_(RECENCY_HORIZON_WEEKS), null);
   } catch (e0) {}
 
   // C4: bouw 't week-plan ÉÉN keer (vóór de per-dag-loop), gevoed met dezelfde dekking/recency.
