@@ -889,6 +889,8 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   // dan geen compensatie-intensiteit forceren; herstel respecteren).
   var debtActief = !!debt && !taperActief && !isEventRecovery && !isRecovery;
   var debtWerk = debtActief ? { low: debt.low, high: debt.high, anaerobic: debt.anaerobic } : null;
+  // C4: week-brede kwaliteitsplaatsing actief in Base/Build/Peak (NIET Recovery/Test/event-recovery).
+  var allocActive = !isEventRecovery && !isRecovery && !isTestWeek && (macroFase === 'Base' || macroFase === 'Build' || macroFase === 'Peak');
 
   // Sorteer op dagIdx zodat ma→zo wordt verwerkt
   days.sort(function (a, b) { return a.dagIdx - b.dagIdx; });
@@ -900,6 +902,12 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
     var wpRaw0 = getDocProp('weekplan_' + formatDate(weekStartDate(new Date()), 'yyyy-MM-dd'), '');
     if (wpRaw0) qualityRecency = recencyFromWeekplan_(JSON.parse(wpRaw0), null);
   } catch (e0) {}
+
+  // C4: bouw 't week-plan ÉÉN keer (vóór de per-dag-loop), gevoed met dezelfde dekking/recency.
+  var allocToday = stripTime_(new Date());
+  var quotaPlan = allocActive
+    ? allocateQualityWeek_(days, profileForDoel_(settings.doel), macroFase, dekking, qualityRecency, recentHardDate, debt, settings, allocToday, taperActief, taperCtx)
+    : {};
 
   days.forEach(function (d) {
     var type;
@@ -947,6 +955,15 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       type = 'test';
       testGedaan = true;
       reden = 'Test — FTP/conditie bepalen';
+    } else if (allocActive && quotaPlan[d.dagIdx]) {
+      // C4: week-allocator-plaatsing (quality/longride/endurance) — overrulet de per-dag-takken.
+      var qp = quotaPlan[d.dagIdx];
+      type = qp.type;
+      archetypeId = qp.archetypeId || null;
+      reden = (qp.role === 'quality') ? ('Sleutelsessie · ' + doel + ' — fase ' + macroFase + ' (week-plaatsing)')
+            : (qp.role === 'longride_efforts') ? 'Lange rit met efforts — week-plaatsing'
+            : (qp.role === 'longride') ? 'Lange duurrit — week-plaatsing'
+            : 'Duurrit — week-plaatsing';
     } else if (d.type === 'pendel') {
       type = (isTripEvent && (macroFase === 'Build' || macroFase === 'Peak'))
         ? 'pendel_trip_intervals'                          // tocht-pendel → sweet-spot/tempo (zie genericPendelIntervals)
@@ -1006,7 +1023,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
     if (isHard && !debtForced && d.datum && lastHardDate) {
       var prevDay = stripTime_(new Date(d.datum.getTime() - 24 * 60 * 60 * 1000));
       if (prevDay.getTime() === lastHardDate.getTime()) {
-        type = 'long_z2';
+        type = (d.type === 'pendel') ? 'pendel_z2' : 'long_z2';   // C4: pendel-aware downgrade
         isHard = false;
         archetypeId = null;   // 2b.2: type gedowngraded → archetype-keuze vervalt
         reden = 'Rustige duurrit — dag na een zware dag';  // load-context wint
@@ -1031,7 +1048,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
         d.archetypeId = null;   // 2b.2: type gewijzigd → archetype vervalt
         d.reden = 'Herstel — wellness laag';
       } else {
-        var gedemoot = demoteType_(d.voorgesteldType);
+        var gedemoot = (d.type === 'pendel') ? 'pendel_z2' : demoteType_(d.voorgesteldType);   // C4: pendel-aware demote
         if (gedemoot !== d.voorgesteldType) {
           d.voorgesteldType = gedemoot;
           d.archetypeId = null;   // 2b.2: gedemoot → archetype vervalt
@@ -1067,6 +1084,7 @@ var DEMOTE_MAP = {
   // Conditie
   'fatox':      'long_z2',
   // Combos
+  'combo_long_with_efforts': 'long_z2',
   'combo_z2_vo2':     'long_z2',
   'combo_ss_sprints': 'tempo',
   'combo_all_three':  'combo_long_with_efforts',
