@@ -1,0 +1,3 @@
+# Secrets — nooit naar Apps Script pushen (rootDir=src dekt 't al; dit is belt-and-suspenders)
+creds.json
+.clasprc.json
