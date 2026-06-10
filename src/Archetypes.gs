@@ -395,7 +395,6 @@ function goalWorkout_(profiel, fase, beschikbareTijd, recency, dekking) {
   recency = recency || [];
   var last = recency.length ? recency[recency.length - 1] : null;
   var lastIntent = last ? last.intent : null;
-  var lastId = last ? last.archetypeId : null;
 
   // (1) intent — duur-haalbaar gefilterd + gewogen + fase-gemoduleerd + coverage-bias + recency-mijdend.
   var intent = goalPickIntent_(profiel, fase, lastIntent, beschikbareTijd, dekking);
@@ -408,15 +407,30 @@ function goalWorkout_(profiel, fase, beschikbareTijd, recency, dekking) {
   });
   if (!kandidaten.length) return null;
 
-  // (3) archetype — vermijd 't laatst-gebruikte id (zwaar penaliseren), boost via archetypeVoorkeuren,
+  // (3) archetype — per-intent recency-VENSTER: mijd ALLE in dit intent recent gebruikte id's
+  //     (volledige rotatie vóór herhaling); boost via archetypeVoorkeuren, dan stalest-eerst,
   //     deterministische tie-break (duurRange.min, dan id).
   var voork = profiel.archetypeVoorkeuren || {};
-  function score(a) { return (voork[a.id] || 0) - (a.id === lastId ? 100 : 0); }
-  kandidaten = kandidaten.slice().sort(function (a, b) {
-    if (score(b) !== score(a)) return score(b) - score(a);
+  var intentRec = recency.filter(function (r) { return r.intent === intent; });
+  function staleness(id) {
+    for (var i = intentRec.length - 1, d = 0; i >= 0; i--, d++) {
+      if (intentRec[i].archetypeId === id) return d;
+    }
+    return intentRec.length + 1;
+  }
+  var gebruikt = {};
+  intentRec.forEach(function (r) { gebruikt[r.archetypeId] = true; });
+  var pool = kandidaten.filter(function (a) { return !gebruikt[a.id]; });
+  if (pool.length === 0) pool = kandidaten.slice();
+  pool.sort(function (a, b) {
+    var va = voork[a.id] || 0, vb = voork[b.id] || 0;
+    if (vb !== va) return vb - va;
+    var sa = staleness(a.id), sb = staleness(b.id);
+    if (sb !== sa) return sb - sa;
     if (a.duurRange[0] !== b.duurRange[0]) return a.duurRange[0] - b.duurRange[0];
     return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
   });
+  kandidaten = pool;
 
   // (4) effectTag → engine-type (HERGEBRUIK COACH_INTENT_ENGINE_TYPE_; type ∈ alle koppel-maps).
   return { type: COACH_INTENT_ENGINE_TYPE_[intent], archetypeId: kandidaten[0].id };

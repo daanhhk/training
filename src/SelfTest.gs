@@ -38,6 +38,7 @@ function runSelfTest() {
   testArchetype_(ctx);
   testArchetypeLib_(ctx);
   testGoalWorkout_(ctx);
+  testGoalWorkoutRotatie_(ctx);
   testInplug_(ctx);
   testKeyIntensityInplug_(ctx);
   testGoalInplugWeekSim_(ctx);
@@ -487,9 +488,10 @@ function testGoalWorkout_(ctx) {
   // recency: vorige intent drempel → kiest een andere intent (ander type)
   var gr = goalWorkout_(klim, 'Build', 75, [{ intent: 'drempel', archetypeId: 'threshold_overunder' }]);
   assert_(ctx, 'goalWO recency intent-avoid', true, gr.type !== 'threshold');
-  // recency: zelfde intent, ander archetype dan 't laatst-gebruikte id
-  var ga = goalWorkout_(klim, 'Peak', 75, [{ intent: 'sweetspot', archetypeId: 'vo2_hill_repeats' }]);
-  assert_(ctx, 'goalWO recency id-avoid', true, ga.type === 'vo2max' && ga.archetypeId !== 'vo2_hill_repeats');
+  // per-intent id-avoid: bij 51 min is ALLEEN vo2 haalbaar → intent blijft vo2 ondanks de vermijd;
+  // 't recency-VENSTER mijdt 't laatst-gebruikte vo2-id → rotatie naar vo2_pyramid.
+  var ga = goalWorkout_(klim, 'Build', 51, [{ intent: 'vo2', archetypeId: 'vo2_microburst' }]);
+  assert_(ctx, 'goalWO recency id-avoid same-intent', true, ga.type === 'vo2max' && ga.archetypeId !== 'vo2_microburst');
   // profiel-kiezer
   assert_(ctx, 'goalWO doel FTP', PROFILES.ftp, profileForDoel_('FTP'));
   assert_(ctx, 'goalWO doel Beklimmingen', PROFILES.klim, profileForDoel_('Beklimmingen'));
@@ -524,6 +526,52 @@ function testGoalWorkout_(ctx) {
     INTENT_PRIMARY_BUCKET_[goalPickIntent_(klim, 'Build', null, 75, { low: true, high: false, anaerobic: true })]);
   // backward-compat: zonder beschikbareTijd én dekking = ongewijzigd (hoogste gewicht).
   assert_(ctx, 'goalWO backward-compat', 'drempel', goalPickIntent_(klim, 'Build', null));
+}
+
+// ── Fase 1b — per-intent recency-VENSTER rotatie (goalWorkout_) ──
+function testGoalWorkoutRotatie_(ctx) {
+  // Duur-isolatie: bij 51 min is ALLEEN vo2 haalbaar (drempel min 54 / sweetspot min 52 buiten
+  // bereik) → goalPickIntent_ houdt vo2 vast ongeacht de recency-vermijd. M = vo2-archetypes ⊇ 51.
+  var TIJD = 51, INTENT = 'vo2';
+  var fitting = ARCHETYPES.filter(function (a) {
+    return a.effectTags.indexOf(INTENT) >= 0 && TIJD >= a.duurRange[0] && TIJD <= a.duurRange[1];
+  }).map(function (a) { return a.id; });
+  var M = fitting.length;
+  assert_(ctx, 'rot M>=2 (rotatie zinnig)', true, M >= 2);
+
+  // Rotatie: M calls → M verschillende id's; call M+1 == call 1 (stalest-eerst na reset).
+  var prof = { id: 'rot', soort: 'capaciteit',
+    intentGewichten: { drempel: 0, sweetspot: 0, vo2: 1 }, archetypeVoorkeuren: {} };
+  var rec = [], seen = {}, first = null, distinct = true;
+  for (var i = 0; i < M; i++) {
+    var g = goalWorkout_(prof, 'Build', TIJD, rec);
+    if (i === 0) first = g.archetypeId;
+    if (seen[g.archetypeId]) distinct = false;
+    seen[g.archetypeId] = true;
+    rec.push({ intent: INTENT, archetypeId: g.archetypeId });
+  }
+  assert_(ctx, 'rot M-distinct (volledige rotatie)', true, distinct && Object.keys(seen).length === M);
+  assert_(ctx, 'rot call M+1 == call 1', first, goalWorkout_(prof, 'Build', TIJD, rec).archetypeId);
+
+  // Bias: één vorm voorkeur 0.5 → komt >= zo vaak als elke andere; élke fitting vorm >= 1x.
+  var boostId = fitting[M - 1];
+  var voork = {}; voork[boostId] = 0.5;
+  var profB = { id: 'rotB', soort: 'capaciteit',
+    intentGewichten: { drempel: 0, sweetspot: 0, vo2: 1 }, archetypeVoorkeuren: voork };
+  var recB = [], count = {};
+  fitting.forEach(function (id) { count[id] = 0; });
+  for (var j = 0; j < 3 * M; j++) {
+    var gb = goalWorkout_(profB, 'Build', TIJD, recB);
+    count[gb.archetypeId] = (count[gb.archetypeId] || 0) + 1;
+    recB.push({ intent: INTENT, archetypeId: gb.archetypeId });
+  }
+  var boostOk = true, eachOk = true;
+  fitting.forEach(function (id) {
+    if (count[id] < 1) eachOk = false;
+    if (id !== boostId && count[boostId] < count[id]) boostOk = false;
+  });
+  assert_(ctx, 'rot bias boosted >= elke andere', true, boostOk);
+  assert_(ctx, 'rot bias élke vorm >=1', true, eachOk);
 }
 
 // ── Fase 1 deel 2b.2 commit 1 — plumbing: buildWorkout-routing + recency-extractor ──
