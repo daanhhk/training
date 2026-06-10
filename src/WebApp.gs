@@ -56,7 +56,7 @@ function segmentsFromBlokken_(blokken) {
     var min = Number(b.minuten) || 0;
     if (min <= 0) return;
     var st = DASH_BUCKET_STYLE_[b.zone] || DASH_BUCKET_STYLE_.z2;
-    segs.push({ minuten: min, bucket: b.zone, kleur: st.kleur, hoogtePct: st.hoogtePct });
+    segs.push({ minuten: min, bucket: b.zone, kleur: st.kleur, hoogtePct: st.hoogtePct, pctLo: b.pctLo, pctHi: b.pctHi });
   });
   return segs.length ? segs : null;
 }

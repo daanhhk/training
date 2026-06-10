@@ -259,14 +259,19 @@ function testTrainingLibrary_(ctx) {
   var settings = { ftp: 250, lthr: 160, doel: 'FTP', doelStart: new Date(2026, 0, 5) };
   var lib = getTrainingLibrary_(settings);
   assert_(ctx, 'lib 6 categorieën', 6, lib.length);
+  var pctOk = true;   // elke library-segment draagt numerieke pctLo/pctHi (pctLo<=pctHi) — voedt de client-wattlijst
   lib.forEach(function (cat) {
     assert_(ctx, 'lib cat niet-leeg: ' + cat.key, true, cat.variants.length > 0);
     cat.variants.forEach(function (v) {
       assert_(ctx, 'lib type match: ' + cat.key + '/' + v.variantId, cat.type, v.type);
       assert_(ctx, 'lib tss>0: ' + cat.key + '/' + v.variantId, true, v.tss > 0);
       assert_(ctx, 'lib segs>0: ' + cat.key + '/' + v.variantId, true, (v.segmenten || []).length > 0);
+      (v.segmenten || []).forEach(function (s) {
+        if (!(typeof s.pctLo === 'number' && typeof s.pctHi === 'number' && s.pctLo <= s.pctHi)) pctOk = false;
+      });
     });
   });
+  assert_(ctx, 'lib segs pctLo/pctHi numeriek', true, pctOk);
 }
 
 // ── buildOverrideWorkout_ / buildFreeRideWorkout_ (puur) — day-override ──

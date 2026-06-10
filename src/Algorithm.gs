@@ -2124,7 +2124,7 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
   var structuur = [['Warmup', warm + ' min', wattsRange(ftp, 50, 68), bpmBelow(lthr, 85), 'Inrijden, opbouwend']];
   var intent = { low: warm + cool, high: 0, anaerobic: 0 };
   var mainMin = 0;
-  var blokken = [{ minuten: warm, zone: 'rust' }];   // warmup laag-intensief
+  var blokken = [{ minuten: warm, zone: 'rust', pctLo: 50, pctHi: 68 }];   // warmup laag-intensief
 
   var rawBlocks = variant.blocks(adj);
   var blocks = scaleBlocksToFit_(rawBlocks, mins, warm, cool);
@@ -2148,8 +2148,8 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
       // per rep: werk-blok + rust-blok → interval-vorm in de balk
       var onZone = pctZoneBucket_(b.onPct), offZone = pctZoneBucket_(b.offPct);
       for (var rr = 0; rr < b.reps; rr++) {
-        if (onMin > 0)  blokken.push({ minuten: Math.round(onMin * 10) / 10, zone: onZone });
-        if (offMin > 0) blokken.push({ minuten: Math.round(offMin * 10) / 10, zone: offZone });
+        if (onMin > 0)  blokken.push({ minuten: Math.round(onMin * 10) / 10, zone: onZone, pctLo: b.onPct - 2, pctHi: b.onPct + 2 });
+        if (offMin > 0) blokken.push({ minuten: Math.round(offMin * 10) / 10, zone: offZone, pctLo: b.offPct, pctHi: b.offPct });
       }
     } else { // steady
       var z = b.zone || variant.zone;
@@ -2160,7 +2160,7 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
       ]);
       intent[z] += b.durMin;
       mainMin += b.durMin;
-      blokken.push({ minuten: b.durMin, zone: pctZoneBucket_(b.pct) });
+      blokken.push({ minuten: b.durMin, zone: pctZoneBucket_(b.pct), pctLo: b.pct - 2, pctHi: b.pct + 2 });
     }
   });
 
@@ -2170,14 +2170,14 @@ function renderVariant_(variant, settings, mesoWeek, macroFase, mins) {
     var gap = (mins - warm - cool) - mainMin;
     if (gap >= 5) {
       structuur.push(['Z2 endurance', gap + ' min', wattsRange(ftp, 63, 72), bpmRange(lthr, 78, 88), 'Aanvullende duur — rustige Z2']);
-      blokken.push({ minuten: gap, zone: 'z2' });
+      blokken.push({ minuten: gap, zone: 'z2', pctLo: 63, pctHi: 72 });
       mainMin += gap;
       intent.low += gap;   // helper telt deze als low (0.7) → IF daalt
     }
   }
 
   structuur.push(['Cooldown', cool + ' min', wattsRange(ftp, 45, 55), '—', 'Easy uit']);
-  blokken.push({ minuten: cool, zone: 'rust' });
+  blokken.push({ minuten: cool, zone: 'rust', pctLo: 45, pctHi: 55 });
 
   var totaalMin = warm + cool + mainMin;
   Object.keys(intent).forEach(function (k) { intent[k] = Math.round(intent[k]); });

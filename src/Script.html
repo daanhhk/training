@@ -327,12 +327,34 @@
     }).join('');
     return '<div class="bloklist">' + rows + '</div>';
   }
+  // Optie B-live: blok-lijst uit (geschaalde) segmenten — label = zone-naam, duur
+  // = afgeronde minuten, watt = ftp×pct. Voedt de twee duur-slider-oppervlakken
+  // (Trainingen-detail + WorkoutPicker) zodat de lijst meeschaalt; mirrort de
+  // server-wattformule (watts = round(ftp×pct/100)).
+  function wattFromPct_(ftp, lo, hi) {
+    if (lo == null || hi == null || !ftp) return '';
+    return Math.round(ftp * lo / 100) + '-' + Math.round(ftp * hi / 100) + 'W';
+  }
+  function blokLijstSegs_(segs) {
+    if (!segs || !segs.length) return '';
+    var rows = segs.map(function (s) {
+      var z = ZONE_VAR[s.bucket] || '--zone-2';
+      var w = wattFmt_(wattFromPct_(state.ftp, s.pctLo, s.pctHi));
+      return '<div class="blok-row"><span class="blok-zone" style="color:var(' + z + ')">' +
+        (ZONE_LABEL[s.bucket] || 'Duur') + '</span><span class="blok-min">' +
+        (Math.round(s.minuten) + ' min') + (w ? ' · ' + w : '') + '</span></div>';
+    }).join('');
+    return '<div class="bloklist">' + rows + '</div>';
+  }
   // ZoneBar + ZoneLegend (klikbaar) → klapt de Blokstructuur uit/in (INTERACTIONS §1d).
   // Lijst + teller uit structuur (watt); valt terug op segmenten als structuur ontbreekt.
-  function zoneBlock_(segs, struct) {
-    var useStruct = !!(struct && struct.length);
-    var n = useStruct ? struct.length : ((segs && segs.length) ? segs.length : 0);
-    var lijst = useStruct ? blokLijstStruct_(struct) : blokLijst_(segs);
+  // fromSegs=true → lijst uit (geschaalde) segmenten i.p.v. de statische structuur
+  // (duur-slider-oppervlakken); default OFF → byte-identiek aan voorheen.
+  function zoneBlock_(segs, struct, fromSegs) {
+    var useStruct = !fromSegs && !!(struct && struct.length);
+    var lijst = fromSegs ? blokLijstSegs_(segs) : (useStruct ? blokLijstStruct_(struct) : blokLijst_(segs));
+    var n = fromSegs ? ((segs && segs.length) ? segs.length : 0)
+                     : (useStruct ? struct.length : ((segs && segs.length) ? segs.length : 0));
     return '<details class="wk-blocks"><summary>' + zoneBar(segs) + zoneLegend_(segs) +
       '<div class="wk-blokhint">Blokstructuur · ' + n + ' blok' + (n === 1 ? '' : 'ken') + ' <span class="wk-chev">⌄</span></div></summary>' + lijst + '</details>';
   }
@@ -1920,7 +1942,7 @@
     var baseLow = 0; segs.forEach(function (s) { if (TRN_LOWBUCKETS[s.bucket]) baseLow += s.minuten; });
     var f = baseLow > 0 ? (newLow / baseLow) : 1;
     var scaled = segs.map(function (s) {
-      return { bucket: s.bucket, hoogtePct: s.hoogtePct,
+      return { bucket: s.bucket, hoogtePct: s.hoogtePct, pctLo: s.pctLo, pctHi: s.pctHi,
         minuten: TRN_LOWBUCKETS[s.bucket] ? Math.max(0.5, s.minuten * f) : s.minuten };
     });
     return { durMin: dur, tss: tss, segmenten: scaled };
@@ -1977,7 +1999,7 @@
       : '<button type="button" class="trn-plan-btn" onclick="trnInplannen(\'' + v.variantId + '\')">Inplannen</button>';
     return '<div class="rc-card">' +
       '<div class="var-head"><span class="var-name">' + esc(v.naam) + '</span>' + badge + '</div>' +
-      zoneBlock_(sc.segmenten, v.structuur) + inlineMetrics_(sc.durMin, sc.tss) + btn + '</div>';
+      zoneBlock_(sc.segmenten, v.structuur, true) + inlineMetrics_(sc.durMin, sc.tss) + btn + '</div>';
   }
 
   function trnRowsHtml_() {
@@ -2148,7 +2170,7 @@
       var v = trnVar_(cat, pkVariantId); if (!v) return '';
       var sc = trnScale_(v, dur);
       return '<div class="rc-card"><div class="var-head"><span class="var-name">' + esc(v.naam) + '</span></div>' +
-        zoneBlock_(sc.segmenten, v.structuur) + inlineMetrics_(sc.durMin, sc.tss) +
+        zoneBlock_(sc.segmenten, v.structuur, true) + inlineMetrics_(sc.durMin, sc.tss) +
         '<button type="button" class="trn-plan-btn" onclick="pkPickLibrary()">Kies deze workout</button></div>';
     }
     return cat.variants.map(function (vr) {
