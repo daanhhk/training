@@ -40,6 +40,7 @@ function runSelfTest() {
   testGoalWorkout_(ctx);
   testInplug_(ctx);
   testKeyIntensityInplug_(ctx);
+  testGoalInplugWeekSim_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -558,6 +559,79 @@ function testKeyIntensityInplug_(ctx) {
   // goalWorkout_ null (geen archetype past in 300 min) → fallback-keten → trip-tak long_z2.
   assert_(ctx, 'kiPlug goalWO-null trip-fallback', 'long_z2',
     keyIntensity('FTP', 'Build', dek, null, true, { beschikbareTijd: 300, recency: [], settings: { doel: 'FTP' }, out: {} }));
+}
+
+// ── Fase 1 deel 2b.2-VERIFY — Build/Peak-weeksimulatie (keyIntensity is PUUR: goalWorkout_/
+// climbTypeWorkout_/doel-tak doen geen Sheet/DocProp → end-to-end keuze puur simuleerbaar) ──
+function testGoalInplugWeekSim_(ctx) {
+  var QUALITY = { threshold: 1, sweet_spot: 1, vo2max: 1 };
+  var dekNorm = { low: true, high: true, anaerobic: false };   // wellness normaal, dekking aanwezig
+  var klimS = { doel: 'Beklimmingen' };
+  var tijden = [50, 60, 75, 90, 120, 150];
+  function archIn_(id) { return ARCHETYPES.filter(function (a) { return a.id === id; }).length > 0; }
+
+  ['Build', 'Peak'].forEach(function (fase) {
+    var recency = [], ids = [], consistent = true, klimIntentsOk = true, fallbackClean = true;
+    tijden.forEach(function (tijd) {
+      var out = {};
+      var type = keyIntensity('Beklimmingen', fase, dekNorm, null, false,
+        { beschikbareTijd: tijd, recency: recency, settings: klimS, out: out });
+      if (QUALITY[type]) {
+        if (!(out.archetypeId != null && archIn_(out.archetypeId))) consistent = false;
+        if (GOAL_KWALITEIT_INTENTS_.indexOf(COACH_TYPE_INTENT_[type]) < 0) klimIntentsOk = false;
+        recency.push({ intent: COACH_TYPE_INTENT_[type], archetypeId: out.archetypeId });
+        ids.push(out.archetypeId);
+      } else if (out.archetypeId != null) {
+        fallbackClean = false;   // fallback-type mag NOOIT een archetypeId dragen
+      }
+    });
+    assert_(ctx, 'sim ' + fase + ' type<->arch consistent', true, consistent);
+    assert_(ctx, 'sim ' + fase + ' klim-intents only', true, klimIntentsOk);
+    assert_(ctx, 'sim ' + fase + ' fallback geen-arch', true, fallbackClean);
+    assert_(ctx, 'sim ' + fase + ' archetype-dagen >=3', true, ids.length >= 3);
+    var uniq = {}; ids.forEach(function (id) { uniq[id] = 1; });
+    assert_(ctx, 'sim ' + fase + ' variatie >=2', true, Object.keys(uniq).length >= 2);
+    var herh = false; for (var i = 1; i < ids.length; i++) { if (ids[i] === ids[i - 1]) herh = true; }
+    assert_(ctx, 'sim ' + fase + ' geen-directe-herhaling', false, herh);
+  });
+
+  // Duur-extremen.
+  assert_(ctx, 'sim >135min trip-fallback', 'long_z2',
+    keyIntensity('Beklimmingen', 'Build', dekNorm, null, true,
+      { beschikbareTijd: 150, recency: [], settings: klimS, out: {} }));
+  var kort = keyIntensity('FTP', 'Build', { low: true, high: false, anaerobic: false }, null, false,
+    { beschikbareTijd: 30, recency: [], settings: { doel: 'FTP' }, out: {} });
+  assert_(ctx, 'sim <minRange doel-tak', true, kort === 'sweet_spot' || kort === 'threshold');
+
+  // Gedrag-shift: dekking-tekort in Build → type komt van goalWorkout_ (archetypeId gezet), niet de doel-tak.
+  var outDek = {};
+  var tDek = keyIntensity('FTP', 'Build', { low: false, high: false, anaerobic: false }, null, false,
+    { beschikbareTijd: 75, recency: [], settings: { doel: 'FTP' }, out: outDek });
+  assert_(ctx, 'sim dekking-shift via goalWO', true, !!QUALITY[tDek] && outDek.archetypeId != null);
+
+  // Elk gekozen archetype → buildWorkout → geldige, push-parsebare workout.
+  var S = { ftp: 275, lthr: 178, doel: 'Beklimmingen' };
+  var bw = buildWorkout('threshold', 90, S, 1, 'Build', null, 0, 'threshold_overunder');
+  assert_(ctx, 'sim buildWO contract', true,
+    bw.archetypeId === 'threshold_overunder' && bw.structuur != null && typeof bw.tss === 'number' &&
+    !!(bw.blokken && bw.blokken.length && bw.blokken[0].pctLo != null));
+  var pushOk = true;
+  bw.structuur.forEach(function (row) { if (dslBlockFromRow_(row, 275) == null) pushOk = false; });
+  assert_(ctx, 'sim buildWO push-parse', true, pushOk);
+
+  // FTP-profiel-variant: ftp-profiel gekozen + drempel/sweetspot domineren vo2 over de reeks.
+  assert_(ctx, 'sim ftp-profiel gekozen', PROFILES.ftp, profileForDoel_('FTP'));
+  var ftpIntents = {};
+  ['Build', 'Peak'].forEach(function (fase) {
+    var rec = [];
+    [60, 75, 90].forEach(function (tijd) {
+      var o = {};
+      var ty = keyIntensity('FTP', fase, dekNorm, null, false, { beschikbareTijd: tijd, recency: rec, settings: { doel: 'FTP' }, out: o });
+      if (QUALITY[ty]) { var it = COACH_TYPE_INTENT_[ty]; ftpIntents[it] = (ftpIntents[it] || 0) + 1; if (o.archetypeId) rec.push({ intent: it, archetypeId: o.archetypeId }); }
+    });
+  });
+  assert_(ctx, 'sim ftp drempel/sweetspot-zwaar', true,
+    ((ftpIntents.drempel || 0) + (ftpIntents.sweetspot || 0)) > (ftpIntents.vo2 || 0));
 }
 
 function testCoach_(ctx) {
