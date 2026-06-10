@@ -315,6 +315,9 @@ var GOAL_FASE_MOD_ = {
   Peak:  { vo2: 0.15, drempel: -0.05, sweetspot: -0.10 }    // peak: vo2 zwaarder
 };
 var GOAL_KWALITEIT_INTENTS_ = ['drempel', 'sweetspot', 'vo2'];   // de kwaliteit-takken (klim-relevant)
+// C1 (fase 1b): intent → primaire zone-bucket (coverage-bias) + boost-grootte.
+var INTENT_PRIMARY_BUCKET_ = { drempel: 'high', sweetspot: 'high', vo2: 'anaerobic' };
+var COVERAGE_BOOST_ = 0.30;
 
 // PROFILES — naast GOAL_PROFILES_ (projectieKey verwijst ernaar). Alleen klim + ftp (2b.1).
 var PROFILES = {
@@ -342,16 +345,34 @@ function goalEffWeights_(profiel, fase) {
   return w;
 }
 
-// Deterministische gewogen keuze (geen Math.random): hoogste gewicht eerst (det. tie-break op
-// vaste intent-volgorde), recency vermijdt de intent van de vorige kwaliteitsdag indien mogelijk.
-function goalPickIntent_(profiel, fase, vermijdIntent) {
+// C1 (fase 1b): bestaat er een archetype van dit intent dat binnen beschikbareTijd past? PUUR.
+function intentHaalbaar_(intent, beschikbareTijd) {
+  return ARCHETYPES.some(function (a) {
+    return a.effectTags.indexOf(intent) >= 0 && beschikbareTijd >= a.duurRange[0] && beschikbareTijd <= a.duurRange[1];
+  });
+}
+
+// Deterministische gewogen keuze (geen Math.random): filter EERST op duur-HAALBARE intents (geen
+// intent-vóór-duur→null meer), dan hoogste gewicht (+ optionele coverage-bias bij een dekking-gat),
+// det. tie-break op vaste intent-volgorde; recency vermijdt de intent van de vorige kwaliteitsdag.
+function goalPickIntent_(profiel, fase, vermijdIntent, beschikbareTijd, dekking) {
   var w = goalEffWeights_(profiel, fase);
-  var order = GOAL_KWALITEIT_INTENTS_.slice().sort(function (a, b) {
-    if (w[b] !== w[a]) return w[b] - w[a];
+  var intents = GOAL_KWALITEIT_INTENTS_.filter(function (i) {
+    return beschikbareTijd == null || intentHaalbaar_(i, beschikbareTijd);
+  });
+  if (!intents.length) intents = GOAL_KWALITEIT_INTENTS_.slice();
+  function score(i) {
+    var s = (w[i] || 0);
+    if (dekking && INTENT_PRIMARY_BUCKET_[i] && !dekking[INTENT_PRIMARY_BUCKET_[i]]) s += COVERAGE_BOOST_;
+    return s;
+  }
+  intents.sort(function (a, b) {
+    var d = score(b) - score(a);
+    if (d !== 0) return d;
     return GOAL_KWALITEIT_INTENTS_.indexOf(a) - GOAL_KWALITEIT_INTENTS_.indexOf(b);
   });
-  for (var i = 0; i < order.length; i++) { if (order[i] !== vermijdIntent) return order[i]; }
-  return order[0];
+  for (var k = 0; k < intents.length; k++) { if (intents[k] !== vermijdIntent) return intents[k]; }
+  return intents[0];
 }
 
 /**
@@ -362,15 +383,15 @@ function goalPickIntent_(profiel, fase, vermijdIntent) {
  * @param recency        array [{intent, archetypeId}, ...] (recentste laatst); [] = geen historie
  * @return { type, archetypeId } of null als geen archetype past
  */
-function goalWorkout_(profiel, fase, beschikbareTijd, recency) {
+function goalWorkout_(profiel, fase, beschikbareTijd, recency, dekking) {
   if (!profiel) return null;
   recency = recency || [];
   var last = recency.length ? recency[recency.length - 1] : null;
   var lastIntent = last ? last.intent : null;
   var lastId = last ? last.archetypeId : null;
 
-  // (1) intent — gewogen + fase-gemoduleerd + recency-mijdend.
-  var intent = goalPickIntent_(profiel, fase, lastIntent);
+  // (1) intent — duur-haalbaar gefilterd + gewogen + fase-gemoduleerd + coverage-bias + recency-mijdend.
+  var intent = goalPickIntent_(profiel, fase, lastIntent, beschikbareTijd, dekking);
   if (!intent) return null;
 
   // (2) filter: effectTag == intent ÉN duurRange ⊇ beschikbareTijd.

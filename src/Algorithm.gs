@@ -1529,7 +1529,7 @@ function keyIntensity(doel, macroFase, dekking, klimType, isTripEvent, ctx) {
   // goalWorkout_ null = geen archetype past binnen de beschikbare tijd). Daarna de trip-tak.
   if (macroFase === 'Build' || macroFase === 'Peak') {
     var gw = (ctx && ctx.settings)
-      ? goalWorkout_(profileForDoel_(ctx.settings.doel), macroFase, ctx.beschikbareTijd, ctx.recency)
+      ? goalWorkout_(profileForDoel_(ctx.settings.doel), macroFase, ctx.beschikbareTijd, ctx.recency, dekking)
       : null;
     if (gw) { if (ctx && ctx.out) ctx.out.archetypeId = gw.archetypeId; return gw.type; }
     var ct = climbTypeWorkout_(klimType, macroFase, dekking);

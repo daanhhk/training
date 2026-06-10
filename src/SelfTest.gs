@@ -501,6 +501,19 @@ function testGoalWorkout_(ctx) {
     if (GOAL_KWALITEIT_INTENTS_.indexOf(goalPickIntent_(klim, f, 'drempel')) < 0) klimOnly = false;
   });
   assert_(ctx, 'goalWO klim klim-only-intents', true, klimOnly);
+  // C1 (a) duur-haalbaar-eerst: bij 40 min heeft de top-intent (drempel, min 54) GEEN archetype, maar
+  // vo2 (vo2_microburst[35,70]) wel → kiest vo2, NIET null (oud intent-vóór-duur-gedrag was null).
+  var gShort = goalWorkout_(klim, 'Build', 40, []);
+  assert_(ctx, 'goalWO duur-haalbaar niet-null', true, gShort != null);
+  assert_(ctx, 'goalWO duur-haalbaar vo2', 'vo2max', gShort && gShort.type);
+  // C1 (b) coverage-bias: anaerobic-gat → vo2-boost wint ondanks lagere basis-gewicht.
+  assert_(ctx, 'goalWO bias anaerobic-gat', 'vo2',
+    goalPickIntent_(klim, 'Build', null, 75, { low: true, high: true, anaerobic: false }));
+  // high-gat → een high-bucket-intent (drempel/sweetspot), NIET vo2.
+  assert_(ctx, 'goalWO bias high-gat', 'high',
+    INTENT_PRIMARY_BUCKET_[goalPickIntent_(klim, 'Build', null, 75, { low: true, high: false, anaerobic: true })]);
+  // backward-compat: zonder beschikbareTijd én dekking = ongewijzigd (hoogste gewicht).
+  assert_(ctx, 'goalWO backward-compat', 'drempel', goalPickIntent_(klim, 'Build', null));
 }
 
 // ── Fase 1 deel 2b.2 commit 1 — plumbing: buildWorkout-routing + recency-extractor ──
