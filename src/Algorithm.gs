@@ -726,10 +726,19 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   // Sorteer op dagIdx zodat ma→zo wordt verwerkt
   days.sort(function (a, b) { return a.dagIdx - b.dagIdx; });
 
+  // 2b.2: recency voor goalWorkout_ — zaai (best-effort) uit de opgeslagen weekplan-snapshot,
+  // vul in-loop aan met elke toegewezen kwaliteitsdag (ma→zo). Deterministisch (geen Math.random).
+  var qualityRecency = [];
+  try {
+    var wpRaw0 = getDocProp('weekplan_' + formatDate(weekStartDate(new Date()), 'yyyy-MM-dd'), '');
+    if (wpRaw0) qualityRecency = recencyFromWeekplan_(JSON.parse(wpRaw0), null);
+  } catch (e0) {}
+
   days.forEach(function (d) {
     var type;
     var reden = '';        // v2c: primaire reden bij het FINALE type
     var debtForced = false; // debt-geforceerde compensatie → exempt van avoid-consecutive-hard
+    var archetypeId = null; // 2b.2: door goalWorkout_ gekozen archetype (alleen vrij-keyIntensity-dagen)
 
     // Per-dag taper-gating: een dag tapert ALLEEN als hij 0..venster dagen vóór
     // het taper-event ligt; anders (ook post-event) → normale toewijzing.
@@ -808,7 +817,10 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
         debtWerk[dpBucket] = 0; // verbruikt → volgende dag andere bucket
         reden = 'Inhaalsessie — ' + redenZoneLabel_(dpBucket) + ' tekort';
       } else {
-        type = keyIntensity(doel, macroFase, dekking, klimType, isTripEvent);
+        var kiOut = {};
+        type = keyIntensity(doel, macroFase, dekking, klimType, isTripEvent,
+          { beschikbareTijd: d.minuten, recency: qualityRecency, settings: settings, out: kiOut });
+        archetypeId = kiOut.archetypeId || null;
         reden = 'Sleutelsessie · ' + doel + ' — fase ' + macroFase;
       }
     } else if (d.type === 'recovery') {
@@ -829,12 +841,15 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       if (prevDay.getTime() === lastHardDate.getTime()) {
         type = 'long_z2';
         isHard = false;
+        archetypeId = null;   // 2b.2: type gedowngraded → archetype-keuze vervalt
         reden = 'Rustige duurrit — dag na een zware dag';  // load-context wint
       }
     }
 
     d.voorgesteldType = type;
     d.reden = reden;
+    d.archetypeId = archetypeId;   // 2b.2: reist mee naar de build-loop (engine-sessie)
+    if (archetypeId) qualityRecency.push({ intent: intentFromType_(type), archetypeId: archetypeId });
     var zones = workoutZones(type, doel);
     zones.forEach(function (z) { dekking[z] = true; });
     if (isHard && d.datum) lastHardDate = stripTime_(d.datum);
@@ -846,11 +861,13 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
       if (!d.voorgesteldType) return;
       if (wellness.signal === 'recovery') {
         d.voorgesteldType = 'recovery';
+        d.archetypeId = null;   // 2b.2: type gewijzigd → archetype vervalt
         d.reden = 'Herstel — wellness laag';
       } else {
         var gedemoot = demoteType_(d.voorgesteldType);
         if (gedemoot !== d.voorgesteldType) {
           d.voorgesteldType = gedemoot;
+          d.archetypeId = null;   // 2b.2: gedemoot → archetype vervalt
           d.reden = 'Lichter gehouden — wellness laag';
         }
       }
@@ -1503,12 +1520,18 @@ function xmlEscape_(s) {
  * Kiest de key-intensity workout voor een vrije dag op basis van doel,
  * macro-fase en wat nog open staat in dekking.
  */
-function keyIntensity(doel, macroFase, dekking, klimType, isTripEvent) {
+function keyIntensity(doel, macroFase, dekking, klimType, isTripEvent, ctx) {
   if (macroFase === 'Taper')    return 'taper_openers'; // defensief — taper handled in assignWorkouts
   if (macroFase === 'Recovery') return 'recovery';
 
-  // Klim-type stuurt de kwaliteitsdag in Build/Peak (event-driven).
+  // Kwaliteitsdag in Build/Peak. 2b.2: goalWorkout_ (profiel-gedreven) vervangt de
+  // climbTypeWorkout_-STAP; climbTypeWorkout_ blijft FALLBACK (geen ctx = revert-pad, of
+  // goalWorkout_ null = geen archetype past binnen de beschikbare tijd). Daarna de trip-tak.
   if (macroFase === 'Build' || macroFase === 'Peak') {
+    var gw = (ctx && ctx.settings)
+      ? goalWorkout_(profileForDoel_(ctx.settings.doel), macroFase, ctx.beschikbareTijd, ctx.recency)
+      : null;
+    if (gw) { if (ctx && ctx.out) ctx.out.archetypeId = gw.archetypeId; return gw.type; }
     var ct = climbTypeWorkout_(klimType, macroFase, dekking);
     if (ct) return ct;
     // Trip/tocht-event zonder klim-routing → duur-key i.p.v. doel-FTP-intervallen.

@@ -39,6 +39,7 @@ function runSelfTest() {
   testArchetypeLib_(ctx);
   testGoalWorkout_(ctx);
   testInplug_(ctx);
+  testKeyIntensityInplug_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -530,6 +531,33 @@ function testInplug_(ctx) {
   assert_(ctx, 'inplug recency laatste intent', 'vo2', rec[rec.length - 1].intent);
   assert_(ctx, 'inplug recency laatste id', 'vo2_long', rec[rec.length - 1].archetypeId);
   assert_(ctx, 'inplug recency refISO-filter', 1, recencyFromWeekplan_(wp, '2026-06-04').length);
+}
+
+// ── Fase 1 deel 2b.2 commit 2 — activatie: goalWorkout_ in keyIntensity (order-invariant) ──
+function testKeyIntensityInplug_(ctx) {
+  var dek = { low: true, high: false, anaerobic: false };
+  // Build met ctx → goalWorkout_ kiest een kwaliteit-type + zet out.archetypeId.
+  var out = {};
+  var t = keyIntensity('Beklimmingen', 'Build', dek, null, false,
+    { beschikbareTijd: 75, recency: [], settings: { doel: 'Beklimmingen' }, out: out });
+  assert_(ctx, 'kiPlug Build quality-type', true, t === 'threshold' || t === 'sweet_spot' || t === 'vo2max');
+  assert_(ctx, 'kiPlug Build archetypeId-set', true, out.archetypeId != null);
+  // order-invariant: Taper/Recovery nemen hun eigen tak (vóór de goalWorkout_-stap), GEEN archetype.
+  var o2 = {};
+  assert_(ctx, 'kiPlug Taper eigen-tak', 'taper_openers',
+    keyIntensity('Beklimmingen', 'Taper', dek, null, false, { beschikbareTijd: 75, recency: [], settings: { doel: 'Beklimmingen' }, out: o2 }));
+  assert_(ctx, 'kiPlug Taper geen-arch', true, o2.archetypeId == null);
+  assert_(ctx, 'kiPlug Recovery eigen-tak', 'recovery',
+    keyIntensity('Beklimmingen', 'Recovery', dek, null, false, { beschikbareTijd: 75, recency: [], settings: { doel: 'Beklimmingen' }, out: {} }));
+  // Base: goalWorkout_ vuurt niet (geen Build/Peak) → doel-tak ongewijzigd (FTP Base → sweet_spot).
+  assert_(ctx, 'kiPlug Base doel-tak', 'sweet_spot',
+    keyIntensity('FTP', 'Base', dek, null, false, { beschikbareTijd: 75, recency: [], settings: { doel: 'FTP' }, out: {} }));
+  // Zonder ctx → climbTypeWorkout_-fallback (revert-pad): klimType 'lang' + !high → sweet_spot.
+  assert_(ctx, 'kiPlug geen-ctx climb-fallback', 'sweet_spot',
+    keyIntensity('FTP', 'Build', dek, 'lang', false));
+  // goalWorkout_ null (geen archetype past in 300 min) → fallback-keten → trip-tak long_z2.
+  assert_(ctx, 'kiPlug goalWO-null trip-fallback', 'long_z2',
+    keyIntensity('FTP', 'Build', dek, null, true, { beschikbareTijd: 300, recency: [], settings: { doel: 'FTP' }, out: {} }));
 }
 
 function testCoach_(ctx) {
