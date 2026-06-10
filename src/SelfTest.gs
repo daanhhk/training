@@ -35,6 +35,7 @@ function runSelfTest() {
   testReadinessAdjust_(ctx);
   testPowerCurve_(ctx);
   testGoalProjection_(ctx);
+  testArchetype_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -362,6 +363,49 @@ function testGoalProjection_(ctx) {
   assert_(ctx, 'maxRecentRideH 42d', 2, maxRecentRideH_(AV, 42));
   assert_(ctx, 'tssPerHourRecent 42d', 55, tssPerHourRecent_(AV, 42));
   assert_(ctx, 'weeklyHoursRecent 42d', 0.5, weeklyHoursRecent_(AV, 42));
+}
+
+// ── Fase 1 deel 1 — archetype-expander (puur) ──
+function testArchetype_(ctx) {
+  var fx = archetypeFixtures_();
+  var REQ = ['naam', 'focus', 'zones', 'totaalMin', 'structuur', 'intent', 'tss', 'eindopmerking', 'blokken'];
+  var doelMap = { fx_steady_duur: 90, fx_drempel_int: 80, fx_microburst_vo2: 40 };
+  fx.forEach(function (rec) {
+    var dm = doelMap[rec.id];
+    var wo = expandArchetype_(rec, { ftp: 275, doelMin: dm, mesoFactor: 1.0, faseOffset: 0 });
+    // (1) verplichte output-velden aanwezig
+    var veldenOk = true;
+    REQ.forEach(function (k) { if (wo[k] == null) veldenOk = false; });
+    assert_(ctx, 'arch ' + rec.id + ' velden', true, veldenOk);
+    // (2) per blok: 0<pctLo≤pctHi≤150, minuten>0, zone consistent met pctZoneBucket_
+    var sum = 0, blokOk = true, zoneOk = true;
+    wo.blokken.forEach(function (b) {
+      sum += b.minuten;
+      if (!(b.pctLo > 0 && b.pctLo <= b.pctHi && b.pctHi <= 150 && b.minuten > 0)) blokOk = false;
+      if (b.zone !== pctZoneBucket_(Math.round((b.pctLo + b.pctHi) / 2))) zoneOk = false;
+    });
+    assert_(ctx, 'arch ' + rec.id + ' blok-bounds', true, blokOk);
+    assert_(ctx, 'arch ' + rec.id + ' blok-zone', true, zoneOk);
+    // (3) Σblok==totaalMin én ≈doelMin (binnen fill-stap)
+    assertClose_(ctx, 'arch ' + rec.id + ' som==totaal', wo.totaalMin, sum, 0.01);
+    assertClose_(ctx, 'arch ' + rec.id + ' ~doelMin', dm, wo.totaalMin, 1.5);
+    // (4)+(5) elke structuur-rij push-parsebaar + row[2] reproduceert watts(pctLo)-watts(pctHi)
+    var pushOk = true, wattOk = true;
+    wo.structuur.forEach(function (row) {
+      if (dslBlockFromRow_(row, 275) == null) pushOk = false;
+      var r = dslPowerRange_(row[2], 275);
+      if (!r || row[2] !== (watts(275, r.lo) + '-' + watts(275, r.hi) + 'W')) wattOk = false;
+    });
+    assert_(ctx, 'arch ' + rec.id + ' push-parse', true, pushOk);
+    assert_(ctx, 'arch ' + rec.id + ' watt-roundtrip', true, wattOk);
+    // (6) tss == tssFromZoneMinutes_(intent)
+    assert_(ctx, 'arch ' + rec.id + ' tss', tssFromZoneMinutes_(wo.intent), wo.tss);
+  });
+  // (7) richting: mesoFactor 1.1 > 1.0 → hogere werk-pct (drempel-fixture)
+  function workPct(wo) { var m = 0; wo.blokken.forEach(function (b) { if (b.pctLo > m) m = b.pctLo; }); return m; }
+  var b10 = expandArchetype_(fx[1], { ftp: 275, doelMin: 80, mesoFactor: 1.0, faseOffset: 0 });
+  var b11 = expandArchetype_(fx[1], { ftp: 275, doelMin: 80, mesoFactor: 1.1, faseOffset: 0 });
+  assert_(ctx, 'arch meso-richting', true, workPct(b11) > workPct(b10));
 }
 
 function testCoach_(ctx) {
