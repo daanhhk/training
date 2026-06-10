@@ -41,6 +41,7 @@ function runSelfTest() {
   testInplug_(ctx);
   testKeyIntensityInplug_(ctx);
   testGoalInplugWeekSim_(ctx);
+  testAllocateQualityWeek_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -649,6 +650,59 @@ function testGoalInplugWeekSim_(ctx) {
   });
   assert_(ctx, 'sim ftp drempel/sweetspot-zwaar', true,
     ((ftpIntents.drempel || 0) + (ftpIntents.sweetspot || 0)) > (ftpIntents.vo2 || 0));
+}
+
+// ── Fase 1b C3 — pure week-allocator (allocateQualityWeek_) ──
+function testAllocateQualityWeek_(ctx) {
+  function dW(idx, type, minuten, o) {
+    o = o || {};
+    return { dagIdx: idx, dag: 'd' + idx, train: o.train !== false, datum: new Date(2026, 5, 8 + idx),
+             minuten: minuten, type: type, gedaan: !!o.gedaan, voorgesteldType: o.vt || '' };
+  }
+  function week() {
+    return [dW(0, 'vrij', 60), dW(1, 'pendel', 0), dW(2, 'vrij', 75), dW(3, 'recovery', 45),
+            dW(4, 'vrij', 90), dW(5, 'weekend', 180), dW(6, 'weekend', 120)];
+  }
+  var klim = PROFILES.klim, ftp = PROFILES.ftp;
+  var dekFresh = { low: false, high: false, anaerobic: false };
+  var today = new Date(2026, 5, 8);
+  var SK = { doel: 'Beklimmingen', pendelDuurMin: 80 }, SF = { doel: 'FTP', pendelDuurMin: 80 };
+  function qCount(p) { var n = 0; Object.keys(p).forEach(function (k) { if (p[k].role === 'quality') n++; }); return n; }
+  function hardIdxs(p) { var a = []; Object.keys(p).forEach(function (k) { if (p[k].role === 'quality' || p[k].role === 'longride_efforts') a.push(Number(k)); }); return a.sort(function (x, y) { return x - y; }); }
+  function noAdjacent(idxs) { for (var i = 1; i < idxs.length; i++) if (idxs[i] - idxs[i - 1] < 2) return false; return true; }
+
+  // A — klim Build: longride_efforts + 2 quality, recovery excluded, pendel→endurance, gespreid.
+  var pa = allocateQualityWeek_(week(), klim, 'Build', dekFresh, [], null, null, SK, today, false, null);
+  assert_(ctx, 'alloc klim Build longride_efforts', 'longride_efforts', pa[5] && pa[5].role);
+  assert_(ctx, 'alloc klim Build combo-type', 'combo_long_with_efforts', pa[5] && pa[5].type);
+  assert_(ctx, 'alloc klim Build 2 quality', 2, qCount(pa));
+  assert_(ctx, 'alloc klim Build recovery-excl', true, pa[3] === undefined);
+  assert_(ctx, 'alloc klim Build pendel endurance', 'pendel_z2', pa[1] && pa[1].type);
+  assert_(ctx, 'alloc klim Build no-adjacent-hard', true, noAdjacent(hardIdxs(pa)));
+  assert_(ctx, 'alloc klim Build weekend-pair vermeden', 'endurance', pa[6] && pa[6].role);
+  var qOk = true;
+  Object.keys(pa).forEach(function (k) {
+    if (pa[k].role === 'quality') { var t = pa[k].type; if (!(t === 'threshold' || t === 'sweet_spot' || t === 'vo2max') || !pa[k].archetypeId) qOk = false; }
+  });
+  assert_(ctx, 'alloc klim Build quality types+arch', true, qOk);
+
+  // B — klim Base: longride/long_z2 + 2 sweet_spot quality (geen archetype); pendel KAN quality.
+  var pb = allocateQualityWeek_(week(), klim, 'Base', dekFresh, [], null, null, SK, today, false, null);
+  assert_(ctx, 'alloc Base longride role', 'longride', pb[5] && pb[5].role);
+  assert_(ctx, 'alloc Base longride long_z2', 'long_z2', pb[5] && pb[5].type);
+  assert_(ctx, 'alloc Base 2 quality', 2, qCount(pb));
+  var ssOk = true; Object.keys(pb).forEach(function (k) { if (pb[k].role === 'quality' && pb[k].type !== 'sweet_spot') ssOk = false; });
+  assert_(ctx, 'alloc Base quality=sweet_spot', true, ssOk);
+  assert_(ctx, 'alloc Base pendel kan quality', 'quality', pb[1] && pb[1].role);
+
+  // C — Recovery (geen quota-entry) → leeg plan.
+  var pc = allocateQualityWeek_(week(), klim, 'Recovery', dekFresh, [], null, null, SK, today, false, null);
+  assert_(ctx, 'alloc Recovery leeg', 0, Object.keys(pc).length);
+
+  // D — ftp (weekendBlok=false): nooit aaneengesloten harde dagen; quota 3.
+  var pd = allocateQualityWeek_(week(), ftp, 'Build', dekFresh, [], null, null, SF, today, false, null);
+  assert_(ctx, 'alloc ftp no-adjacent-hard', true, noAdjacent(hardIdxs(pd)));
+  assert_(ctx, 'alloc ftp 3 quality', 3, qCount(pd));
 }
 
 function testCoach_(ctx) {

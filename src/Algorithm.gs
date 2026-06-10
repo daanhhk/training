@@ -705,6 +705,173 @@ function redenZoneLabel_(b) {
  * @param wellness  resultaat van getWellnessSignal(); demote/recovery
  *                  signal overschrijft de assignment cascade.
  */
+// ════════════════════════════════════════════════════════════════
+// FASE 1b — week-brede kwaliteitsplaatsing (PUUR; getest). DORMANT tot de C4-wiring.
+// ════════════════════════════════════════════════════════════════
+
+// Bevat de workout 'high' of 'anaerobic'? (= kwaliteit/hard).
+function isHardType_(type, doel) {
+  var z = workoutZones(type, doel);
+  return z.indexOf('high') >= 0 || z.indexOf('anaerobic') >= 0;
+}
+// Hardste load-bucket van een type: anaerobic > high > low; null als leeg.
+function primaryBucketOfType_(type, doel) {
+  var z = workoutZones(type, doel);
+  if (z.indexOf('anaerobic') >= 0) return 'anaerobic';
+  if (z.indexOf('high') >= 0) return 'high';
+  if (z.indexOf('low') >= 0) return 'low';
+  return null;
+}
+
+/**
+ * Week-brede kwaliteitsallocatie (PUUR — geen Sheet/DocProp). Returnt
+ * { [dagIdx]: {role, type, archetypeId} } voor elke future-eligible dag.
+ * role ∈ 'quality'|'longride'|'longride_efforts'|'endurance'. Plaatst eerst de
+ * lange rit, dan debt-pre-claim, dan resterende quality-slots gespreid +
+ * coverage-gebiast (forward), en vult de rest met endurance.
+ */
+function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recentHardDate, debt, settings, today, taperActief, taperCtx) {
+  var plan = {};
+  if (!profiel) return plan;
+  var doel = settings.doel;
+  var quota = (profiel.kwaliteitPerWeek && profiel.kwaliteitPerWeek[macroFase]) || 0;
+  if (quota <= 0) return plan;
+
+  var todayT = stripTime_(today).getTime();
+  function dayTapers_(d) {
+    if (!taperActief || !taperCtx || !taperCtx.datum || !d.datum) return false;
+    var dt = Math.round((stripTime_(taperCtx.datum).getTime() - stripTime_(d.datum).getTime()) / 86400000);
+    return dt >= 0 && dt <= taperCtx.venster;
+  }
+  function eligible_(d) {
+    return d.train === true && (d.type === 'vrij' || d.type === 'weekend' || d.type === 'pendel') &&
+      !d.gedaan && d.datum && stripTime_(d.datum).getTime() >= todayT && !dayTapers_(d);
+  }
+
+  // 0. quota − reeds-voltooide harde dagen (NB: bij wiring met tePlannen = 0; zie HANDOFF).
+  var doneHard = 0;
+  days.forEach(function (d) { if (d.gedaan && isHardType_(d.voorgesteldType, doel)) doneHard++; });
+  var remaining = Math.max(0, quota - doneHard);
+  var cov = { low: !!dekking.low, high: !!dekking.high, anaerobic: !!dekking.anaerobic };
+  var rec = (recency || []).slice();
+  var elig = days.filter(eligible_);
+  var planned = {};
+
+  var spreiding = profiel.spreiding || {};
+  var minGap = (spreiding.midweekMinGap != null) ? spreiding.midweekMinGap : 1;
+  var weekendBlok = !!spreiding.weekendBlok;
+
+  function dayByIdx_(idx) { for (var i = 0; i < days.length; i++) if (days[i].dagIdx === idx) return days[i]; return null; }
+  function hardAnchors_() {
+    var a = [];
+    if (recentHardDate) a.push({ t: stripTime_(recentHardDate).getTime(), weekend: false });
+    Object.keys(plan).forEach(function (k) {
+      var p = plan[k];
+      if (p.role === 'longride_efforts' || p.role === 'quality') {
+        var dd = dayByIdx_(Number(k));
+        if (dd && dd.datum) a.push({ t: stripTime_(dd.datum).getTime(), weekend: dd.type === 'weekend' });
+      }
+    });
+    return a;
+  }
+  function gapDays_(d, a) { return Math.abs(Math.round((stripTime_(d.datum).getTime() - a.t) / 86400000)); }
+  function gapOK_(d, anchors) {
+    for (var i = 0; i < anchors.length; i++) {
+      var g = gapDays_(d, anchors[i]);
+      if (g < (minGap + 1)) {
+        var adjWeekend = (g === 1) && (d.type === 'weekend') && anchors[i].weekend && weekendBlok;
+        if (!adjWeekend) return false;
+      }
+    }
+    return true;
+  }
+  function formsWeekendPair_(d, anchors) {
+    if (d.type !== 'weekend') return false;
+    for (var i = 0; i < anchors.length; i++) { if (anchors[i].weekend && gapDays_(d, anchors[i]) === 1) return true; }
+    return false;
+  }
+  function minGapTo_(d, anchors) { var m = 9999; for (var i = 0; i < anchors.length; i++) { var g = gapDays_(d, anchors[i]); if (g < m) m = g; } return m; }
+  // Spreiding-prioriteit: (1) geen weekend-paar vormen, (2) max gap, (3) pendel-voorkeur, (4) laagste dagIdx.
+  function pickBestSpread_(cands, anchors) {
+    var best = null, bk = null;
+    cands.forEach(function (d) {
+      var k = { pair: formsWeekendPair_(d, anchors) ? 1 : 0, gap: minGapTo_(d, anchors), pendel: (d.type === 'pendel') ? 0 : 1, idx: d.dagIdx };
+      if (!bk) { best = d; bk = k; return; }
+      if (k.pair !== bk.pair) { if (k.pair < bk.pair) { best = d; bk = k; } return; }
+      if (k.gap !== bk.gap) { if (k.gap > bk.gap) { best = d; bk = k; } return; }
+      if (k.pendel !== bk.pendel) { if (k.pendel < bk.pendel) { best = d; bk = k; } return; }
+      if (k.idx < bk.idx) { best = d; bk = k; }
+    });
+    return best;
+  }
+
+  // 1. lange rit — langste eligible niet-pendel dag (tie: hoogste dagIdx).
+  if ((profiel.langeRitPerWeek || 0) >= 1) {
+    var lr = null;
+    elig.forEach(function (d) {
+      if (d.type === 'pendel') return;
+      if (!lr || d.minuten > lr.minuten || (d.minuten === lr.minuten && d.dagIdx > lr.dagIdx)) lr = d;
+    });
+    if (lr) {
+      var efforts = !!spreiding.effortsInLangeRit && (macroFase === 'Build' || macroFase === 'Peak');
+      if (efforts) {
+        plan[lr.dagIdx] = { role: 'longride_efforts', type: 'combo_long_with_efforts', archetypeId: null };
+        cov.low = true; cov.high = true; remaining = Math.max(0, remaining - 1);
+      } else {
+        plan[lr.dagIdx] = { role: 'longride', type: 'long_z2', archetypeId: null };
+        cov.low = true;
+      }
+      planned[lr.dagIdx] = true;
+    }
+  }
+
+  // 2. debt pre-claim (één slot met de debt-type).
+  if (remaining > 0 && debt) {
+    var dp = debtPreferredType_(debt, doel, macroFase);
+    if (dp && dp !== 'long_z2' && dp !== 'recovery') {
+      var anc2 = hardAnchors_();
+      var pick = pickBestSpread_(elig.filter(function (d) { return !planned[d.dagIdx] && gapOK_(d, anc2); }), anc2);
+      if (pick) {
+        plan[pick.dagIdx] = { role: 'quality', type: dp, archetypeId: null };
+        var b = primaryBucketOfType_(dp, doel); if (b) cov[b] = true;
+        planned[pick.dagIdx] = true; remaining--;
+      }
+    }
+  }
+
+  // 3. resterende quality-slots.
+  var guard = 0;
+  while (remaining > 0 && guard++ < 20) {
+    var anchors = hardAnchors_();
+    var cands = elig.filter(function (d) { return !planned[d.dagIdx] && gapOK_(d, anchors); });
+    if (!cands.length) break;
+    var sel = pickBestSpread_(cands, anchors);
+    if (!sel) break;
+    if (macroFase === 'Base') {
+      plan[sel.dagIdx] = { role: 'quality', type: 'sweet_spot', archetypeId: null };
+      cov.high = true; planned[sel.dagIdx] = true; remaining--;
+    } else {
+      var bt = (sel.type === 'pendel') ? (settings.pendelDuurMin || 80) : sel.minuten;
+      var gw = goalWorkout_(profiel, macroFase, bt, rec, cov);
+      if (gw) {
+        plan[sel.dagIdx] = { role: 'quality', type: gw.type, archetypeId: gw.archetypeId };
+        rec.push({ intent: intentFromType_(gw.type), archetypeId: gw.archetypeId });
+        var b2 = primaryBucketOfType_(gw.type, doel); if (b2) cov[b2] = true;
+        planned[sel.dagIdx] = true; remaining--;
+      } else {
+        planned[sel.dagIdx] = 'skip';   // geen archetype past → uit de pool, géén quality
+      }
+    }
+  }
+
+  // 4. endurance-fill — elke resterende eligible dag.
+  elig.forEach(function (d) {
+    if (plan[d.dagIdx]) return;
+    plan[d.dagIdx] = { role: 'endurance', type: (d.type === 'pendel') ? 'pendel_z2' : 'long_z2', archetypeId: null };
+  });
+  return plan;
+}
+
 function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate, taperCtx) {
   var doel = settings.doel;
   // Taper is een per-dag-overlay (Deel 2): taperCtx = { datum, venster, isTrip }
