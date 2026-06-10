@@ -45,6 +45,8 @@ function runSelfTest() {
   testAllocateQualityWeek_(ctx);
   testGatherWeekplanEntries_(ctx);
   testVolumeModulatie_(ctx);
+  testCovGateBase_(ctx);
+  testProfielenVo2maxConditie_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -497,7 +499,9 @@ function testGoalWorkout_(ctx) {
   // profiel-kiezer
   assert_(ctx, 'goalWO doel FTP', PROFILES.ftp, profileForDoel_('FTP'));
   assert_(ctx, 'goalWO doel Beklimmingen', PROFILES.klim, profileForDoel_('Beklimmingen'));
-  assert_(ctx, 'goalWO doel VO2max default-klim', PROFILES.klim, profileForDoel_('VO2max'));
+  assert_(ctx, 'goalWO doel VO2max', PROFILES.vo2max, profileForDoel_('VO2max'));
+  assert_(ctx, 'goalWO doel Conditie', PROFILES.conditie, profileForDoel_('Conditie'));
+  assert_(ctx, 'goalWO doel onbekend->klim', PROFILES.klim, profileForDoel_('xyz'));
   // effectTag->engine-type zit in ALLE bekende koppel-maps (cruciaal voor de 2b.2-inplug)
   GOAL_KWALITEIT_INTENTS_.forEach(function (it) {
     var t = COACH_INTENT_ENGINE_TYPE_[it];
@@ -630,6 +634,45 @@ function testVolumeModulatie_(ctx) {
   assert_(ctx, 'vol mod Build=0', 0, volumeModulatie(20, 'Build', klim).vo2);
   assert_(ctx, 'vol mod NaN=0', 0, volumeModulatie(undefined, 'Base', klim).vo2);
   assert_(ctx, 'vol mod geen-response=0', 0, volumeModulatie(20, 'Base', { id: 'x' }).vo2);
+}
+
+// ── Pass 1b — coverage-boost volume-gate in Base (vo2 niet geïnjecteerd ≤ U0) ──
+function testCovGateBase_(ctx) {
+  var klim = PROFILES.klim, ftp = PROFILES.ftp;
+  var gap = { low: true, high: true, anaerobic: false };   // alleen 'n anaerobic-gat
+  function pick(p, fase, V) { return goalPickIntent_(p, fase, null, 75, gap, V); }
+  // Base ≤ U0: vo2 krijgt GEEN coverage-boost → niet gekozen (#1 leidt).
+  assert_(ctx, 'covgate klim Base V6 !vo2', true, pick(klim, 'Base', 6) !== 'vo2');
+  assert_(ctx, 'covgate ftp Base V6 !vo2', true, pick(ftp, 'Base', 6) !== 'vo2');
+  // Base hoog volume: ramp(cap)+boost verslaat #1 → vo2 gekozen (boost actief boven U0).
+  assert_(ctx, 'covgate klim Base V15 vo2', 'vo2', pick(klim, 'Base', 15));
+  assert_(ctx, 'covgate ftp Base V20 vo2', 'vo2', pick(ftp, 'Base', 20));
+  // Build: gate geldt NIET → coverage injecteert vo2 (anaerobic-gat) ongeacht V (volume-onafhankelijk).
+  assert_(ctx, 'covgate Build niet-gated vo2', 'vo2', pick(klim, 'Build', 6));
+  assert_(ctx, 'covgate Build V-onafhankelijk', pick(klim, 'Build', 6), pick(klim, 'Build', 20));
+}
+
+// ── Pass 2-track — eigen PROFILES vo2max + conditie (ordering + neutraal + archetype-resolutie) ──
+function testProfielenVo2maxConditie_(ctx) {
+  var vo2 = PROFILES.vo2max, cond = PROFILES.conditie;
+  // vo2max Base: drempel 0.40 > sweetspot 0.35 > vo2 0.30 (vo2 3e); @hoog V vo2 #2 (< #1 drempel).
+  var v6 = goalEffWeights_(vo2, 'Base', 6);
+  assert_(ctx, 'prof vo2max Base V6 vo2 3rd', true, v6.vo2 < v6.sweetspot && v6.sweetspot < v6.drempel);
+  var v13 = goalEffWeights_(vo2, 'Base', 13);
+  assert_(ctx, 'prof vo2max Base V13 vo2 enters', true, v13.sweetspot < v13.vo2 && v13.vo2 < v13.drempel);
+  // conditie Base: sweetspot 0.55 > drempel 0.40 > vo2 0.10 (sweetspot-led); @hoog V vo2 #2 (< #1 sweetspot).
+  var c6 = goalEffWeights_(cond, 'Base', 6);
+  assert_(ctx, 'prof conditie Base V6 vo2 3rd', true, c6.vo2 < c6.drempel && c6.drempel < c6.sweetspot);
+  var c20 = goalEffWeights_(cond, 'Base', 20);
+  assert_(ctx, 'prof conditie Base V20 vo2 enters', true, c20.drempel < c20.vo2 && c20.vo2 < c20.sweetspot);
+  // Build volume-neutraal (delta 0) voor beide.
+  function neutral(p, fase) { var lo = goalEffWeights_(p, fase, 6), hi = goalEffWeights_(p, fase, 20); return GOAL_KWALITEIT_INTENTS_.every(function (k) { return lo[k] === hi[k]; }); }
+  assert_(ctx, 'prof vo2max Build neutraal', true, neutral(vo2, 'Build'));
+  assert_(ctx, 'prof conditie Build neutraal', true, neutral(cond, 'Build'));
+  // Archetype-resolutie smoke: goalWorkout_ levert een geldig archetype per profiel op haalbare duur.
+  function archOk(p) { var g = goalWorkout_(p, 'Build', 75, []); return !!(g && g.archetypeId && ARCHETYPES.filter(function (a) { return a.id === g.archetypeId; }).length > 0); }
+  assert_(ctx, 'prof vo2max archetype-resolutie', true, archOk(vo2));
+  assert_(ctx, 'prof conditie archetype-resolutie', true, archOk(cond));
 }
 
 // ── Fase 1 deel 2b.2 commit 1 — plumbing: buildWorkout-routing + recency-extractor ──

@@ -504,6 +504,22 @@ var PROFILES = {
           spreiding: { midweekMinGap: 1, weekendBlok: false, effortsInLangeRit: false },
           langeRitPerWeek: 1,
           // Pass 1: ftp Base vo2 (basis 0.10) ligt ver onder #2 sweetspot 0.45 → grotere cap (< #1 drempel 0.50).
+          volumeResponse: { vo2Slope: 0.04, vo2Cap: 0.38 } },
+  // Eigen profielen voor VO2max + Conditie (waren default klim). Vorm = klim/ftp. projectieKey
+  // WEGGELATEN — net als ftp (GOAL_PROFILES_ is girona-only; niet-klim-profielen verwijzen er niet naar).
+  vo2max: { id: 'vo2max', soort: 'capaciteit', intentGewichten: { drempel: 0.35, sweetspot: 0.25, vo2: 0.40 },
+          faseModulatie: GOAL_FASE_MOD_,
+          kwaliteitPerWeek: { Base: 2, Build: 3, Peak: 2 },
+          spreiding: { midweekMinGap: 1, weekendBlok: false, effortsInLangeRit: false },
+          langeRitPerWeek: 1,
+          // Base (gedeelde mod): drempel 0.40 > sweetspot 0.35 > vo2 0.30 → vo2 3e; cap < #1 drempel 0.40.
+          volumeResponse: { vo2Slope: 0.02, vo2Cap: 0.08 } },
+  conditie: { id: 'conditie', soort: 'capaciteit', intentGewichten: { sweetspot: 0.45, drempel: 0.35, vo2: 0.20 },
+          faseModulatie: GOAL_FASE_MOD_,
+          kwaliteitPerWeek: { Base: 2, Build: 3, Peak: 2 },
+          spreiding: { midweekMinGap: 1, weekendBlok: false, effortsInLangeRit: false },
+          langeRitPerWeek: 1,
+          // Base: sweetspot 0.55 > drempel 0.40 > vo2 0.10 (sweetspot-led/endurance); cap < #1 sweetspot 0.55.
           volumeResponse: { vo2Slope: 0.04, vo2Cap: 0.38 } }
 };
 
@@ -511,7 +527,9 @@ var PROFILES = {
 function profileForDoel_(doel) {
   if (doel === 'FTP') return PROFILES.ftp;
   if (doel === 'Beklimmingen') return PROFILES.klim;
-  return PROFILES.klim;
+  if (doel === 'VO2max') return PROFILES.vo2max;
+  if (doel === 'Conditie') return PROFILES.conditie;
+  return PROFILES.klim;   // onbekend → klim-fallback
 }
 
 // Effectieve gewichten = intentGewichten + fase-shift (per kwaliteit-intent).
@@ -555,9 +573,12 @@ function goalPickIntent_(profiel, fase, vermijdIntent, beschikbareTijd, dekking,
     return beschikbareTijd == null || intentHaalbaar_(i, beschikbareTijd);
   });
   if (!intents.length) intents = GOAL_KWALITEIT_INTENTS_.slice();
+  // Pass 1b: in Base ONDER 't volume-plafond krijgt vo2 GEEN coverage-boost — een anaerobic-gat
+  // wordt bij laag volume NIET via quality-injectie gedekt (volume stuurt vo2, niet de dekking).
+  var vo2GateBase = (fase === 'Base' && isFinite(Number(V)) && Number(V) <= BASE_POLAR_VOL_U0);
   function score(i) {
     var s = (w[i] || 0);
-    if (dekking && INTENT_PRIMARY_BUCKET_[i] && !dekking[INTENT_PRIMARY_BUCKET_[i]]) s += COVERAGE_BOOST_;
+    if (dekking && INTENT_PRIMARY_BUCKET_[i] && !dekking[INTENT_PRIMARY_BUCKET_[i]] && !(i === 'vo2' && vo2GateBase)) s += COVERAGE_BOOST_;
     return s;
   }
   intents.sort(function (a, b) {
