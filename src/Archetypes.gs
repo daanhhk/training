@@ -294,3 +294,102 @@ var ARCHETYPES = [
     naam: 'VO2 piramide 1-2-3-2-1', focus: 'vo2 capacity',
     eindopmerking: 'Oplopende VO2-treden — variatie in de prikkel.' }
 ];
+
+/**
+ * FASE 1 deel 2b.1 — PROFIEL-laag + goalWorkout_-selector. PURE additie, GEEN inplug
+ * (keyIntensity/climbTypeWorkout_/assignWorkouts/buildWorkout + de koppel-maps onaangeroerd).
+ *
+ * Profiel-vorm: { id, soort:'capaciteit'|'event', intentGewichten:{drempel,sweetspot,vo2},
+ *   faseModulatie?:{Base/Build/Peak: shift-per-intent}, archetypeVoorkeuren?:{<id>:boost},
+ *   projectieKey? } (link naar GOAL_PROFILES_ in WebApp.gs — NB: niet Doel.gs).
+ * goalWorkout_ KIEST een archetype (geen expansie, zet GÉÉN d.voorgesteldType — dat is 2b.2).
+ */
+
+// Startgewichten over de KWALITEIT-intents (duur/herstel = andere takken). Kalibreerbaar.
+var GOAL_INTENT_WEIGHTS_KLIM_ = { drempel: 0.40, vo2: 0.35, sweetspot: 0.25 };
+var GOAL_INTENT_WEIGHTS_FTP_  = { drempel: 0.45, sweetspot: 0.35, vo2: 0.20 };
+// Lichte fase-shift (additief; "× faseModulatie" = gecombineerd via shift, per de schema-`{...shift}`).
+var GOAL_FASE_MOD_ = {
+  Base:  { sweetspot: 0.10, drempel: 0.05, vo2: -0.10 },   // base: sweetspot/drempel zwaarder
+  Build: {},                                               // build: gebalanceerd
+  Peak:  { vo2: 0.15, drempel: -0.05, sweetspot: -0.10 }    // peak: vo2 zwaarder
+};
+var GOAL_KWALITEIT_INTENTS_ = ['drempel', 'sweetspot', 'vo2'];   // de kwaliteit-takken (klim-relevant)
+
+// PROFILES — naast GOAL_PROFILES_ (projectieKey verwijst ernaar). Alleen klim + ftp (2b.1).
+var PROFILES = {
+  klim: { id: 'klim', soort: 'event', intentGewichten: GOAL_INTENT_WEIGHTS_KLIM_,
+          faseModulatie: GOAL_FASE_MOD_,
+          archetypeVoorkeuren: { vo2_hill_repeats: 0.2, threshold_long: 0.1 },   // klim-specifieke boosts
+          projectieKey: 'girona' },
+  ftp:  { id: 'ftp', soort: 'capaciteit', intentGewichten: GOAL_INTENT_WEIGHTS_FTP_,
+          faseModulatie: GOAL_FASE_MOD_ }
+};
+
+// settings.doel (DOEL_OPTIONS, Settings.gs) → profiel. Default klim (VO2max/Conditie → nog geen eigen profiel).
+function profileForDoel_(doel) {
+  if (doel === 'FTP') return PROFILES.ftp;
+  if (doel === 'Beklimmingen') return PROFILES.klim;
+  return PROFILES.klim;
+}
+
+// Effectieve gewichten = intentGewichten + fase-shift (per kwaliteit-intent).
+function goalEffWeights_(profiel, fase) {
+  var base = profiel.intentGewichten || {};
+  var mod = (profiel.faseModulatie && profiel.faseModulatie[fase]) ? profiel.faseModulatie[fase] : {};
+  var w = {};
+  GOAL_KWALITEIT_INTENTS_.forEach(function (k) { w[k] = (base[k] || 0) + (mod[k] || 0); });
+  return w;
+}
+
+// Deterministische gewogen keuze (geen Math.random): hoogste gewicht eerst (det. tie-break op
+// vaste intent-volgorde), recency vermijdt de intent van de vorige kwaliteitsdag indien mogelijk.
+function goalPickIntent_(profiel, fase, vermijdIntent) {
+  var w = goalEffWeights_(profiel, fase);
+  var order = GOAL_KWALITEIT_INTENTS_.slice().sort(function (a, b) {
+    if (w[b] !== w[a]) return w[b] - w[a];
+    return GOAL_KWALITEIT_INTENTS_.indexOf(a) - GOAL_KWALITEIT_INTENTS_.indexOf(b);
+  });
+  for (var i = 0; i < order.length; i++) { if (order[i] !== vermijdIntent) return order[i]; }
+  return order[0];
+}
+
+/**
+ * Kiest (NIET expandeert) een archetype voor een kwaliteitsdag. DETERMINISTISCH.
+ * @param profiel        PROFILES-entry
+ * @param fase           'Base'|'Build'|'Peak' (macroFase)
+ * @param beschikbareTijd minuten
+ * @param recency        array [{intent, archetypeId}, ...] (recentste laatst); [] = geen historie
+ * @return { type, archetypeId } of null als geen archetype past
+ */
+function goalWorkout_(profiel, fase, beschikbareTijd, recency) {
+  if (!profiel) return null;
+  recency = recency || [];
+  var last = recency.length ? recency[recency.length - 1] : null;
+  var lastIntent = last ? last.intent : null;
+  var lastId = last ? last.archetypeId : null;
+
+  // (1) intent — gewogen + fase-gemoduleerd + recency-mijdend.
+  var intent = goalPickIntent_(profiel, fase, lastIntent);
+  if (!intent) return null;
+
+  // (2) filter: effectTag == intent ÉN duurRange ⊇ beschikbareTijd.
+  var kandidaten = ARCHETYPES.filter(function (a) {
+    return a.effectTags.indexOf(intent) >= 0 &&
+      beschikbareTijd >= a.duurRange[0] && beschikbareTijd <= a.duurRange[1];
+  });
+  if (!kandidaten.length) return null;
+
+  // (3) archetype — vermijd 't laatst-gebruikte id (zwaar penaliseren), boost via archetypeVoorkeuren,
+  //     deterministische tie-break (duurRange.min, dan id).
+  var voork = profiel.archetypeVoorkeuren || {};
+  function score(a) { return (voork[a.id] || 0) - (a.id === lastId ? 100 : 0); }
+  kandidaten = kandidaten.slice().sort(function (a, b) {
+    if (score(b) !== score(a)) return score(b) - score(a);
+    if (a.duurRange[0] !== b.duurRange[0]) return a.duurRange[0] - b.duurRange[0];
+    return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+  });
+
+  // (4) effectTag → engine-type (HERGEBRUIK COACH_INTENT_ENGINE_TYPE_; type ∈ alle koppel-maps).
+  return { type: COACH_INTENT_ENGINE_TYPE_[intent], archetypeId: kandidaten[0].id };
+}

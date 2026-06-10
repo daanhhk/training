@@ -37,6 +37,7 @@ function runSelfTest() {
   testGoalProjection_(ctx);
   testArchetype_(ctx);
   testArchetypeLib_(ctx);
+  testGoalWorkout_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -454,6 +455,49 @@ function testArchetypeLib_(ctx) {
       }
     });
   });
+}
+
+// ── Fase 1 deel 2b.1 — profiel-laag + goalWorkout_-selector (deterministisch) ──
+function testGoalWorkout_(ctx) {
+  var klim = profileForDoel_('Beklimmingen'), ftp = profileForDoel_('FTP');
+  // determinisme: zelfde input → zelfde keuze
+  var g1 = goalWorkout_(klim, 'Build', 75, []);
+  var g2 = goalWorkout_(klim, 'Build', 75, []);
+  assert_(ctx, 'goalWO det type', g1.type, g2.type);
+  assert_(ctx, 'goalWO det id', g1.archetypeId, g2.archetypeId);
+  // intent-keuze respecteert gewichten over de fasen
+  assert_(ctx, 'goalWO klim Build->drempel', 'drempel', goalPickIntent_(klim, 'Build', null));
+  assert_(ctx, 'goalWO klim Peak->vo2', 'vo2', goalPickIntent_(klim, 'Peak', null));
+  assert_(ctx, 'goalWO ftp Build->drempel', 'drempel', goalPickIntent_(ftp, 'Build', null));
+  // filter: bij 75 min drempel past ALLEEN threshold_overunder (threshold_long min 82)
+  assert_(ctx, 'goalWO filter id', 'threshold_overunder', g1.archetypeId);
+  assert_(ctx, 'goalWO filter type', 'threshold', g1.type);
+  var rec = null; ARCHETYPES.forEach(function (a) { if (a.id === g1.archetypeId) rec = a; });
+  assert_(ctx, 'goalWO match intent+range', true,
+    rec.effectTags.indexOf('drempel') >= 0 && 75 >= rec.duurRange[0] && 75 <= rec.duurRange[1]);
+  // recency: vorige intent drempel → kiest een andere intent (ander type)
+  var gr = goalWorkout_(klim, 'Build', 75, [{ intent: 'drempel', archetypeId: 'threshold_overunder' }]);
+  assert_(ctx, 'goalWO recency intent-avoid', true, gr.type !== 'threshold');
+  // recency: zelfde intent, ander archetype dan 't laatst-gebruikte id
+  var ga = goalWorkout_(klim, 'Peak', 75, [{ intent: 'sweetspot', archetypeId: 'vo2_hill_repeats' }]);
+  assert_(ctx, 'goalWO recency id-avoid', true, ga.type === 'vo2max' && ga.archetypeId !== 'vo2_hill_repeats');
+  // profiel-kiezer
+  assert_(ctx, 'goalWO doel FTP', PROFILES.ftp, profileForDoel_('FTP'));
+  assert_(ctx, 'goalWO doel Beklimmingen', PROFILES.klim, profileForDoel_('Beklimmingen'));
+  assert_(ctx, 'goalWO doel VO2max default-klim', PROFILES.klim, profileForDoel_('VO2max'));
+  // effectTag->engine-type zit in ALLE bekende koppel-maps (cruciaal voor de 2b.2-inplug)
+  GOAL_KWALITEIT_INTENTS_.forEach(function (it) {
+    var t = COACH_INTENT_ENGINE_TYPE_[it];
+    assert_(ctx, 'goalWO type-in-maps ' + it, true,
+      COACH_TYPE_INTENT_[t] != null && DEMOTE_MAP[t] != null && workoutZones(t, 'FTP').length > 0);
+  });
+  // klim kiest UITSLUITEND klim-relevante intents (drempel/sweetspot/vo2)
+  var klimOnly = true;
+  ['Base', 'Build', 'Peak'].forEach(function (f) {
+    if (GOAL_KWALITEIT_INTENTS_.indexOf(goalPickIntent_(klim, f, null)) < 0) klimOnly = false;
+    if (GOAL_KWALITEIT_INTENTS_.indexOf(goalPickIntent_(klim, f, 'drempel')) < 0) klimOnly = false;
+  });
+  assert_(ctx, 'goalWO klim klim-only-intents', true, klimOnly);
 }
 
 function testCoach_(ctx) {
