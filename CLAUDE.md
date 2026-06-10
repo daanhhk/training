@@ -67,7 +67,7 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 commit: pusht de huidige source (`clasp push -f`) + draait de selftest remote
 (`clasp run-function runSelfTest`), parset de envelope `{ failures, passed, failed }`, en
 exit non-zero als `failed > 0` OF `passed < BASELINE`. Geen commit tenzij de gate exit 0
-geeft. BASELINE (631) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
+geeft. BASELINE (643) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
 niet; verhoog BASELINE alleen om te ratelen ná een feature die tests toevoegt. De oude
 handmatige selftest-loop (Daan draait `runSelfTest` in de editor) is VERVALLEN.
 
@@ -161,6 +161,14 @@ componenten + states), `DESIGN.md` (visuele taal), `INTERACTIONS.md`
   eerst, stalest-first bij uitputting; `archetypeVoorkeuren` = zachte bias). Cross-week-diepte
   hangt op `RECENCY_HORIZON_WEEKS` (8, Algorithm.gs); één-week-generatie zónder diepe seed →
   wekelijkse herhaling.
+- **Volume-adaptieve Base-weging (Pass 1)** (`volumeModulatie`): additieve vo2-delta op de RAUWE
+  `goalEffWeights_`-sort-scores (GEEN clamp/renorm), gelaagd boven `faseModulatie`. ALLEEN Base +
+  de vo2-key; Build/Peak / niet-eindige V / geen `volumeResponse` → 0 (byte-identiek). Per-profiel
+  `volumeResponse {vo2Slope,vo2Cap}` (op het PROFIEL, niet de gedeelde `GOAL_FASE_MOD_`) capt vo2
+  < de #1 Base-intent (blijft #2, nooit #1); ramp start op `BASE_POLAR_VOL_U0` (9 weekuren). V =
+  weekUREN (`Σ(weekDays||days).minuten/60`, in `allocateQualityWeek_`), gethreaded door
+  `goalEffWeights_`→`goalPickIntent_`→`goalWorkout_`. Base-quality loopt via `goalWorkout_` (niet
+  meer hardcoded sweet_spot). GEFASEERD: pass 2 Build/Peak, pass 3 volume-`kwaliteitPerWeek` + middle-taper.
 - **Trainingen-bibliotheek-cache** (`trainlib_v*`, `getTrainingLibraryCached_`) keyt ALLEEN op
   ftp/lthr → elke segment/structuur-SHAPE-wijziging vereist een cache-versie-bump (`v1_`→`v2_`),
   anders serveert /dev een stale shape (de selftest mist 't — die roept de verse builder).
