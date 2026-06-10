@@ -38,6 +38,7 @@ function runSelfTest() {
   testArchetype_(ctx);
   testArchetypeLib_(ctx);
   testGoalWorkout_(ctx);
+  testInplug_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -498,6 +499,37 @@ function testGoalWorkout_(ctx) {
     if (GOAL_KWALITEIT_INTENTS_.indexOf(goalPickIntent_(klim, f, 'drempel')) < 0) klimOnly = false;
   });
   assert_(ctx, 'goalWO klim klim-only-intents', true, klimOnly);
+}
+
+// ── Fase 1 deel 2b.2 commit 1 — plumbing: buildWorkout-routing + recency-extractor ──
+function testInplug_(ctx) {
+  var S = { ftp: 275, lthr: 178, doel: 'FTP' };
+  // (a) buildWorkout MET archetypeId → archetype-contract + getagd id.
+  var wa = buildWorkout('threshold', 90, S, 1, 'Build', null, 0, 'threshold_long');
+  assert_(ctx, 'inplug buildWO arch id', 'threshold_long', wa.archetypeId);
+  assert_(ctx, 'inplug buildWO arch blokken-pct', true,
+    !!(wa.blokken && wa.blokken.length && wa.blokken[0].pctLo != null && wa.blokken[0].pctHi != null));
+  assert_(ctx, 'inplug buildWO arch contract', true,
+    wa.structuur != null && wa.intent != null && typeof wa.tss === 'number' && wa.zones != null);
+  // (b) buildWorkout ZONDER archetypeId → bestaande dispatch byte-identiek (regressie).
+  var wr = buildWorkout('recovery', 45, S, 1, 'Base', null, 0);
+  assert_(ctx, 'inplug buildWO recovery focus', 'recovery', wr.focus);
+  assert_(ctx, 'inplug buildWO recovery geen-arch', true, wr.archetypeId == null);
+  assert_(ctx, 'inplug buildWO pendel_z2 focus', 'aerobic base', buildWorkout('pendel_z2', 120, S, 1, 'Base', null, 0).focus);
+  assert_(ctx, 'inplug buildWO taper focus', 'sharpness', buildWorkout('taper_openers', 30, S, 1, 'Base', null, 0).focus);
+  // onbekend archetypeId → val door naar dispatch (geen crash).
+  assert_(ctx, 'inplug buildWO onbekend-arch fallback', 'recovery', buildWorkout('recovery', 45, S, 1, 'Base', null, 0, 'bestaat_niet').focus);
+  // (c) recencyFromWeekplan_ uit mock-snapshot → kwaliteit-only, gesorteerd, refISO-filter.
+  var wp = [
+    { datum: '2026-06-01', workoutType: 'long_z2', archetypeId: null },
+    { datum: '2026-06-03', workoutType: 'threshold', archetypeId: 'threshold_long' },
+    { datum: '2026-06-05', workoutType: 'vo2max', archetypeId: 'vo2_long' }
+  ];
+  var rec = recencyFromWeekplan_(wp, '2026-06-10');
+  assert_(ctx, 'inplug recency len', 2, rec.length);
+  assert_(ctx, 'inplug recency laatste intent', 'vo2', rec[rec.length - 1].intent);
+  assert_(ctx, 'inplug recency laatste id', 'vo2_long', rec[rec.length - 1].archetypeId);
+  assert_(ctx, 'inplug recency refISO-filter', 1, recencyFromWeekplan_(wp, '2026-06-04').length);
 }
 
 function testCoach_(ctx) {

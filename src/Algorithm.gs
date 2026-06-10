@@ -174,7 +174,9 @@ function generateProposal() {
       // Asymmetrische pendel: vroege sessie(s) geforceerd Z2, laatste = engine-keuze
       // (d.voorgesteldType). Niet-pendel: altijd d.voorgesteldType (1 sessie).
       var sessieType = (isPendel && si < sessieCount - 1) ? 'pendel_z2' : d.voorgesteldType;
-      var wo = buildWorkout(sessieType, sessieMin, settings, mesoWeek, macro.macroFase, eventCtx, d.dagIdx);
+      // 2b.2: archetypeId reist mee met de ENGINE-sessie (laatste bij pendel); forced-Z2-sessies krijgen 'm niet.
+      var sessieArch = (isPendel && si < sessieCount - 1) ? null : (d.archetypeId || null);
+      var wo = buildWorkout(sessieType, sessieMin, settings, mesoWeek, macro.macroFase, eventCtx, d.dagIdx, sessieArch);
       if (wo) { sessions.push(wo); sessieTypes.push(sessieType); }
     }
     if (!sessions.length) return;
@@ -212,6 +214,7 @@ function generateProposal() {
     weekplan.push({
       datum: dISO,
       workoutType: d.voorgesteldType,
+      archetypeId: d.archetypeId || null,   // 2b.2: traceability + recency-bron (null tot commit 2)
       naam: aggNaam,
       variantId: sessions[0].variantId || null,
       zones: Object.keys(zoneSet),
@@ -2173,7 +2176,18 @@ function genericPools_() {
  * Bouwt een concrete workout. Variant-pools eerst, dan generieke/doel-
  * specifieke routing. macroFase/meso schalen intensiteit binnen de variant.
  */
-function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx, slot) {
+function buildWorkout(type, mins, settings, mesoWeek, macroFase, eventCtx, slot, archetypeId) {
+  // FASE 1 deel 2b.2 — een gekozen archetype expandeert direct (overrulet de type-dispatch).
+  // INERT tot keyIntensity een archetypeId zet (commit 2). Onbekend id → val door naar de dispatch.
+  if (archetypeId) {
+    var arec = null;
+    for (var ai = 0; ai < ARCHETYPES.length; ai++) { if (ARCHETYPES[ai].id === archetypeId) { arec = ARCHETYPES[ai]; break; } }
+    if (arec) {
+      var awo = expandArchetype_(arec, { ftp: settings.ftp, lthr: settings.lthr, doelMin: mins,
+        mesoFactor: mesoFactor(mesoWeek), faseOffset: (VARIANT_FASE_OFFSET[macroFase] || 0) });
+      if (awo) { awo.archetypeId = archetypeId; return awo; }
+    }
+  }
   var doel = settings.doel;
   var ftp = settings.ftp, lthr = settings.lthr;
 

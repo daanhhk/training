@@ -393,3 +393,25 @@ function goalWorkout_(profiel, fase, beschikbareTijd, recency) {
   // (4) effectTag → engine-type (HERGEBRUIK COACH_INTENT_ENGINE_TYPE_; type ∈ alle koppel-maps).
   return { type: COACH_INTENT_ENGINE_TYPE_[intent], archetypeId: kandidaten[0].id };
 }
+
+/**
+ * Recency-extractor (PUUR): uit een weekplan-snapshot (array van entries met datum/workoutType/
+ * archetypeId) de recent gebruikte KWALITEIT-intents/archetype-id's → recency-argument voor
+ * goalWorkout_. Filtert op kwaliteit (drempel/sweetspot/vo2 via intentFromType_), sorteert
+ * oplopend op datum (recentste laatst), optioneel < refISO. Voeding in 2b.2 uit dashWeekplanByDate_/
+ * weekplan_<maandag>.
+ */
+function recencyFromWeekplan_(weekplan, refISO) {
+  if (!weekplan || !weekplan.length) return [];
+  var rows = weekplan.filter(function (e) {
+    return e && e.datum && e.workoutType && (!refISO || e.datum < refISO);
+  }).slice().sort(function (a, b) { return a.datum < b.datum ? -1 : (a.datum > b.datum ? 1 : 0); });
+  var out = [];
+  rows.forEach(function (e) {
+    var intent = intentFromType_(e.workoutType);
+    if (GOAL_KWALITEIT_INTENTS_.indexOf(intent) >= 0) {
+      out.push({ intent: intent, archetypeId: e.archetypeId || null });
+    }
+  });
+  return out;
+}
