@@ -481,6 +481,10 @@ var GOAL_KWALITEIT_INTENTS_ = ['drempel', 'sweetspot', 'vo2'];   // de kwaliteit
 // C1 (fase 1b): intent → primaire zone-bucket (coverage-bias) + boost-grootte.
 var INTENT_PRIMARY_BUCKET_ = { drempel: 'high', sweetspot: 'high', vo2: 'anaerobic' };
 var COVERAGE_BOOST_ = 0.10;   // C1b: MODULEERT (tipt nauwe keuzes), overruleert beslissende profielgewichten NIET
+// Pass 1 — volume-adaptief: Base polariseert met weekvolume. Onder dit aantal weekUREN geen
+// vo2-prikkel; daarboven ramt vo2 (additieve term op de rauwe sort-scores; GEEN clamp/renorm).
+// Per-profiel slope/cap via `volumeResponse`; cap houdt vo2 STRIKT onder de #1 Base-intent.
+var BASE_POLAR_VOL_U0 = 9;
 
 // PROFILES — naast GOAL_PROFILES_ (projectieKey verwijst ernaar). Alleen klim + ftp (2b.1).
 var PROFILES = {
@@ -491,12 +495,16 @@ var PROFILES = {
           // C2 (fase 1b): week-plaatsing-velden (puur additief; consument = Run B).
           kwaliteitPerWeek: { Base: 2, Build: 3, Peak: 2 },
           spreiding: { midweekMinGap: 1, weekendBlok: true, effortsInLangeRit: true },
-          langeRitPerWeek: 1 },
+          langeRitPerWeek: 1,
+          // Pass 1: Base vo2 (basis 0.25) stijgt met weekvolume; cap < #1 drempel 0.45 → vo2 wordt #2 (passeert sweetspot 0.35), nooit #1.
+          volumeResponse: { vo2Slope: 0.03, vo2Cap: 0.15 } },
   ftp:  { id: 'ftp', soort: 'capaciteit', intentGewichten: GOAL_INTENT_WEIGHTS_FTP_,
           faseModulatie: GOAL_FASE_MOD_,
           kwaliteitPerWeek: { Base: 2, Build: 3, Peak: 2 },
           spreiding: { midweekMinGap: 1, weekendBlok: false, effortsInLangeRit: false },
-          langeRitPerWeek: 1 }
+          langeRitPerWeek: 1,
+          // Pass 1: ftp Base vo2 (basis 0.10) ligt ver onder #2 sweetspot 0.45 → grotere cap (< #1 drempel 0.50).
+          volumeResponse: { vo2Slope: 0.04, vo2Cap: 0.38 } }
 };
 
 // settings.doel (DOEL_OPTIONS, Settings.gs) → profiel. Default klim (VO2max/Conditie → nog geen eigen profiel).
@@ -507,12 +515,28 @@ function profileForDoel_(doel) {
 }
 
 // Effectieve gewichten = intentGewichten + fase-shift (per kwaliteit-intent).
-function goalEffWeights_(profiel, fase) {
+function goalEffWeights_(profiel, fase, V) {
   var base = profiel.intentGewichten || {};
   var mod = (profiel.faseModulatie && profiel.faseModulatie[fase]) ? profiel.faseModulatie[fase] : {};
+  var vol = volumeModulatie(V, fase, profiel);
   var w = {};
-  GOAL_KWALITEIT_INTENTS_.forEach(function (k) { w[k] = (base[k] || 0) + (mod[k] || 0); });
+  GOAL_KWALITEIT_INTENTS_.forEach(function (k) { w[k] = (base[k] || 0) + (mod[k] || 0) + (vol[k] || 0); });
   return w;
+}
+
+// Pass 1 — volume-adaptieve additieve term op de RAUWE sort-scores (geen clamp/renorm).
+// PROFIEL-AGNOSTISCH: leest profiel.volumeResponse {vo2Slope, vo2Cap}. ALLEEN de vo2-key, ALLEEN
+// in Base; Build/Peak + niet-eindige V + ontbrekende volumeResponse → 0-delta (byte-identiek aan
+// vóór Pass 1). vo2 ramt vanaf BASE_POLAR_VOL_U0 weekUREN, gecapt < de #1 Base-intent (blijft #2).
+function volumeModulatie(V, fase, profiel) {
+  var z = { drempel: 0, sweetspot: 0, vo2: 0 };
+  if (fase !== 'Base') return z;
+  var v = Number(V);
+  if (!isFinite(v)) return z;
+  var vr = (profiel && profiel.volumeResponse) || null;
+  if (!vr) return z;
+  z.vo2 = Math.min(vr.vo2Slope * Math.max(0, v - BASE_POLAR_VOL_U0), vr.vo2Cap);
+  return z;
 }
 
 // C1 (fase 1b): bestaat er een archetype van dit intent dat binnen beschikbareTijd past? PUUR.
@@ -525,8 +549,8 @@ function intentHaalbaar_(intent, beschikbareTijd) {
 // Deterministische gewogen keuze (geen Math.random): filter EERST op duur-HAALBARE intents (geen
 // intent-vóór-duur→null meer), dan hoogste gewicht (+ optionele coverage-bias bij een dekking-gat),
 // det. tie-break op vaste intent-volgorde; recency vermijdt de intent van de vorige kwaliteitsdag.
-function goalPickIntent_(profiel, fase, vermijdIntent, beschikbareTijd, dekking) {
-  var w = goalEffWeights_(profiel, fase);
+function goalPickIntent_(profiel, fase, vermijdIntent, beschikbareTijd, dekking, V) {
+  var w = goalEffWeights_(profiel, fase, V);
   var intents = GOAL_KWALITEIT_INTENTS_.filter(function (i) {
     return beschikbareTijd == null || intentHaalbaar_(i, beschikbareTijd);
   });
@@ -553,14 +577,14 @@ function goalPickIntent_(profiel, fase, vermijdIntent, beschikbareTijd, dekking)
  * @param recency        array [{intent, archetypeId}, ...] (recentste laatst); [] = geen historie
  * @return { type, archetypeId } of null als geen archetype past
  */
-function goalWorkout_(profiel, fase, beschikbareTijd, recency, dekking) {
+function goalWorkout_(profiel, fase, beschikbareTijd, recency, dekking, V) {
   if (!profiel) return null;
   recency = recency || [];
   var last = recency.length ? recency[recency.length - 1] : null;
   var lastIntent = last ? last.intent : null;
 
-  // (1) intent — duur-haalbaar gefilterd + gewogen + fase-gemoduleerd + coverage-bias + recency-mijdend.
-  var intent = goalPickIntent_(profiel, fase, lastIntent, beschikbareTijd, dekking);
+  // (1) intent — duur-haalbaar gefilterd + gewogen + fase-gemoduleerd + volume-adaptief (Base) + coverage-bias + recency-mijdend.
+  var intent = goalPickIntent_(profiel, fase, lastIntent, beschikbareTijd, dekking, V);
   if (!intent) return null;
 
   // (2) filter: effectTag == intent ÉN duurRange ⊇ beschikbareTijd.
