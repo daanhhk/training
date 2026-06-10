@@ -67,7 +67,7 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 commit: pusht de huidige source (`clasp push -f`) + draait de selftest remote
 (`clasp run-function runSelfTest`), parset de envelope `{ failures, passed, failed }`, en
 exit non-zero als `failed > 0` OF `passed < BASELINE`. Geen commit tenzij de gate exit 0
-geeft. BASELINE (643) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
+geeft. BASELINE (659) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
 niet; verhoog BASELINE alleen om te ratelen ná een feature die tests toevoegt. De oude
 handmatige selftest-loop (Daan draait `runSelfTest` in de editor) is VERVALLEN.
 
@@ -169,6 +169,11 @@ componenten + states), `DESIGN.md` (visuele taal), `INTERACTIONS.md`
   weekUREN (`Σ(weekDays||days).minuten/60`, in `allocateQualityWeek_`), gethreaded door
   `goalEffWeights_`→`goalPickIntent_`→`goalWorkout_`. Base-quality loopt via `goalWorkout_` (niet
   meer hardcoded sweet_spot). GEFASEERD: pass 2 Build/Peak, pass 3 volume-`kwaliteitPerWeek` + middle-taper.
+- **Cov-gate (Pass 1b)** (`goalPickIntent_` `vo2GateBase`): in Base ≤ `BASE_POLAR_VOL_U0` krijgt vo2
+  GÉÉN `COVERAGE_BOOST_` — 'n anaerobic-gat wordt bij laag volume NIET via quality-injectie gedekt
+  (volume stuurt vo2, niet de dekking); >U0 + Build/Peak ongegated. **Profielen** (`profileForDoel_`):
+  klim/ftp/vo2max/conditie, elk eigen `intentGewichten` + `volumeResponse` (cap < hun #1 Base-intent);
+  `projectieKey` alléén op klim (`GOAL_PROFILES_` = girona-only). VO2max→vo2max, Conditie→conditie.
 - **Trainingen-bibliotheek-cache** (`trainlib_v*`, `getTrainingLibraryCached_`) keyt ALLEEN op
   ftp/lthr → elke segment/structuur-SHAPE-wijziging vereist een cache-versie-bump (`v1_`→`v2_`),
   anders serveert /dev een stale shape (de selftest mist 't — die roept de verse builder).
