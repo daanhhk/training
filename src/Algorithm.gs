@@ -755,6 +755,10 @@ function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recent
   var remaining = Math.max(0, quota - doneHard);
   var cov = { low: !!dekking.low, high: !!dekking.high, anaerobic: !!dekking.anaerobic };
   var rec = (recency || []).slice();
+  // Pass 1: weekvolume (uren) voor de volume-adaptieve Base-intent-weging — Σ beschikbare minuten
+  // over de volle week (weekDays indien meegegeven, anders de meegegeven days) / 60.
+  var volBron = (weekDays && weekDays.length) ? weekDays : days;
+  var weekV = 0; volBron.forEach(function (d) { weekV += (Number(d.minuten) || 0); }); weekV = weekV / 60;
   var elig = days.filter(eligible_);
   var planned = {};
 
@@ -848,20 +852,17 @@ function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recent
     if (!cands.length) break;
     var sel = pickBestSpread_(cands, anchors);
     if (!sel) break;
-    if (macroFase === 'Base') {
-      plan[sel.dagIdx] = { role: 'quality', type: 'sweet_spot', archetypeId: null };
-      cov.high = true; planned[sel.dagIdx] = true; remaining--;
+    // Pass 1: Base loopt nu via dezelfde goalWorkout_-keuze als Build/Peak (was hardcoded
+    // sweet_spot), mét de weekvolume-laag (weekV) → Base polariseert (vo2 verschijnt bij hoog volume).
+    var bt = (sel.type === 'pendel') ? (settings.pendelDuurMin || 80) : sel.minuten;
+    var gw = goalWorkout_(profiel, macroFase, bt, rec, cov, weekV);
+    if (gw) {
+      plan[sel.dagIdx] = { role: 'quality', type: gw.type, archetypeId: gw.archetypeId };
+      rec.push({ intent: intentFromType_(gw.type), archetypeId: gw.archetypeId });
+      var b2 = primaryBucketOfType_(gw.type, doel); if (b2) cov[b2] = true;
+      planned[sel.dagIdx] = true; remaining--;
     } else {
-      var bt = (sel.type === 'pendel') ? (settings.pendelDuurMin || 80) : sel.minuten;
-      var gw = goalWorkout_(profiel, macroFase, bt, rec, cov);
-      if (gw) {
-        plan[sel.dagIdx] = { role: 'quality', type: gw.type, archetypeId: gw.archetypeId };
-        rec.push({ intent: intentFromType_(gw.type), archetypeId: gw.archetypeId });
-        var b2 = primaryBucketOfType_(gw.type, doel); if (b2) cov[b2] = true;
-        planned[sel.dagIdx] = true; remaining--;
-      } else {
-        planned[sel.dagIdx] = 'skip';   // geen archetype past → uit de pool, géén quality
-      }
+      planned[sel.dagIdx] = 'skip';   // geen archetype past → uit de pool, géén quality
     }
   }
 

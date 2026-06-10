@@ -44,6 +44,7 @@ function runSelfTest() {
   testGoalInplugWeekSim_(ctx);
   testAllocateQualityWeek_(ctx);
   testGatherWeekplanEntries_(ctx);
+  testVolumeModulatie_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -602,6 +603,35 @@ function testGatherWeekplanEntries_(ctx) {
   }
 }
 
+// ── Pass 1 — volume-adaptieve Base-intent-weging (volumeModulatie, rauwe sort-scores) ──
+function testVolumeModulatie_(ctx) {
+  var klim = PROFILES.klim, ftp = PROFILES.ftp;
+  // klim Base @V<V0: drempel 0.45 > sweetspot 0.35 > vo2 0.25 (geen vo2-boost → vo2 3rd → afwezig in 2-quality).
+  var k6 = goalEffWeights_(klim, 'Base', 6);
+  assert_(ctx, 'vol klim Base V6 vo2 3rd', true, k6.vo2 < k6.sweetspot && k6.sweetspot < k6.drempel);
+  // klim @13u: vo2 ramt boven sweetspot (#2), blijft onder drempel (#1) → vo2 wordt #2, nooit #1.
+  var k13 = goalEffWeights_(klim, 'Base', 13);
+  assert_(ctx, 'vol klim Base V13 vo2 enters', true, k13.sweetspot < k13.vo2 && k13.vo2 < k13.drempel);
+  // ftp Base @V<V0: drempel 0.50 > sweetspot 0.45 > vo2 0.10 (vo2 3rd).
+  var f6 = goalEffWeights_(ftp, 'Base', 6);
+  assert_(ctx, 'vol ftp Base V6 vo2 3rd', true, f6.vo2 < f6.sweetspot && f6.sweetspot < f6.drempel);
+  // ftp @20u: vo2 boven sweetspot (0.45), onder drempel (0.50).
+  var f20 = goalEffWeights_(ftp, 'Base', 20);
+  assert_(ctx, 'vol ftp Base V20 vo2 enters', true, f20.sweetspot < f20.vo2 && f20.vo2 < f20.drempel);
+  // Build/Peak: volume-NEUTRAAL (delta 0) — goalEffWeights_ identiek over V=6/V=20/no-V.
+  function neutral(profiel, fase) {
+    var lo = goalEffWeights_(profiel, fase, 6), hi = goalEffWeights_(profiel, fase, 20), nov = goalEffWeights_(profiel, fase);
+    return GOAL_KWALITEIT_INTENTS_.every(function (k) { return lo[k] === hi[k] && hi[k] === nov[k]; });
+  }
+  assert_(ctx, 'vol klim Build neutraal', true, neutral(klim, 'Build'));
+  assert_(ctx, 'vol klim Peak neutraal', true, neutral(klim, 'Peak'));
+  assert_(ctx, 'vol ftp Build neutraal', true, neutral(ftp, 'Build'));
+  // volumeModulatie zelf: niet-Base / niet-eindige V / geen volumeResponse → 0.
+  assert_(ctx, 'vol mod Build=0', 0, volumeModulatie(20, 'Build', klim).vo2);
+  assert_(ctx, 'vol mod NaN=0', 0, volumeModulatie(undefined, 'Base', klim).vo2);
+  assert_(ctx, 'vol mod geen-response=0', 0, volumeModulatie(20, 'Base', { id: 'x' }).vo2);
+}
+
 // ── Fase 1 deel 2b.2 commit 1 — plumbing: buildWorkout-routing + recency-extractor ──
 function testInplug_(ctx) {
   var S = { ftp: 275, lthr: 178, doel: 'FTP' };
@@ -772,8 +802,16 @@ function testAllocateQualityWeek_(ctx) {
   assert_(ctx, 'alloc Base longride role', 'longride', pb[5] && pb[5].role);
   assert_(ctx, 'alloc Base longride long_z2', 'long_z2', pb[5] && pb[5].type);
   assert_(ctx, 'alloc Base 2 quality', 2, qCount(pb));
-  var ssOk = true; Object.keys(pb).forEach(function (k) { if (pb[k].role === 'quality' && pb[k].type !== 'sweet_spot') ssOk = false; });
-  assert_(ctx, 'alloc Base quality=sweet_spot', true, ssOk);
+  // Pass 1: Base loopt nu via goalWorkout_ (was hardcoded sweet_spot) → quality = echte archetypes,
+  // drempel-led (#1 Base-intent), geen herhaalde vorm. Bij dit fixture-volume (~9,5u) komt vo2 via de
+  // coverage-bias (anaerobic-gat), niet via de volume-ramp — de ramp wordt puur getest in testVolumeModulatie_.
+  var baseQ = Object.keys(pb).filter(function (k) { return pb[k].role === 'quality'; }).map(function (k) { return pb[k]; });
+  var baseTypesOk = baseQ.every(function (q) { return (q.type === 'threshold' || q.type === 'sweet_spot' || q.type === 'vo2max') && !!q.archetypeId; });
+  assert_(ctx, 'alloc Base quality types+arch', true, baseTypesOk);
+  assert_(ctx, 'alloc Base drempel-led (#1)', true, baseQ.some(function (q) { return q.type === 'threshold'; }));
+  var baseIds = baseQ.map(function (q) { return q.archetypeId; }), baseUniq = {};
+  baseIds.forEach(function (id) { baseUniq[id] = 1; });
+  assert_(ctx, 'alloc Base geen-herhaalde-vorm', baseIds.length, Object.keys(baseUniq).length);
   assert_(ctx, 'alloc Base pendel kan quality', 'quality', pb[1] && pb[1].role);
 
   // C — Recovery (geen quota-entry) → leeg plan.
