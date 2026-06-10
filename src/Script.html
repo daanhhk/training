@@ -1307,16 +1307,6 @@
     if (el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
   }
 
-  // ── Vorm: trend & details ──
-  // niveauReeks-delta (laatste − eerste non-null) — ZELFDE bron als de Alles-window
-  // van de niveau-grafiek (renderNiveauHead_), zodat LevelCard ↔ grafiek consistent zijn.
-  function niveauReeksDelta_() {
-    var reeks = (state.vorm && state.vorm.niveauReeks) ? state.vorm.niveauReeks : [];
-    var pts = reeks.filter(function (p) { return p.niveau != null; });
-    if (pts.length < 2) return null;
-    return Math.round((pts[pts.length - 1].niveau - pts[0].niveau) * 10) / 10;
-  }
-
   // Vorm-A (pakket §2b) — LevelCard W/kg-GELEID: W/kg-hero + W/kg-tier-chip (NV_TIERS,
   // ZELFDE bron als de Niveau-tab) + tier-voortgangsbalk (positie binnen de band) +
   // W/kg-delta. "x/50" + de niveau-hero + blok-% zijn losgelaten.
@@ -1749,7 +1739,7 @@
     var rt = p.riderType;
     if (rt && rt.pos != null) {
       var leftPct = Math.round((1 - rt.pos) * 100);   // pos 1=Sprinter→links · pos 0=Diesel→rechts (label-volgorde)
-      typeHtml = '<div class="nv-type"><div class="nv-type-lbls"><span>Sprinter</span><span>Allrounder</span><span>Diesel · klimmer</span></div>' +
+      typeHtml = '<div class="nv-type"><div class="nv-type-lbls"><span>Sprinter</span><span>All-rounder</span><span>Diesel · klimmer</span></div>' +
         '<div class="nv-type-track"><div class="nv-type-marker" style="left:' + leftPct + '%"></div></div>' +
         '<div class="nv-type-duiding muted">' + nvTypeDuiding_(rt) + '</div></div>';
     }
@@ -1828,87 +1818,6 @@
     if (!w || w.n == null) return reeks;
     return reeks.slice(Math.max(0, reeks.length - w.n));
   }
-  function renderNiveauHead_() {
-    var el = document.getElementById('niveau-head');
-    if (!el) return;
-    var full = (state.vorm && state.vorm.niveauReeks) ? state.vorm.niveauReeks : [];
-    var nonNull = full.filter(function (p) { return p.niveau != null; });
-    // Empty/te-kort (< 2 punten): value "—", geen toggle.
-    if (nonNull.length < 2) {
-      el.innerHTML = '<div class="nh-row"><div class="nh-val nh-empty">—<span class="nh-unit">niveau</span></div></div>';
-      return;
-    }
-    var pts = niveauReeksWindow_().filter(function (p) { return p.niveau != null; });
-    var cur = pts.length ? pts[pts.length - 1].niveau : null;
-    var first = pts.length ? pts[0].niveau : null;
-    var delta = (cur != null && first != null) ? Math.round((cur - first) * 10) / 10 : null;
-    var deltaHtml = '';
-    if (delta != null && pts.length > 1) {
-      if (delta > 0)      deltaHtml = '<span class="nh-delta nh-up">+' + nl(delta, 1) + ' ↑</span>';
-      else if (delta < 0) deltaHtml = '<span class="nh-delta nh-down">' + nl(delta, 1) + ' ↓</span>';
-      else                deltaHtml = '<span class="nh-delta">±0,0</span>';
-    }
-    var segs = NIVEAU_WINDOWS.map(function (w) {
-      return '<button type="button" data-nw="' + w.k + '"' + (w.k === niveauWindow ? ' class="active"' : '') +
-        ' onclick="setNiveauWindow(\'' + w.k + '\')">' + w.l + '</button>';
-    }).join('');
-    el.innerHTML = '<div class="nh-row"><div class="nh-val">' + nl(cur, 1) +
-      '<span class="nh-unit">niveau</span></div>' + deltaHtml + '</div>' +
-      '<div class="seg">' + segs + '</div>';
-  }
-  function setNiveauWindow(k) {
-    niveauWindow = k;
-    renderNiveauHead_();
-    drawNiveauChart();
-  }
-
-  // §2c: niveau-per-maand trend — AreaChart (accent-area 26% + 2,5px lijn + "nu"-punt).
-  // Venster via niveauReeksWindow_; auto-zoom Y; interpolateNulls voor lege maanden.
-  // Google Charts-limieten (best-effort): area is flat 26% (geen gradient-fade naar 0);
-  // lijn-caps niet rond instelbaar; "nu"-punt krijgt fill maar geen stroke-ring.
-  function drawNiveauChart() {
-    if (!chartsReady || !state || !state.vorm || !state.vorm.niveauReeks) return;
-    var el = document.getElementById('niveau-chart');
-    if (!el) return;
-    if (state.vorm.niveauReeks.filter(function (p) { return p.niveau != null; }).length < 2) {
-      el.innerHTML = '<div class="muted">Nog te weinig niveau-data.</div>'; return;
-    }
-    var reeks = niveauReeksWindow_();
-    var lastIdx = -1;
-    reeks.forEach(function (p, i) { if (p.niveau != null) lastIdx = i; });
-    var puntStyle = 'point { size: 5; fill-color: ' + cssColor_('var(--accent)') + '; }';
-
-    var dt = new google.visualization.DataTable();
-    dt.addColumn('string', 'Maand');
-    dt.addColumn('number', 'Niveau');
-    dt.addColumn({ type: 'string', role: 'tooltip' });
-    dt.addColumn({ type: 'string', role: 'style' });
-    var mn = Infinity, mx = -Infinity;
-    reeks.forEach(function (p, i) {
-      var tip = null;
-      if (p.niveau != null) {
-        tip = nlMaandLabel_(p.maand) + ': ' + p.niveau.toFixed(1).replace('.', ',');
-        if (p.ftp && p.gewicht) tip += ' (' + (p.ftp / p.gewicht).toFixed(2).replace('.', ',') + ' W/kg)';
-        if (p.niveau < mn) mn = p.niveau;
-        if (p.niveau > mx) mx = p.niveau;
-      }
-      dt.addRow([nlMaandLabel_(p.maand), p.niveau, tip, (i === lastIdx) ? puntStyle : null]);
-    });
-    var opts = {
-      legend: { position: 'none' },
-      chartArea: { width: '85%', height: '70%' },
-      colors: [cssColor_('var(--chart-line)')],
-      curveType: 'function', interpolateNulls: true,
-      lineWidth: 2.5, pointSize: 0, areaOpacity: 0.26,
-      hAxis: { textStyle: { fontSize: 9, color: cssColor_('var(--text-secondary)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, minorGridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
-      vAxis: { textStyle: { color: cssColor_('var(--chart-axis)') }, gridlines: { color: cssColor_('var(--chart-grid)') }, minorGridlines: { color: 'transparent' }, baselineColor: cssColor_('var(--chart-grid)') },
-      backgroundColor: 'transparent'
-    };
-    if (mn !== Infinity) opts.vAxis.viewWindow = { min: Math.floor(mn - 1), max: Math.ceil(mx + 1) };
-    new google.visualization.AreaChart(el).draw(dt, opts);
-  }
-
-
   // ── Navigatie ──
   function scrollSelectedChip() {
     var el = document.querySelector('.chip.sel');
