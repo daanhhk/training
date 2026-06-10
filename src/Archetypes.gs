@@ -324,9 +324,16 @@ var PROFILES = {
   klim: { id: 'klim', soort: 'event', intentGewichten: GOAL_INTENT_WEIGHTS_KLIM_,
           faseModulatie: GOAL_FASE_MOD_,
           archetypeVoorkeuren: { vo2_hill_repeats: 0.2, threshold_long: 0.1 },   // klim-specifieke boosts
-          projectieKey: 'girona' },
+          projectieKey: 'girona',
+          // C2 (fase 1b): week-plaatsing-velden (puur additief; consument = Run B).
+          kwaliteitPerWeek: { Base: 2, Build: 3, Peak: 2 },
+          spreiding: { midweekMinGap: 1, weekendBlok: true, effortsInLangeRit: true },
+          langeRitPerWeek: 1 },
   ftp:  { id: 'ftp', soort: 'capaciteit', intentGewichten: GOAL_INTENT_WEIGHTS_FTP_,
-          faseModulatie: GOAL_FASE_MOD_ }
+          faseModulatie: GOAL_FASE_MOD_,
+          kwaliteitPerWeek: { Base: 2, Build: 3, Peak: 2 },
+          spreiding: { midweekMinGap: 1, weekendBlok: false, effortsInLangeRit: false },
+          langeRitPerWeek: 1 }
 };
 
 // settings.doel (DOEL_OPTIONS, Settings.gs) → profiel. Default klim (VO2max/Conditie → nog geen eigen profiel).
