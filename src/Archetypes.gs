@@ -175,3 +175,117 @@ function archetypeFixtures_() {
       naam: 'Fixture Microburst', focus: 'vo2 capacity', eindopmerking: 'Test-fixture microburst.' }
   ];
 }
+
+/**
+ * PRODUCTIE-archetype-register — klim/FTP-kwaliteit (drempel/sweetspot/vo2).
+ * Data-only; NIET ingeplugd (geen goalWorkout_/buildWorkout-route nog). Elk record
+ * leeft in 't bestaande schema en valideert via expandArchetype_ + push-pariteit.
+ * duurRange.min = warmup+core+cooldown (geen fill); .max = + ~30-40 min Z2-fill.
+ * Doseringen spiegelen de bestaande generators waar een equivalent bestaat.
+ * over-unders + pyramids = sequentie van steady/int-blocks (grammatica past — geen expander-wijziging).
+ */
+var ARCHETYPES = [
+  // ── DREMPEL ──
+  { id: 'threshold_long', structuurtype: 'intervals', effectTags: ['drempel'], zone: 4,
+    duurRange: [82, 120],
+    warmup: { durMin: 15, pctLo: 55, pctHi: 75 },
+    core: [{ kind: 'int', label: 'Drempel', reps: 3, onMin: 14, onPct: 98, offMin: 5, offPct: 55 }],
+    cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Drempel lang 3×14', focus: 'sustained threshold',
+    eindopmerking: 'Lange drempelblokken — pacen als een alpine col.' },
+  { id: 'threshold_overunder', structuurtype: 'intervals', effectTags: ['drempel'], zone: 4,
+    duurRange: [54, 90],
+    warmup: { durMin: 15, pctLo: 55, pctHi: 75 },
+    core: [
+      { kind: 'steady', label: 'Over', durMin: 3, pct: 105, note: 'Boven FTP — lactaat opbouwen' },
+      { kind: 'steady', label: 'Under', durMin: 4, pct: 92, note: 'Onder FTP — klaren, niet uitrusten' },
+      { kind: 'steady', label: 'Herstel', durMin: 4, pct: 55, note: 'Easy tussen de sets' },
+      { kind: 'steady', label: 'Over', durMin: 3, pct: 105, note: 'Boven FTP' },
+      { kind: 'steady', label: 'Under', durMin: 4, pct: 92, note: 'Onder FTP' },
+      { kind: 'steady', label: 'Herstel', durMin: 4, pct: 55, note: 'Easy tussen de sets' },
+      { kind: 'steady', label: 'Over', durMin: 3, pct: 105, note: 'Boven FTP' },
+      { kind: 'steady', label: 'Under', durMin: 4, pct: 92, note: 'Onder FTP, afsluiten' }
+    ],
+    cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Drempel over-under 3 sets', focus: 'lactate clearance',
+    eindopmerking: 'Wisselen boven/onder FTP — leert klaren onder druk.' },
+  // ── SWEET SPOT ──
+  { id: 'sweetspot_long', structuurtype: 'intervals', effectTags: ['sweetspot'], zone: 4,
+    duurRange: [103, 135],
+    warmup: { durMin: 15, pctLo: 55, pctHi: 70 },
+    core: [{ kind: 'int', label: 'Sweet Spot', reps: 3, onMin: 20, onPct: 90, offMin: 6, offPct: 50 }],
+    cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Sweet Spot lang 3×20', focus: 'climbing endurance',
+    eindopmerking: 'Lange sweet-spot blokken — uren in de klim-zone.' },
+  { id: 'sweetspot_pyramid', structuurtype: 'pyramid', effectTags: ['sweetspot'], zone: 4,
+    duurRange: [89, 120],
+    warmup: { durMin: 12, pctLo: 55, pctHi: 70 },
+    core: [
+      { kind: 'steady', label: 'SS 10', durMin: 10, pct: 88, note: 'Opbouwen' },
+      { kind: 'steady', label: 'Herstel', durMin: 3, pct: 55, note: 'Kort lossen' },
+      { kind: 'steady', label: 'SS 15', durMin: 15, pct: 90, note: 'Middenblok' },
+      { kind: 'steady', label: 'Herstel', durMin: 3, pct: 55, note: 'Kort lossen' },
+      { kind: 'steady', label: 'SS 20', durMin: 20, pct: 92, note: 'Piekblok' },
+      { kind: 'steady', label: 'Herstel', durMin: 3, pct: 55, note: 'Kort lossen' },
+      { kind: 'steady', label: 'SS 15', durMin: 15, pct: 90, note: 'Afbouwen' }
+    ],
+    cooldown: { durMin: 8, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Sweet Spot piramide', focus: 'climbing endurance',
+    eindopmerking: 'Oplopend/aflopend — variatie binnen de sweet spot.' },
+  // BALANS (toegevoegd): sweet spot was alleen lang-gedekt (min 89-103); deze vult ~52-90min.
+  { id: 'sweetspot_short', structuurtype: 'intervals', effectTags: ['sweetspot'], zone: 4,
+    duurRange: [52, 90],
+    warmup: { durMin: 12, pctLo: 55, pctHi: 70 },
+    core: [{ kind: 'int', label: 'Sweet Spot', reps: 2, onMin: 12, onPct: 90, offMin: 4, offPct: 50 }],
+    cooldown: { durMin: 8, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Sweet Spot kort 2×12', focus: 'sweet spot',
+    eindopmerking: 'Korte sweet-spot dosis — past in een doordeweekse sessie.' },
+  // ── VO2 ──
+  { id: 'vo2_long', structuurtype: 'intervals', effectTags: ['vo2'], zone: 5,
+    duurRange: [65, 100],
+    warmup: { durMin: 15, pctLo: 55, pctHi: 80 },
+    core: [{ kind: 'int', label: 'VO2 5×4', reps: 5, onMin: 4, onPct: 112, offMin: 4, offPct: 50 }],
+    cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'VO2max 5×4', focus: 'vo2 capacity',
+    eindopmerking: 'Klassieke 5×4 — maximaal aerobe prikkel.' },
+  { id: 'vo2_hill_repeats', structuurtype: 'intervals', effectTags: ['vo2'], zone: 5,
+    duurRange: [59, 95],
+    warmup: { durMin: 15, pctLo: 55, pctHi: 80 },
+    core: [{ kind: 'int', label: 'Hill reps', reps: 9, onSec: 90, onPct: 115, offMin: 2, offPct: 50 }],
+    cooldown: { durMin: 12, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'VO2 Hill Repeats 9×90s', focus: 'explosive climbing',
+    eindopmerking: 'Korte explosieve klim-efforts — punchy beklimmingen.' },
+  { id: 'vo2_microburst', structuurtype: 'microburst', effectTags: ['vo2'], zone: 5,
+    duurRange: [35, 70],
+    warmup: { durMin: 15, pctLo: 55, pctHi: 80 },
+    core: [{ kind: 'int', label: 'Microbursts 30/30', reps: 10, onSec: 30, onPct: 122, offSec: 30, offPct: 50 }],
+    cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Anaerobe capaciteit 10×30/30', focus: 'anaerobic capacity',
+    eindopmerking: 'Snelle herhalingen — anaerobe capaciteit + herstel.' },
+  { id: 'vo2_pyramid', structuurtype: 'pyramid', effectTags: ['vo2'], zone: 5,
+    duurRange: [42, 75],
+    warmup: { durMin: 15, pctLo: 55, pctHi: 80 },
+    core: [
+      { kind: 'steady', label: 'VO2 1', durMin: 1, pct: 115, note: 'Opbouwen' },
+      { kind: 'steady', label: 'Herstel', durMin: 2, pct: 50, note: 'Lossen' },
+      { kind: 'steady', label: 'VO2 2', durMin: 2, pct: 115, note: 'Door' },
+      { kind: 'steady', label: 'Herstel', durMin: 2, pct: 50, note: 'Lossen' },
+      { kind: 'steady', label: 'VO2 3', durMin: 3, pct: 115, note: 'Piek' },
+      { kind: 'steady', label: 'Herstel', durMin: 2, pct: 50, note: 'Lossen' },
+      { kind: 'steady', label: 'VO2 2', durMin: 2, pct: 115, note: 'Afbouwen' },
+      { kind: 'steady', label: 'Herstel', durMin: 2, pct: 50, note: 'Lossen' },
+      { kind: 'steady', label: 'VO2 1', durMin: 1, pct: 115, note: 'Afsluiten' }
+    ],
+    cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'VO2 piramide 1-2-3-2-1', focus: 'vo2 capacity',
+    eindopmerking: 'Oplopende VO2-treden — variatie in de prikkel.' }
+];

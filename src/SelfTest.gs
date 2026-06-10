@@ -36,6 +36,7 @@ function runSelfTest() {
   testPowerCurve_(ctx);
   testGoalProjection_(ctx);
   testArchetype_(ctx);
+  testArchetypeLib_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -406,6 +407,43 @@ function testArchetype_(ctx) {
   var b10 = expandArchetype_(fx[1], { ftp: 275, doelMin: 80, mesoFactor: 1.0, faseOffset: 0 });
   var b11 = expandArchetype_(fx[1], { ftp: 275, doelMin: 80, mesoFactor: 1.1, faseOffset: 0 });
   assert_(ctx, 'arch meso-richting', true, workPct(b11) > workPct(b10));
+}
+
+// ── Fase 1 deel 2a — productie-archetype-register (data + push-pariteit) ──
+function testArchetypeLib_(ctx) {
+  var REQ = ['naam', 'focus', 'zones', 'totaalMin', 'structuur', 'intent', 'tss', 'eindopmerking', 'blokken'];
+  ARCHETYPES.forEach(function (rec) {
+    var dm = rec.duurRange[0] + 10;   // binnen [min, max]
+    var wo = expandArchetype_(rec, { ftp: 275, lthr: 178, doelMin: dm, mesoFactor: 1.0, faseOffset: 0 });
+    var veldenOk = true;
+    REQ.forEach(function (k) { if (wo[k] == null) veldenOk = false; });
+    assert_(ctx, 'lib ' + rec.id + ' velden', true, veldenOk);
+    var sum = 0, blokOk = true, zoneOk = true;
+    wo.blokken.forEach(function (b) {
+      sum += b.minuten;
+      if (!(b.pctLo > 0 && b.pctLo <= b.pctHi && b.pctHi <= 150 && b.minuten > 0)) blokOk = false;
+      if (b.zone !== pctZoneBucket_(Math.round((b.pctLo + b.pctHi) / 2))) zoneOk = false;
+    });
+    assert_(ctx, 'lib ' + rec.id + ' blok-bounds', true, blokOk);
+    assert_(ctx, 'lib ' + rec.id + ' blok-zone', true, zoneOk);
+    assertClose_(ctx, 'lib ' + rec.id + ' som==totaal', wo.totaalMin, sum, 0.01);
+    assertClose_(ctx, 'lib ' + rec.id + ' ~doelMin', dm, wo.totaalMin, 1.5);
+    var pushOk = true, wattOk = true;
+    wo.structuur.forEach(function (row) {
+      if (dslBlockFromRow_(row, 275) == null) pushOk = false;
+      var r = dslPowerRange_(row[2], 275);
+      if (!r || row[2] !== (watts(275, r.lo) + '-' + watts(275, r.hi) + 'W')) wattOk = false;
+    });
+    assert_(ctx, 'lib ' + rec.id + ' push-parse', true, pushOk);
+    assert_(ctx, 'lib ' + rec.id + ' watt-roundtrip', true, wattOk);
+    assert_(ctx, 'lib ' + rec.id + ' tss', tssFromZoneMinutes_(wo.intent), wo.tss);
+    var tagsOk = rec.effectTags.length > 0;
+    rec.effectTags.forEach(function (t) { if (ARCHETYPE_EFFECT_TAGS.indexOf(t) < 0) tagsOk = false; });
+    assert_(ctx, 'lib ' + rec.id + ' effectTags', true, tagsOk);
+    assert_(ctx, 'lib ' + rec.id + ' structuurtype', true, ARCHETYPE_STRUCTUURTYPES.indexOf(rec.structuurtype) >= 0);
+    var coreMin = expandArchetype_(rec, { ftp: 275, lthr: 178, doelMin: 0, mesoFactor: 1.0, faseOffset: 0 }).totaalMin;
+    assertClose_(ctx, 'lib ' + rec.id + ' min~core', rec.duurRange[0], coreMin, 1.5);
+  });
 }
 
 function testCoach_(ctx) {
