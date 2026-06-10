@@ -24,6 +24,53 @@ https://script.google.com/macros/s/AKfycbz51mSRp2LYEIWFPJLmahX14_40w5c85UEDcjCSI
 - **CADANS-REBRAND + VORM-A LIVE (STAP 1).** *Rebrand* (e4d380c; favicon-keten SVG→raw-crash→PNG-jsDelivr-crash-safe, eind daa32e9): CadansMark = inline SVG in `#appbar` (`.appbar-mark`; 3 stijgende `skewX(-12)`-balken, fill `var(--accent)`→`var(--accent-strong)`); #appbar-wordmark = dynamisch `state.coachName` (uppercase, default "COACH"); coachnaam-instelling **"Jouw coach"** (drawer-sectie bovenaan: tekstveld + chips) → `saveSettingsEditor`→`saveSettings` → `SETTINGS_FIELDS.COACH_NAAM` (rij 54) + DocProp `coach_naam` (raakt `API_KEY` niet) → `state.coachName`, in wordmark + coach-callout-overline; `setTitle('Cadans')`. Favicon = `favicon.png` (repo-root, uit pakket `cadans-icon-512.png`) via jsDelivr (`cdn.jsdelivr.net/gh/daanhhk/training@main/favicon.png`), `setFaviconUrl` in **TRY/CATCH** in `doGet` (crasht nooit). Merk "Cadans" = mark + tabtitel; wordmark = coachnaam. *Vorm Variant A* (248527d, pakket-volgend): deck-LevelCard (#vorm-level) W/kg-geleid — hero "{wkg} W/kg" (`state.ftp/gewicht`, 1 dec, null-guard), tier-chip via `NV_TIERS`/`nvTierIndex_` (W/kg-afgeleid; Beginner/Recreatief/Getraind/Gevorderd/Zeer goed/Elite; NIET `niveauTier_`), tier-voortgangsbalk = positie-in-band + "nog {x} tot {volgende}", W/kg-delta uit `state.niveauProgressie`; "x/50"+niveau-hero+blok-% weg. VormLevelSummary (#vorm-metrics) vervangt niveau-grafiek + MetricRow = FTP/Gewicht/Week-TSS + "Progressie →"→`switchTab('niveau')`; `drawNiveauChart`-mount+calls weg; deck blijft 2 slides; volgorde deck→summary→balans. ONTDUBBELING: W/kg+tier exclusief in deck-LevelCard. TIER consistent Vorm↔Niveau (beide `NV_TIERS`). Geen tokens; `--chart-grid` + `niveauTier_`/`testTier_` ongemoeid → **224/0 ongewijzigd** (Daan handmatig). Zie KLAAR.
 - **STAP 2 — readiness→Schema-koppeling: CODE-COMPLEET** (selftest **240/0**, was 224). *Deel 1 server* (89221c1): pure `readinessAdjust_(planned, band, macroFase)` in Coach.gs (+ `readinessEaseNaam_`/`readinessRegel_`/`readinessRegelDone_`); `getDashboardState`-overlay zet `day.coach` (`kind:'readiness'`) op de vandaag-PLANNED dag bij demote; `saveDayOverride` clean-object draagt src-passthrough (`if(ov.src)`); `testReadinessAdjust_` (+16); `getReadinessScore_` ge-hoist naar één gedeelde `readinessState`. *Deel 2 client* (9035e95): `readinessBannerHtml_` (suggest: `--readiness-{band}`-dot + "Gereedheid N · woord" + "VERLICHT {from}→{to}" + knop "Verlicht vandaag"; committed: ✓-regel, geen knop) hergebruikt `.coach-*`-classes/-tokens (12/12 geserveerd, GÉÉN nieuwe); mount in `renderDagDetail` ná de weekdag-kop (vóór `var ov`), kind-gated; `planAdaptatie_` stuurt `src:ad.src` mee; commit = free-ride override (`src:'readiness'`) → committed-banner + FreeRideCard + "Terug naar voorstel" (revert via `clearDayOverride`). **Architectuur GELOCKT:** route B (read-side overlay + user-commit override, GÉÉN generatie-bake) · VERLICHTEN niet verschuiven · caution→`demoteType_` (één DEMOTE_MAP-stap) / rest→recovery · today-only · enkel-sessie-only (multi-sessie + per-sessie-ease = future) · onderdrukt in Taper/Recovery · leest 't HUIDIG opgeslagen type → componeert schoon met avoid-consecutive-hard + wellness-slot-pass (geen dubbel-ease). **OPEN — verify + close-out (volgende week, TAPER-geblokkeerd):** visuele /dev-verify staat nog (taper = Z2-only + ease onderdrukt → geen natuurlijke trigger; demo via TEMP `rdydemo`-hook op een toekomstige geplande dag, PARAM-EERST-dan-dag-tikken). TEMP `rdydemo`-hook (`// TEMP rdydemo`) staat NOG in Script.html (verruimd naar `trnPlannable_`, 325315c). Close-out = (1) /dev-verify suggest→commit→committed→revert, (2) rdydemo-hook verwijderen, (3) FTP-Coach-export §d + INTERACTIONS readiness-banner-secties folden, (4) HANDOFF-bump.
 
+## clasp run-function — autonome CC-loop (setup in uitvoering)
+
+DOEL: CC draait runSelfTest (returnt {passed, failed, failures}) en diagnostiek
+zelf -> einde handmatige selftest + _Diag.gs plak-loop. Env: clasp 3.3.0 /
+node v24 -> commando is `run-function` (niet `run`). Default draait HEAD/laatste
+push, dus loop = `clasp push -f && clasp run-function runSelfTest`.
+
+GEDAAN (Deel A, GUI):
+- Standaard GCP-project aangemaakt; Project ID + Project number genoteerd.
+- OAuth consent screen (Google Auth Platform): External, jezelf als test user,
+  app in Testing. Scopes overgeslagen (komen uit manifest).
+- Desktop OAuth-client -> creds.json in repo-root (enkele extensie; dubbele
+  .json.json was fout, gecorrigeerd).
+
+TE DOEN:
+1. Deel A stap 4: Project NUMBER koppelen in Apps Script editor
+   (Project Settings -> GCP Project -> Change -> number plakken). NOG NIET gedaan.
+2. CC SETUP-prompt (CLI, een run): projectId in .clasp.json;
+   executionApi:{access:"MYSELF"} in src/appsscript.json; creds.json in
+   .gitignore EN .claspignore; `clasp push -f`; `clasp apis enable script`;
+   `clasp create-deployment --description "api-exec"`;
+   `clasp login --creds creds.json --use-project-scopes --include-clasp-scopes`
+   (browser-akkoord; "unverified app" -> doorgaan); verifieer
+   `clasp run-function runSelfTest`; GUI-fallback (Deploy -> API Executable) als
+   "not deployed"; commit `chore: enable clasp run-function (executionApi + projectId)`
+   + push. (Reconstrueerbaar uit deze stappen.)
+3. Manifest-scopes (spreadsheets.currentonly, script.external_request,
+   script.scriptapp, script.send_mail) -> mogelijke 2e-fase consent/scope-fout
+   bij login/run; bij fout de letterlijke melding terugkoppelen.
+
+PARALLEL-DISCIPLINE: recon was read-only (veilig parallel); SETUP schrijft +
+pusht -> alleen draaien als andere CC-instance op schoon punt staat (geen
+gelijktijdige clasp/git-push; twee pushes naar zelfde scriptId clobberen).
+
+DAARNA — WERKWIJZE HERSCHRIJVEN (CLAUDE.md):
+- Self-enforced test-gate: geen commit tenzij run-function-selftest groen EN
+  count >= baseline; evt. wrapper-script dat non-zero exit geeft bij rood.
+- Mission-scoped prompts: doel + acceptatiecriteria + toestemming te itereren
+  + no-go-zones (Deck CSS, token-mirror, calc-consolidation).
+- Stop-and-ask condities: design/UX-ambiguiteit -> Claude Design; fragile/locked
+  zones; selftest niet groen na ~3 pogingen; niet-locked architectuurkeuze;
+  iets met credential. Vraag-format: situatie/opties/aanbeveling/trade-off.
+- Run-log rapportage voor autonome runs.
+- Handmatig blijft: visuele verificatie op /dev — krimpen via meer
+  pure-function-dekking, batchen aan einde-feature, deterministische
+  demo-states (rdydemo-stijl).
+
 ## Visual system / aanpak
 - **design-conventies: zie CLAUDE.md** ("Design — bron van waarheid": UI-build-loop, token-discipline, self-heal).
 - Beslissing: **THEME-FIRST**. `design/tokens.css` (donker, 4-tabs) = styling-bron van waarheid; volledig gemirrord in `src/Tokens.html`.
