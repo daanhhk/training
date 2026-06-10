@@ -67,7 +67,7 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 commit: pusht de huidige source (`clasp push -f`) + draait de selftest remote
 (`clasp run-function runSelfTest`), parset de envelope `{ failures, passed, failed }`, en
 exit non-zero als `failed > 0` OF `passed < BASELINE`. Geen commit tenzij de gate exit 0
-geeft. BASELINE (478) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
+geeft. BASELINE (479) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
 niet; verhoog BASELINE alleen om te ratelen ná een feature die tests toevoegt. De oude
 handmatige selftest-loop (Daan draait `runSelfTest` in de editor) is VERVALLEN.
 
