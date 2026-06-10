@@ -407,6 +407,9 @@ function testArchetype_(ctx) {
   var b10 = expandArchetype_(fx[1], { ftp: 275, doelMin: 80, mesoFactor: 1.0, faseOffset: 0 });
   var b11 = expandArchetype_(fx[1], { ftp: 275, doelMin: 80, mesoFactor: 1.1, faseOffset: 0 });
   assert_(ctx, 'arch meso-richting', true, workPct(b11) > workPct(b10));
+  // onPct-fallback (geen werk-range op de fixture): leidt nog pctLo/pctHi af (collapsed onLo==onHi).
+  var foBlk = b10.blokken.filter(function (b) { return b.pctLo === 98 && b.pctHi === 98; });
+  assert_(ctx, 'arch onPct-fallback', true, foBlk.length > 0);
 }
 
 // ── Fase 1 deel 2a — productie-archetype-register (data + push-pariteit) ──
@@ -443,6 +446,13 @@ function testArchetypeLib_(ctx) {
     assert_(ctx, 'lib ' + rec.id + ' structuurtype', true, ARCHETYPE_STRUCTUURTYPES.indexOf(rec.structuurtype) >= 0);
     var coreMin = expandArchetype_(rec, { ftp: 275, lthr: 178, doelMin: 0, mesoFactor: 1.0, faseOffset: 0 }).totaalMin;
     assertClose_(ctx, 'lib ' + rec.id + ' min~core', rec.duurRange[0], coreMin, 1.5);
+    // NIEUW — int-werk-blok met werk-range: een ECHTE range (pctHi-pctLo == onPctHi-onPctLo > 0, niet ±2).
+    rec.core.forEach(function (c) {
+      if (c.kind === 'int' && c.onPctLo != null && c.onPctHi != null) {
+        var hit = wo.blokken.filter(function (b) { return b.pctLo === c.onPctLo && b.pctHi === c.onPctHi; });
+        assert_(ctx, 'lib ' + rec.id + ' werk-range', true, hit.length > 0 && (c.onPctHi - c.onPctLo) > 0);
+      }
+    });
   });
 }
 

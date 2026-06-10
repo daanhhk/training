@@ -89,14 +89,19 @@ function expandArchetype_(rec, ctx) {
       var offUnit = (c.offMin != null) ? 'min' : 'sec';
       var onVal   = (c.onMin != null) ? c.onMin : c.onSec;
       var offVal  = (c.offMin != null) ? c.offMin : c.offSec;
-      var onP = adj(c.onPct), offP = adj(c.offPct);
+      // Werk-range: onPctLo/onPctHi → echte range; afwezig → onPct-fallback (collapsed = onLo==onHi).
+      var onLo, onHi;
+      if (c.onPctLo != null && c.onPctHi != null) { onLo = adj(c.onPctLo); onHi = adj(c.onPctHi); }
+      else { var op = adj(c.onPct); onLo = op; onHi = op; }
+      var onMid = Math.round((onLo + onHi) / 2);   // representatieve pct → bucket (zoals nu)
+      var offP = adj(c.offPct);
       // ÉÉN repeat-rij ("Nx M min/sec"), rust in de note — exact renderVariant_'s vorm.
-      structuur.push([c.label, c.reps + 'x ' + onVal + ' ' + onUnit, wattsRange(ftp, onP, onP),
+      structuur.push([c.label, c.reps + 'x ' + onVal + ' ' + onUnit, wattsRange(ftp, onLo, onHi),
         archBpm_('work', lthr), offVal + ' ' + offUnit + ' rust @ ' + offP + '%']);
       // reps × [on, off] runtime-blokken (balk + intent), GEEN extra structuur-rij.
       for (var rr = 0; rr < c.reps; rr++) {
-        if (onMin > 0)  { blokken.push({ minuten: r1(onMin),  zone: pctZoneBucket_(onP),  pctLo: onP,  pctHi: onP  }); preMin += r1(onMin); }
-        if (offMin > 0) { blokken.push({ minuten: r1(offMin), zone: pctZoneBucket_(offP), pctLo: offP, pctHi: offP }); preMin += r1(offMin); }
+        if (onMin > 0)  { blokken.push({ minuten: r1(onMin),  zone: pctZoneBucket_(onMid), pctLo: onLo, pctHi: onHi }); preMin += r1(onMin); }
+        if (offMin > 0) { blokken.push({ minuten: r1(offMin), zone: pctZoneBucket_(offP),  pctLo: offP, pctHi: offP }); preMin += r1(offMin); }
       }
     }
   });
@@ -189,7 +194,7 @@ var ARCHETYPES = [
   { id: 'threshold_long', structuurtype: 'intervals', effectTags: ['drempel'], zone: 4,
     duurRange: [82, 120],
     warmup: { durMin: 15, pctLo: 55, pctHi: 75 },
-    core: [{ kind: 'int', label: 'Drempel', reps: 3, onMin: 14, onPct: 98, offMin: 5, offPct: 55 }],
+    core: [{ kind: 'int', label: 'Drempel', reps: 3, onMin: 14, onPctLo: 95, onPctHi: 102, offMin: 5, offPct: 55 }],
     cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
     fill: { zone: 2, pct: 65 },
     naam: 'Drempel lang 3×14', focus: 'sustained threshold',
@@ -215,7 +220,7 @@ var ARCHETYPES = [
   { id: 'sweetspot_long', structuurtype: 'intervals', effectTags: ['sweetspot'], zone: 4,
     duurRange: [103, 135],
     warmup: { durMin: 15, pctLo: 55, pctHi: 70 },
-    core: [{ kind: 'int', label: 'Sweet Spot', reps: 3, onMin: 20, onPct: 90, offMin: 6, offPct: 50 }],
+    core: [{ kind: 'int', label: 'Sweet Spot', reps: 3, onMin: 20, onPctLo: 88, onPctHi: 93, offMin: 6, offPct: 50 }],
     cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
     fill: { zone: 2, pct: 65 },
     naam: 'Sweet Spot lang 3×20', focus: 'climbing endurance',
@@ -240,7 +245,7 @@ var ARCHETYPES = [
   { id: 'sweetspot_short', structuurtype: 'intervals', effectTags: ['sweetspot'], zone: 4,
     duurRange: [52, 90],
     warmup: { durMin: 12, pctLo: 55, pctHi: 70 },
-    core: [{ kind: 'int', label: 'Sweet Spot', reps: 2, onMin: 12, onPct: 90, offMin: 4, offPct: 50 }],
+    core: [{ kind: 'int', label: 'Sweet Spot', reps: 2, onMin: 12, onPctLo: 88, onPctHi: 92, offMin: 4, offPct: 50 }],
     cooldown: { durMin: 8, pctLo: 45, pctHi: 55 },
     fill: { zone: 2, pct: 65 },
     naam: 'Sweet Spot kort 2×12', focus: 'sweet spot',
@@ -249,7 +254,7 @@ var ARCHETYPES = [
   { id: 'vo2_long', structuurtype: 'intervals', effectTags: ['vo2'], zone: 5,
     duurRange: [65, 100],
     warmup: { durMin: 15, pctLo: 55, pctHi: 80 },
-    core: [{ kind: 'int', label: 'VO2 5×4', reps: 5, onMin: 4, onPct: 112, offMin: 4, offPct: 50 }],
+    core: [{ kind: 'int', label: 'VO2 5×4', reps: 5, onMin: 4, onPctLo: 110, onPctHi: 115, offMin: 4, offPct: 50 }],
     cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
     fill: { zone: 2, pct: 65 },
     naam: 'VO2max 5×4', focus: 'vo2 capacity',
@@ -257,7 +262,7 @@ var ARCHETYPES = [
   { id: 'vo2_hill_repeats', structuurtype: 'intervals', effectTags: ['vo2'], zone: 5,
     duurRange: [59, 95],
     warmup: { durMin: 15, pctLo: 55, pctHi: 80 },
-    core: [{ kind: 'int', label: 'Hill reps', reps: 9, onSec: 90, onPct: 115, offMin: 2, offPct: 50 }],
+    core: [{ kind: 'int', label: 'Hill reps', reps: 9, onSec: 90, onPctLo: 112, onPctHi: 118, offMin: 2, offPct: 50 }],
     cooldown: { durMin: 12, pctLo: 45, pctHi: 55 },
     fill: { zone: 2, pct: 65 },
     naam: 'VO2 Hill Repeats 9×90s', focus: 'explosive climbing',
@@ -265,7 +270,7 @@ var ARCHETYPES = [
   { id: 'vo2_microburst', structuurtype: 'microburst', effectTags: ['vo2'], zone: 5,
     duurRange: [35, 70],
     warmup: { durMin: 15, pctLo: 55, pctHi: 80 },
-    core: [{ kind: 'int', label: 'Microbursts 30/30', reps: 10, onSec: 30, onPct: 122, offSec: 30, offPct: 50 }],
+    core: [{ kind: 'int', label: 'Microbursts 30/30', reps: 10, onSec: 30, onPctLo: 120, onPctHi: 130, offSec: 30, offPct: 50 }],
     cooldown: { durMin: 10, pctLo: 45, pctHi: 55 },
     fill: { zone: 2, pct: 65 },
     naam: 'Anaerobe capaciteit 10×30/30', focus: 'anaerobic capacity',
