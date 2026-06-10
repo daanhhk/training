@@ -703,6 +703,13 @@ function testAllocateQualityWeek_(ctx) {
   var pd = allocateQualityWeek_(week(), ftp, 'Build', dekFresh, [], null, null, SF, today, false, null);
   assert_(ctx, 'alloc ftp no-adjacent-hard', true, noAdjacent(hardIdxs(pd)));
   assert_(ctx, 'alloc ftp 3 quality', 3, qCount(pd));
+  // E — done-quality threading (#3): pendel-only week (geen longride_efforts → volle 3 quality-slots);
+  // weekDays met 1 done-hard dag (threshold) reduceert de quota 3 → 2.
+  var daysP = [dW(0, 'pendel', 80), dW(1, 'pendel', 80), dW(2, 'pendel', 80), dW(3, 'pendel', 80), dW(4, 'pendel', 80)];
+  var baseN = qCount(allocateQualityWeek_(daysP, klim, 'Build', dekFresh, [], null, null, SK, today, false, null));
+  var redN = qCount(allocateQualityWeek_(daysP, klim, 'Build', dekFresh, [], null, null, SK, today, false, null,
+    daysP.concat([dW(0, 'vrij', 75, { gedaan: true, vt: 'threshold' })])));
+  assert_(ctx, 'alloc done-quality reductie 3->2', true, baseN === 3 && redN === 2);
 }
 
 function testCoach_(ctx) {

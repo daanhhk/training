@@ -113,7 +113,7 @@ function generateProposal() {
   var taperCtx = macro.taperEventDate
     ? { datum: macro.taperEventDate, venster: macro.taperVenster, isTrip: !!macro.taperIsTrip }
     : null;
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.macroFase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, eventDate, taperCtx);
+  assignWorkouts(tePlannen, settings, mesoWeek, macro.macroFase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, eventDate, taperCtx, days);
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
@@ -730,7 +730,7 @@ function primaryBucketOfType_(type, doel) {
  * lange rit, dan debt-pre-claim, dan resterende quality-slots gespreid +
  * coverage-gebiast (forward), en vult de rest met endurance.
  */
-function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recentHardDate, debt, settings, today, taperActief, taperCtx) {
+function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recentHardDate, debt, settings, today, taperActief, taperCtx, weekDays) {
   var plan = {};
   if (!profiel) return plan;
   var doel = settings.doel;
@@ -750,7 +750,8 @@ function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recent
 
   // 0. quota − reeds-voltooide harde dagen (NB: bij wiring met tePlannen = 0; zie HANDOFF).
   var doneHard = 0;
-  days.forEach(function (d) { if (d.gedaan && isHardType_(d.voorgesteldType, doel)) doneHard++; });
+  var doneScan = (weekDays && weekDays.length) ? weekDays : days;
+  doneScan.forEach(function (d) { if (d.gedaan && isHardType_(d.voorgesteldType, doel)) doneHard++; });
   var remaining = Math.max(0, quota - doneHard);
   var cov = { low: !!dekking.low, high: !!dekking.high, anaerobic: !!dekking.anaerobic };
   var rec = (recency || []).slice();
@@ -872,7 +873,7 @@ function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recent
   return plan;
 }
 
-function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate, taperCtx) {
+function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, klimType, recentHardDate, debt, isTripEvent, eventDate, taperCtx, weekDays) {
   var doel = settings.doel;
   // Taper is een per-dag-overlay (Deel 2): taperCtx = { datum, venster, isTrip }
   // of null. macroFase is hier ALTIJD de onderliggende fase (nooit 'Taper').
@@ -906,7 +907,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   // C4: bouw 't week-plan ÉÉN keer (vóór de per-dag-loop), gevoed met dezelfde dekking/recency.
   var allocToday = stripTime_(new Date());
   var quotaPlan = allocActive
-    ? allocateQualityWeek_(days, profileForDoel_(settings.doel), macroFase, dekking, qualityRecency, recentHardDate, debt, settings, allocToday, taperActief, taperCtx)
+    ? allocateQualityWeek_(days, profileForDoel_(settings.doel), macroFase, dekking, qualityRecency, recentHardDate, debt, settings, allocToday, taperActief, taperCtx, weekDays)
     : {};
 
   days.forEach(function (d) {
