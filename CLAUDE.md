@@ -35,7 +35,8 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 
 - Daan plakt NOOIT code. Alles loopt via Claude Code + `clasp push -f`.
   Diagnostiek via read-only `_Diag.gs` (gitignored — niet committen,
-  opruimen na gebruik).
+  opruimen na gebruik); een diag die zijn bevindingen RETOURNEERT kan nu via
+  `clasp run-function` draaien (geen editor-plak meer nodig).
 - Close-out van ELKE wijziging: `clasp push -f` (Apps Script → direct live
   op /dev, geen redeploy) **én** `git push` (GitHub). CLAUDE.md en
   HANDOFF.md gaan via **git, NIET clasp** (geen Apps Script-bestanden, niet
@@ -46,9 +47,10 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
 - **Rapport-cap**: MAX 200 woorden proza. Literals (bestand/functie/regel/
   key/commit-hash) exact en tellen niet mee. Geen code-dumps, geen
   prompt-herhaling, afwijkingen expliciet melden.
-- **Test-gate `runSelfTest`** (pure-engine asserts; details + stand in HANDOFF).
-  `clasp run` is GEPARKEERD → een nieuwe pure-calc-testcase draait **Daan
-  HANDMATIG** in de Apps Script-editor; CC kan 'm niet remote draaien.
+- **Test-gate (self-enforced)**: elke wijziging draait `node test-gate.mjs`
+  (= `clasp push -f` + remote `clasp run-function runSelfTest`) vóór commit;
+  geen commit tenzij groen (`failed==0` én `passed>=BASELINE`). De oude
+  handmatige editor-loop is VERVALLEN. Detail → §"Werkwijze — autonome CC-loop".
 - Mobiel-signaal "ik zit op mijn telefoon" → lever prompts als PLATTE TEKST,
   geen triple-backtick-blokken (slecht plakbaar op telefoon).
 - **HANDOFF.md = bron van waarheid voor de STAND** (chat leest die).
@@ -58,6 +60,36 @@ Twee-laags: **claude.ai-chat** = ontwerper/prompt-schrijver; **Claude Code
   KLAAR: VERWIJDER het uit BACKLOG. BACKLOG = uitsluitend nog-niet-gestart —
   voorkomt stale dubbelingen.
 - Taal: NL met Daan; English voor code/commits/logging; NL voor UI-strings.
+
+## Werkwijze — autonome CC-loop
+
+**Test-gate (self-enforced).** Elke wijziging draait door `node test-gate.mjs` vóór
+commit: pusht de huidige source (`clasp push -f`) + draait de selftest remote
+(`clasp run-function runSelfTest`), parset de envelope `{ failures, passed, failed }`, en
+exit non-zero als `failed > 0` OF `passed < BASELINE`. Geen commit tenzij de gate exit 0
+geeft. BASELINE (478) is een VLOER: nieuwe testcases (hoger `passed`) breken de gate
+niet; verhoog BASELINE alleen om te ratelen ná een feature die tests toevoegt. De oude
+handmatige selftest-loop (Daan draait `runSelfTest` in de editor) is VERVALLEN.
+
+**Mission-scoped prompts.** Een prompt = doel + acceptatiecriteria + expliciete
+toestemming om binnen scope te itereren + no-go-zones. Vaste no-go's (raken =
+stop-and-ask): Deck CSS (`.status-card`/`.status-wrap`), token-mirror (`design/tokens.css`
+↔ `src/Tokens.html` byte-identiek, geen off-palette hex), calc-consolidation
+(`dashStatsFromActivities_` c.s. — eigen hoog-risico-sessie).
+
+**Stop-and-ask.** CC stopt en vraagt (format: situatie / opties / aanbeveling /
+trade-off) bij: design/UX-ambiguïteit → Claude Design; een fragile/locked zone;
+selftest niet groen na ~3 pogingen; een niet-gelockte architectuurkeuze; iets met een
+credential. Bij twijfel: stoppen boven improviseren.
+
+**Run-log (autonome runs).** Rapporteer: gedraaide stappen, gate-uitslag
+(`passed`/`failed`), commit-hash(es), eerlijke afwijkingen. Max 200 woorden prose;
+literals (bestandsnamen/hashes/URLs) los + exact; plain text óf één code-blok.
+
+**Handmatig blijft: visuele /dev-verificatie.** CC heeft geen browser → visuele
+checkpoints doet Daan op /dev. Krimp die stap via (a) meer pure-function-dekking onder de
+gate, (b) visuele checks batchen aan einde-feature, (c) deterministische demo-states
+(rdydemo-stijl) voor toestanden zonder live-trigger.
 
 ## Design — bron van waarheid
 
