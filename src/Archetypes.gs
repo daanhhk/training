@@ -317,7 +317,7 @@ var GOAL_FASE_MOD_ = {
 var GOAL_KWALITEIT_INTENTS_ = ['drempel', 'sweetspot', 'vo2'];   // de kwaliteit-takken (klim-relevant)
 // C1 (fase 1b): intent → primaire zone-bucket (coverage-bias) + boost-grootte.
 var INTENT_PRIMARY_BUCKET_ = { drempel: 'high', sweetspot: 'high', vo2: 'anaerobic' };
-var COVERAGE_BOOST_ = 0.30;
+var COVERAGE_BOOST_ = 0.10;   // C1b: MODULEERT (tipt nauwe keuzes), overruleert beslissende profielgewichten NIET
 
 // PROFILES — naast GOAL_PROFILES_ (projectieKey verwijst ernaar). Alleen klim + ftp (2b.1).
 var PROFILES = {

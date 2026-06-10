@@ -506,10 +506,14 @@ function testGoalWorkout_(ctx) {
   var gShort = goalWorkout_(klim, 'Build', 40, []);
   assert_(ctx, 'goalWO duur-haalbaar niet-null', true, gShort != null);
   assert_(ctx, 'goalWO duur-haalbaar vo2', 'vo2max', gShort && gShort.type);
-  // C1 (b) coverage-bias: anaerobic-gat → vo2-boost wint ondanks lagere basis-gewicht.
-  assert_(ctx, 'goalWO bias anaerobic-gat', 'vo2',
+  // C1b coverage-bias = MODULATIE, niet override (COVERAGE_BOOST_ 0.10):
+  // klim NAUWE keuze (vo2 0.35+0.10=0.45 > drempel 0.40) → anaerobic-gat tipt naar vo2.
+  assert_(ctx, 'goalWO bias klim anaerobic-gat->vo2', 'vo2',
     goalPickIntent_(klim, 'Build', null, 75, { low: true, high: true, anaerobic: false }));
-  // high-gat → een high-bucket-intent (drempel/sweetspot), NIET vo2.
+  // ftp BESLISSENDE voorkeur HOUDT (drempel 0.45 > vo2 0.20+0.10=0.30) → high-bucket, NIET vo2.
+  assert_(ctx, 'goalWO bias ftp anaerobic-gat houdt-high', 'high',
+    INTENT_PRIMARY_BUCKET_[goalPickIntent_(ftp, 'Build', null, 75, { low: true, high: true, anaerobic: false })]);
+  // high-gat → high-bucket-intent (drempel/sweetspot), NIET vo2.
   assert_(ctx, 'goalWO bias high-gat', 'high',
     INTENT_PRIMARY_BUCKET_[goalPickIntent_(klim, 'Build', null, 75, { low: true, high: false, anaerobic: true })]);
   // backward-compat: zonder beschikbareTijd én dekking = ongewijzigd (hoogste gewicht).
