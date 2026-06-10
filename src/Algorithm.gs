@@ -2267,12 +2267,12 @@ function getTrainingLibrary_(settings) {
 // FTP/LTHR-wijziging; 6h backstop. getTrainingLibrary_ blijft ONGEMOEID (test-gate).
 function getTrainingLibraryCached_(settings) {
   var cache = CacheService.getUserCache();
-  var key = 'trainlib_v1_' + Utilities.base64Encode(
+  var key = 'trainlib_v2_' + Utilities.base64Encode(
     Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([settings.ftp, settings.lthr])));
   var hit = cache.get(key);
   if (hit) { try { return JSON.parse(hit); } catch (e) {} }
   var lib = getTrainingLibrary_(settings);
-  try { cache.put(key, JSON.stringify(lib), 21600); } catch (e) {}   // 6h; key zelf-invalideert op input-wijziging
+  try { cache.put(key, JSON.stringify(lib), 21600); } catch (e) {}   // 6h; key invalideert op ftp/lthr — BUMP de _vN_ bij ELKE library/segment-SHAPE-wijziging (bv. pctLo/pctHi), anders serveert de cache een stale shape
   return lib;
 }
 
