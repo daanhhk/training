@@ -47,6 +47,7 @@ function runSelfTest() {
   testVolumeModulatie_(ctx);
   testCovGateBase_(ctx);
   testProfielenVo2maxConditie_(ctx);
+  testSnapshotDayAction_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
 
@@ -673,6 +674,23 @@ function testProfielenVo2maxConditie_(ctx) {
   function archOk(p) { var g = goalWorkout_(p, 'Build', 75, []); return !!(g && g.archetypeId && ARCHETYPES.filter(function (a) { return a.id === g.archetypeId; }).length > 0); }
   assert_(ctx, 'prof vo2max archetype-resolutie', true, archOk(vo2));
   assert_(ctx, 'prof conditie archetype-resolutie', true, archOk(cond));
+}
+
+// ── Knip-a — snapshotDayAction_ (puur): freeze-first voor VOORBIJE dagen ──
+function testSnapshotDayAction_(ctx) {
+  var today = '2026-06-11';
+  // VOORBIJ + vorige entry → freeze, ongeacht train/type (gemist + avail-uit + de bug-case verbatim).
+  assert_(ctx, 'snap past+prev freeze', 'freeze', snapshotDayAction_('2026-06-10', today, true, true, 'taper_z2_kort'));
+  assert_(ctx, 'snap past+prev bug-case (type leeg) freeze', 'freeze', snapshotDayAction_('2026-06-10', today, true, true, ''));
+  assert_(ctx, 'snap past+prev avail-uit freeze', 'freeze', snapshotDayAction_('2026-06-10', today, true, false, ''));
+  // VOORBIJ + geen prev → rebuild als er 'n type is, anders skip.
+  assert_(ctx, 'snap past+noprev+type rebuild', 'rebuild', snapshotDayAction_('2026-06-10', today, false, true, 'long_z2'));
+  assert_(ctx, 'snap past+noprev+geen-type skip', 'skip', snapshotDayAction_('2026-06-10', today, false, true, ''));
+  // VANDAAG/TOEKOMST: train+type → rebuild; anders skip; NOOIT freeze (ook niet met prev).
+  assert_(ctx, 'snap today train+type rebuild', 'rebuild', snapshotDayAction_('2026-06-11', today, false, true, 'sweet_spot'));
+  assert_(ctx, 'snap future train+type rebuild', 'rebuild', snapshotDayAction_('2026-06-14', today, true, true, 'long_z2'));
+  assert_(ctx, 'snap future restdag+prev skip (volgt nieuw plan)', 'skip', snapshotDayAction_('2026-06-14', today, true, false, ''));
+  assert_(ctx, 'snap future geen-type skip', 'skip', snapshotDayAction_('2026-06-13', today, false, false, ''));
 }
 
 // ── Fase 1 deel 2b.2 commit 1 — plumbing: buildWorkout-routing + recency-extractor ──

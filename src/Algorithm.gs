@@ -50,6 +50,18 @@ function mesoFactor(week) {
 /**
  * Entry point — gekoppeld aan menu item "Genereer voorstel voor deze week".
  */
+// Knip-a (puur): wat doet de weekplan-snapshot met een dag? VOORBIJE dag (dISO < todayISO) mét 'n
+// vorige entry → 'freeze' (behoud, ONGEACHT train/type — dekt gemist én beschikbaarheid-uitgezet);
+// voorbij zónder vorige entry → 'rebuild' als er 'n type is, anders 'skip'. Vandaag/toekomst volgt
+// het NIEUWE plan: 'rebuild' bij train+type, anders 'skip' — NOOIT bevriezen.
+function snapshotDayAction_(dISO, todayISO, hasPrev, train, voorgesteldType) {
+  if (dISO < todayISO) {
+    if (hasPrev) return 'freeze';
+    return voorgesteldType ? 'rebuild' : 'skip';
+  }
+  return (train && voorgesteldType) ? 'rebuild' : 'skip';
+}
+
 function generateProposal() {
   cleanupOldProposals_();
 
@@ -132,8 +144,8 @@ function generateProposal() {
   // Types die hun template ZELF schalen naar d.minuten (zie genericLongZ2 /
   // genericCombo). Voor andere types loggen we als template > 30min afwijkt.
   var SCALABLE_TYPES = { long_z2: 1, combo_long_with_efforts: 1 };
-  // Knip-fix (a): bevries voorbije/niet-tePlannen dagen — behoud hun vorige
-  // weekplan-entry i.p.v. retroactief herbouwen met nieuwe template-minuten.
+  // Knip-fix (a): bevries VOORBIJE dagen (date-compare, niet tePlannenSet) — behoud hun vorige
+  // weekplan-entry i.p.v. retroactief herbouwen/verdwijnen. Beslissing = snapshotDayAction_ (puur).
   var prevByDate = {};
   try {
     var prevRaw = getDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), '');
@@ -142,8 +154,7 @@ function generateProposal() {
       if (Array.isArray(prevArr)) prevArr.forEach(function (e) { if (e && e.datum) prevByDate[e.datum] = e; });
     }
   } catch (e) {}
-  var tePlannenSet = {};
-  tePlannen.forEach(function (tp) { if (tp.datum) tePlannenSet[formatDate(tp.datum, 'yyyy-MM-dd')] = true; });
+  var todayISO = formatDate(today, 'yyyy-MM-dd');
   days.forEach(function (d) {
     if (!d.datum) return;
     var dISO = formatDate(d.datum, 'yyyy-MM-dd');
@@ -158,9 +169,12 @@ function generateProposal() {
         return;
       }
     }
-    if (!d.train || !d.voorgesteldType) return;
-    // Niet-tePlannen (voorbij/voltooid) + vorige entry aanwezig → bevries (geen retroactieve wijziging).
-    if (!tePlannenSet[dISO] && prevByDate[dISO]) { weekplan.push(prevByDate[dISO]); return; }
+    // Knip-a (freeze-first): bepaal de actie VÓÓR de train/type-guard zodat 'n VOORBIJE dag
+    // (gemist OF beschikbaarheid-uitgezet → voorgesteldType leeg) z'n vorige entry behoudt i.p.v.
+    // te verdwijnen. Vandaag/toekomst volgt het nieuwe plan (nooit bevriezen).
+    var action = snapshotDayAction_(dISO, todayISO, !!prevByDate[dISO], d.train, d.voorgesteldType);
+    if (action === 'freeze') { weekplan.push(prevByDate[dISO]); return; }
+    if (action === 'skip') return;
 
     // v2b-B: pendel-dag expandeert naar pendelAantal sessies van pendelDuurMin;
     // overige dagen = één sessie van d.minuten (basiskey, ongewijzigd gedrag).
