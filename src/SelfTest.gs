@@ -35,6 +35,7 @@ function runSelfTest() {
   testReadinessAdjust_(ctx);
   testPowerCurve_(ctx);
   testGoalProjection_(ctx);
+  testActiveGoalProfile_(ctx);
   testArchetype_(ctx);
   testArchetypeLib_(ctx);
   testGoalWorkout_(ctx);
@@ -380,6 +381,27 @@ function testGoalProjection_(ctx) {
   assert_(ctx, 'maxRecentRideH 42d', 2, maxRecentRideH_(AV, 42));
   assert_(ctx, 'tssPerHourRecent 42d', 55, tssPerHourRecent_(AV, 42));
   assert_(ctx, 'weeklyHoursRecent 42d', 0.5, weeklyHoursRecent_(AV, 42));
+}
+
+// ── FTP goal-profile — doel-gedreven activeGoalProfile_ + ftp-profiel-vorm ──
+function testActiveGoalProfile_(ctx) {
+  // doel → profiel-mapping (object-identiteit; geen side-effects).
+  assert_(ctx, 'activeProfile FTP->ftp', GOAL_PROFILES_.ftp, activeGoalProfile_({ doel: 'FTP' }));
+  assert_(ctx, 'activeProfile Beklimmingen->girona', GOAL_PROFILES_.girona, activeGoalProfile_({ doel: 'Beklimmingen' }));
+  assert_(ctx, 'activeProfile VO2max->girona', GOAL_PROFILES_.girona, activeGoalProfile_({ doel: 'VO2max' }));
+  assert_(ctx, 'activeProfile Conditie->girona', GOAL_PROFILES_.girona, activeGoalProfile_({ doel: 'Conditie' }));
+  assert_(ctx, 'activeProfile onbekend->girona', GOAL_PROFILES_.girona, activeGoalProfile_({ doel: 'xyz' }));
+  assert_(ctx, 'activeProfile missing->girona', GOAL_PROFILES_.girona, activeGoalProfile_({}));
+  assert_(ctx, 'activeProfile null-settings->girona', GOAL_PROFILES_.girona, activeGoalProfile_(null));
+  // ftp-profiel: key 'ftp' + PRECIES 1 dim (ctl / 65 / up).
+  var ftp = GOAL_PROFILES_.ftp;
+  assert_(ctx, 'ftp profiel key', 'ftp', ftp.key);
+  assert_(ctx, 'ftp profiel 1 dim', 1, ftp.dims.length);
+  assert_(ctx, 'ftp dim metric', 'ctl', ftp.dims[0].metric);
+  assert_(ctx, 'ftp dim target', 65, ftp.dims[0].target);
+  assert_(ctx, 'ftp dim dir', 'up', ftp.dims[0].dir);
+  // ctlApproachWeeks_ met de ftp duur-target = eindig getal (bereikbaar pad).
+  assert_(ctx, 'ftp target ctlWeeks finite', true, isFinite(ctlApproachWeeks_(45, 80, ftp.dims[0].target)));
 }
 
 // ── Fase 1 deel 1 — archetype-expander (puur) ──

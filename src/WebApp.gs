@@ -456,17 +456,27 @@ function eftpFromActivities_(actValues) {
 // ════════════════════════════════════════════════════════════════
 // Swap-able doel-seam: generaliseert voorbij Girona. Per dim {metric, target, unit, dir}.
 var GOAL_PROFILES_ = {
-  girona: { label: 'Girona', dims: [
+  girona: { key: 'girona', label: 'Girona', sub: '~90 km · 1200 hm/dag · lange klimmen', dims: [
     { key: 'klim', label: 'Klimvermogen', metric: 'ftpWkg', target: 4.0, unit: 'W/kg', dir: 'up' },
     { key: 'duur', label: 'Duurvermogen', metric: 'ctl', target: 65, unit: 'CTL', dir: 'up' },
     { key: 'lang', label: 'Lange-rit', metric: 'longRideH', target: 4.0, unit: 'u', dir: 'up' }
+  ] },
+  // FTP-doel: GEEN klim/lange-rit-target — de speculatieve ftpBandFromProjection_-band IS de
+  // doel-uitspraak (test-gereedheid). Eén duur-as (CTL) als solide volume-anker.
+  ftp: { key: 'ftp', label: 'FTP', sub: 'fitheid-opbouw · CTL-doel', dims: [
+    { key: 'duur', label: 'Duurvermogen', metric: 'ctl', target: 65, unit: 'CTL', dir: 'up' }
   ] }
 };
 var FTP_GAIN_PER_CTL_ = 0.004, FTP_GAIN_CAP_ = 0.08;   // speculatieve FTP-winst (tunebaar)
 var PROJ_TAU_DAYS_ = 42;                               // PMC-tijdconstante (CTL-ramp)
 
-// Actief doelprofiel. Seam: later mappen uit settings.doel / A-event — nu altijd Girona.
-function activeGoalProfile_(settings) { return GOAL_PROFILES_.girona; }
+// Actief doelprofiel — doel-gedreven (PUUR, geen side-effects). FTP → ftp; Beklimmingen +
+// VO2max/Conditie/onbekend/missing → girona (fallback).
+function activeGoalProfile_(settings) {
+  var doel = settings && settings.doel;
+  if (doel === 'FTP') return GOAL_PROFILES_.ftp;
+  return GOAL_PROFILES_.girona;
+}
 
 // gap t.o.v. target; dir 'up' = hoger is beter. onTrack = doel gehaald; pct = voortgang 0..1.
 function goalGap_(current, target, dir) {
@@ -575,7 +585,7 @@ function buildGoalProfile_(settings, inputs) {
     return { key: d.key, label: d.label, metric: d.metric, unit: d.unit, dir: d.dir,
              target: d.target, current: cur, gap: g.gap, onTrack: g.onTrack, pct: g.pct };
   });
-  return { key: 'girona', label: prof.label, dims: dims };
+  return { key: prof.key, label: prof.label, sub: prof.sub || null, dims: dims };
 }
 
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
