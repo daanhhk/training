@@ -1619,7 +1619,7 @@
     var gp = state.goalProfile, p = state.projection;
     if (!gp || !gp.dims || !gp.dims.length || !p || p.currentCtl == null || p.ftp == null) {
       el.innerHTML = '<div class="rc-card"><div class="nvd-head"><div class="rc-overline">Doel-gereedheid</div><span class="nv-soon-tag">Visie</span></div>' +
-        '<div class="nv-empty muted">Stel je Girona-doel in en verbind je historie — dan projecteren we je gereedheid.</div></div>';
+        '<div class="nv-empty muted">Stel je doel in en verbind je historie — dan projecteren we je gereedheid.</div></div>';
       return;
     }
     if (nvDoelHours == null) {
@@ -1640,15 +1640,15 @@
     var onT = gp.dims.filter(function (d) { return d.onTrack; });
     var gaps = gp.dims.filter(function (d) { return !d.onTrack; }).sort(function (a, b) { return (a.pct == null ? 2 : a.pct) - (b.pct == null ? 2 : b.pct); });
     var sumTxt, sumMod;
-    if (!gaps.length) { sumTxt = 'Alle assen op koers — je bent <strong>Girona-klaar</strong>.'; sumMod = 'ok'; }
+    if (!gaps.length) { sumTxt = 'Alle assen op koers — je bent <strong>' + esc(gp.label) + '-klaar</strong>.'; sumMod = 'ok'; }
     else if (onT.length) { sumTxt = esc(onT.map(function (d) { return d.label; }).join(' & ')) + ' op koers — <strong>' + esc(gaps[0].label.toLowerCase()) + '</strong> is je laatste stap.'; sumMod = 'ok'; }
     else { sumTxt = 'Nog werk op alle assen — focus op <strong>' + esc(gaps[0].label.toLowerCase()) + '</strong>.'; sumMod = 'neutral'; }
     var aannames = ['2 sleutelsessies per week, consequent', 'Regelmaat ≥ 90% — geen lange onderbrekingen', 'Herstel & voeding op orde', 'FTP-winst vlakt af richting je plafond'];
     var assumItems = aannames.map(function (a) { return '<div class="nvd-assum-item"><span class="nvd-assum-dot"></span><span>' + esc(a) + '</span></div>'; }).join('');
     var pill = '<span class="nvd-pill"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1L1 10.5h10L6 1z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6 5v2.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><circle cx="6" cy="8.8" r="0.6" fill="currentColor"/></svg>schatting</span>';
     el.innerHTML = '<div class="rc-card">' +
-      '<div class="nvd-head"><div><div class="rc-overline">Doel-gereedheid · Girona</div>' +
-        '<div class="nvd-sub muted">~90 km · 1200 hm/dag · lange klimmen</div></div><span class="nv-soon-tag">Visie</span></div>' +
+      '<div class="nvd-head"><div><div class="rc-overline">Doel-gereedheid · ' + esc(gp.label) + '</div>' +
+        '<div class="nvd-sub muted">' + esc(gp.sub || '') + '</div></div><span class="nv-soon-tag">Visie</span></div>' +
       '<div class="nvd-gaps">' + rows + '</div>' +
       '<div class="nvd-callout ' + sumMod + '"><span class="nvd-callout-dot"></span><span>' + sumTxt + '</span></div>' +
       '<div class="nvd-whatif">' +
