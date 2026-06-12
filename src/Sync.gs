@@ -161,7 +161,10 @@ function syncActivities() {
       pi   != null ? Math.round(pi   * 100) / 100 : '',
       a.icu_ftp         != null ? a.icu_ftp         : '',   // gezette FTP @ rit
       a.icu_weight      != null ? a.icu_weight      : '',   // gewicht @ rit
-      a.icu_rolling_ftp != null ? a.icu_rolling_ftp : ''    // rolling/eFTP (2c)
+      a.icu_rolling_ftp != null ? a.icu_rolling_ftp : '',   // rolling/eFTP (2c)
+      // idx15 — icu_zone_times als JSON (0-API zone-debt). Zelfde respons,
+      // geen extra API-call. Leeg wanneer de rit geen power-zonedata heeft.
+      (a.icu_zone_times && a.icu_zone_times.length) ? JSON.stringify(a.icu_zone_times) : ''
     ];
   });
 

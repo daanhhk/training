@@ -14,8 +14,13 @@ var ACTIVITEITEN_SHEET = 'Activiteiten';
 var ACT_HEADERS = [
   'Datum', 'Type', 'Naam', 'Duur (min)', 'Afstand (km)',
   'Gem W', 'Norm W', 'IF', 'TSS', 'Gem HR', 'Max HR', 'PI',
-  'FTP', 'Gewicht', 'Rolling FTP'
+  'FTP', 'Gewicht', 'Rolling FTP', 'Zone-tijden'
 ];
+
+// idx15 — icu_zone_times als compacte JSON-string (leeg = geen power-zonedata).
+// APPEND-only kolom: blijft op 15 ook als er later kolommen achteraan komen.
+// Leesbron voor de 0-API zone-debt (zoneTimesFromCell_ → tryPowerZoneTimes_).
+var ACT_ZONE_TIMES_IDX = 15;
 
 function buildActiviteiten(ss) {
   var sh = getOrCreateSheet(ss, ACTIVITEITEN_SHEET);
@@ -41,6 +46,6 @@ function buildActiviteiten(ss) {
   sh.setConditionalFormatRules(rules);
 
   SpreadsheetApp.flush();
-  var widths = [100, 80, 240, 80, 100, 70, 75, 60, 70, 80, 80, 60, 60, 70, 80];
+  var widths = [100, 80, 240, 80, 100, 70, 75, 60, 70, 80, 80, 60, 60, 70, 80, 120];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 }
