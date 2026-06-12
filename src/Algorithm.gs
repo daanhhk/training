@@ -413,15 +413,73 @@ function typeBucket_(type, doel) {
 }
 
 /**
+ * Pure parser: Activiteiten-tab cel (idx15 'Zone-tijden') → icu_zone_times-array
+ * [{id,secs},...] óf null. Leeg / niet-string / malformed / leeg-array → null.
+ * Spiegelt de live icu_zone_times-vorm zodat tryPowerZoneTimes_ 'm 1:1 leest.
+ */
+function zoneTimesFromCell_(cellValue) {
+  if (cellValue == null) return null;
+  var s = String(cellValue).trim();
+  if (!s) return null;
+  var arr;
+  try { arr = JSON.parse(s); } catch (e) { return null; }
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  return arr;
+}
+
+/**
+ * Live-pad (API-fallback): fiets-activiteiten van de laatste 14 dagen, gegroepeerd
+ * op dISO. Byte-identiek aan het oude computeZoneDebt_-inlezen.
+ */
+function zoneActsByDateFromApi_() {
+  var acts = [];
+  try { acts = getActivities(14) || []; } catch (e) { console.warn('computeZoneDebt getActivities: ' + e.message); }
+  var byDate = {};
+  acts.forEach(function (a) {
+    if (CYCLING_TYPES.indexOf(String(a.type || '')) < 0) return;  // alleen fiets — runs betalen geen cycling-debt (v2d)
+    if (!a.start_date_local) return;
+    var key = formatDate(stripTime_(new Date(a.start_date_local)), 'yyyy-MM-dd');
+    (byDate[key] = byDate[key] || []).push(a);
+  });
+  return byDate;
+}
+
+/**
+ * 0-API-pad: bouwt dezelfde dISO→[activity]-map uit de voor-gelezen Activiteiten-
+ * tab-array. Per rij een pseudo-activity {type, start_date_local, icu_zone_times}
+ * zodat de per-dag-loop + actualZoneMinutes_ identiek draaien aan het live-pad.
+ */
+function zoneActsByDateFromTab_(actValues) {
+  var byDate = {};
+  if (!actValues || !actValues.length) return byDate;
+  actValues.forEach(function (r) {
+    if (!(r[0] instanceof Date)) return;                          // idx0 = Datum
+    if (CYCLING_TYPES.indexOf(String(r[1] || '')) < 0) return;    // idx1 = Type, alleen fiets
+    var key = formatDate(stripTime_(r[0]), 'yyyy-MM-dd');
+    (byDate[key] = byDate[key] || []).push({
+      type: r[1], start_date_local: r[0],
+      icu_zone_times: zoneTimesFromCell_(r[ACT_ZONE_TIMES_IDX])
+    });
+  });
+  return byDate;
+}
+
+/**
  * Vergelijkt geplande intent (weekplan_<weekStart>) met werkelijke
  * zone-minuten van voltooide+gematchte dagen DEZE week.
  * debt[bucket] = Σ intent - Σ actual (positief = tekort).
  * |debt| < 5 min → 0 (verwaarloosbaar). Geen zone-data voor een dag →
  * aanname dat de intent gehaald is (debt 0 voor die dag).
  *
+ * Actuals-bron: voor-gelezen Activiteiten-tab (0-API) wanneer `actValues`
+ * meegegeven is, anders de live API (byte-identiek aan vroeger). Mist de tab
+ * zone-data voor een gereden+gedane dag → val voor déze berekening terug op de
+ * live API (730d-rewrite self-healt de tab; geen aparte backfill).
+ *
+ * @param actValues optioneel — readActiviteitenValues_()-array (idx15 = zone-times).
  * @return { debt:{low,high,anaerobic}, details:[per dag], hasPlan:bool }
  */
-function computeZoneDebt_(ss, weekStart) {
+function computeZoneDebt_(ss, weekStart, actValues) {
   var result = { debt: { low: 0, high: 0, anaerobic: 0 }, details: [], hasPlan: false };
 
   var raw = getDocProp('weekplan_' + formatDate(weekStart, 'yyyy-MM-dd'), '');
@@ -434,20 +492,14 @@ function computeZoneDebt_(ss, weekStart) {
   var planByDate = {};
   plan.forEach(function (p) { planByDate[p.datum] = p; });
 
-  // Activities ophalen (icu_zone_times zit niet in de tab) — stil falen.
-  var acts = [];
-  try { acts = getActivities(14) || []; } catch (e) { console.warn('computeZoneDebt getActivities: ' + e.message); }
-  var actsByDate = {};
-  acts.forEach(function (a) {
-    if (CYCLING_TYPES.indexOf(String(a.type || '')) < 0) return;  // alleen fiets — runs betalen geen cycling-debt (v2d)
-    if (!a.start_date_local) return;
-    var key = formatDate(stripTime_(new Date(a.start_date_local)), 'yyyy-MM-dd');
-    (actsByDate[key] = actsByDate[key] || []).push(a);
-  });
+  // Actuals-bron: tab (0-API, gethreaded) of live API-fallback.
+  var fromSheet = !!actValues;
+  var actsByDate = fromSheet ? zoneActsByDateFromTab_(actValues) : zoneActsByDateFromApi_();
 
   var wsT = stripTime_(weekStart).getTime();
   var weT = wsT + 7 * 24 * 60 * 60 * 1000;
 
+  var coverageGap = false;
   var planner = readPlanner(ss);
   planner.forEach(function (day) {
     if (!day.train || !day.gedaan || !day.datum) return;
@@ -470,6 +522,11 @@ function computeZoneDebt_(ss, weekStart) {
       }
     });
 
+    // Dekkings-gat (alleen sheet-pad): er reed een fiets-activiteit op een
+    // geplande+gedane dag, maar de tab levert er geen zone-data voor → de tab is
+    // (nog) niet dekkend → val voor déze berekening terug op de live API.
+    if (fromSheet && dayActs.length > 0 && !actual) coverageGap = true;
+
     result.details.push({
       datum: key, dag: day.dag, type: p.workoutType,
       intent: p.intent, actual: actual, hasData: !!actual, source: source
@@ -480,6 +537,11 @@ function computeZoneDebt_(ss, weekStart) {
       result.debt[b] += (p.intent[b] || 0) - (actual[b] || 0);
     });
   });
+
+  if (fromSheet && coverageGap) {
+    console.info('computeZoneDebt_: tab zone-dekking incompleet → API-fallback');
+    return computeZoneDebt_(ss, weekStart);   // live-pad, byte-identiek aan vroeger
+  }
 
   ['low', 'high', 'anaerobic'].forEach(function (b) {
     result.debt[b] = Math.round(result.debt[b]);

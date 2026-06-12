@@ -1035,7 +1035,7 @@ function getDashboardState() {
   if (wellness.signal !== 'normal') waarom.push('Bijsturing: ' + wellness.reason);
   waarom.push('Garmin-verwachting: ' + garminVerdict);
   try {
-    var fb = computeZoneDebt_(ss, weekStart);
+    var fb = computeZoneDebt_(ss, weekStart, actValues);   // 0-API: lees uit de gethreade tab-array
     if (fb && fb.hasPlan) {
       ['high','anaerobic','low'].forEach(function (b) {
         var v = Number(fb.debt[b]) || 0;

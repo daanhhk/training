@@ -53,6 +53,8 @@ function runSelfTest() {
   testSnapshotDayAction_(ctx);
   testCoachAdaptatie_(ctx);
   testRideDetail_(ctx);
+  testZoneTimesFromCell_(ctx);
+  testZoneDebtSheet_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1049,4 +1051,65 @@ function testRideDetail_(ctx) {
   assertClose_(ctx, 'rd wkg 3.5', 3.5, rdWkg_(245, 70), 0.001);
   assert_(ctx, 'rd wkg geen gewicht', null, rdWkg_(200, 0));
   assert_(ctx, 'rd wkg geen watt', null, rdWkg_(null, 70));
+}
+
+// ── 0-API zone-debt: cel-parser + tab-sourcing (puur) ───────────────
+function testZoneTimesFromCell_(ctx) {
+  var valid = JSON.stringify([{ id: 'Z1', secs: 600 }, { id: 'Z3', secs: 300 }]);
+  var p = zoneTimesFromCell_(valid);
+  assert_(ctx, 'zt valid is-array', true, Array.isArray(p));
+  assert_(ctx, 'zt valid len', 2, p ? p.length : -1);
+  assert_(ctx, 'zt valid id0', 'Z1', p ? p[0].id : null);
+  assert_(ctx, 'zt empty-string → null', null, zoneTimesFromCell_(''));
+  assert_(ctx, 'zt whitespace → null', null, zoneTimesFromCell_('   '));
+  assert_(ctx, 'zt null → null', null, zoneTimesFromCell_(null));
+  assert_(ctx, 'zt empty-array → null', null, zoneTimesFromCell_('[]'));
+  assert_(ctx, 'zt non-array json → null', null, zoneTimesFromCell_('{"a":1}'));
+  assert_(ctx, 'zt scalar json → null', null, zoneTimesFromCell_('5'));
+  assert_(ctx, 'zt malformed → null', null, zoneTimesFromCell_('[{id:'));
+}
+
+function testZoneDebtSheet_(ctx) {
+  // Equivalentie: een tab-rij met icu_zone_times-JSON levert via
+  // zoneActsByDateFromTab_ → actualZoneMinutes_ DEZELFDE bucket-minuten als een
+  // live activity met dezelfde icu_zone_times (per-dag-loop is gedeelde code).
+  var zt = [{ id: 'Z1', secs: 600 }, { id: 'Z2', secs: 600 },
+            { id: 'Z3', secs: 300 }, { id: 'Z5', secs: 120 }, { id: 'SS', secs: 90 }];
+  var liveAct = { type: 'Ride', start_date_local: new Date(2026, 0, 5), icu_zone_times: zt };
+  var live = actualZoneMinutes_(liveAct, null);
+  assertClose_(ctx, 'live low (Z1+Z2=20m)', 20, live.low, 0.001);
+  assertClose_(ctx, 'live high (Z3=5m)', 5, live.high, 0.001);
+  assertClose_(ctx, 'live anaerobic (Z5=2m)', 2, live.anaerobic, 0.001);
+  assert_(ctx, 'live source power', 'power', live.source);
+
+  // Tab-rij (idx0 Datum, idx1 Type, idx15 Zone-tijden-JSON) → pseudo-activity.
+  var row = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  row[0] = new Date(2026, 0, 5);
+  row[1] = 'Ride';
+  row[ACT_ZONE_TIMES_IDX] = JSON.stringify(zt);
+  var key = formatDate(stripTime_(new Date(2026, 0, 5)), 'yyyy-MM-dd');
+  var arr = zoneActsByDateFromTab_([row])[key];
+  assert_(ctx, 'tab byDate has key', 1, arr ? arr.length : 0);
+  var tab = arr ? actualZoneMinutes_(arr[0], null) : null;
+  assertClose_(ctx, 'tab low == live', live.low, tab ? tab.low : -1, 0.001);
+  assertClose_(ctx, 'tab high == live', live.high, tab ? tab.high : -1, 0.001);
+  assertClose_(ctx, 'tab anaerobic == live', live.anaerobic, tab ? tab.anaerobic : -1, 0.001);
+  assert_(ctx, 'tab source power', 'power', tab ? tab.source : null);
+
+  // Lege zone-cel → pseudo zonder data → actualZoneMinutes_ null (drijft coverageGap).
+  var emptyRow = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  emptyRow[0] = new Date(2026, 0, 6);
+  emptyRow[1] = 'Ride';
+  emptyRow[ACT_ZONE_TIMES_IDX] = '';
+  var key2 = formatDate(stripTime_(new Date(2026, 0, 6)), 'yyyy-MM-dd');
+  var arr2 = zoneActsByDateFromTab_([emptyRow])[key2];
+  assert_(ctx, 'tab empty-cell row present', 1, arr2 ? arr2.length : 0);
+  assert_(ctx, 'tab empty-cell → null zonemin', null, arr2 ? actualZoneMinutes_(arr2[0], null) : 'NOPE');
+
+  // Niet-fiets (Run) wordt gefilterd (geen entry in de map).
+  var runRow = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  runRow[0] = new Date(2026, 0, 7);
+  runRow[1] = 'Run';
+  runRow[ACT_ZONE_TIMES_IDX] = JSON.stringify(zt);
+  assert_(ctx, 'tab non-cycling filtered', 0, Object.keys(zoneActsByDateFromTab_([runRow])).length);
 }
