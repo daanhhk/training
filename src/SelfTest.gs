@@ -55,6 +55,10 @@ function runSelfTest() {
   testRideDetail_(ctx);
   testZoneTimesFromCell_(ctx);
   testZoneDebtSheet_(ctx);
+  testDashActuals_(ctx);
+  testDashStats_(ctx);
+  testDashBeginAnker_(ctx);
+  testDashNiveauReeks_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1112,4 +1116,114 @@ function testZoneDebtSheet_(ctx) {
   runRow[1] = 'Run';
   runRow[ACT_ZONE_TIMES_IDX] = JSON.stringify(zt);
   assert_(ctx, 'tab non-cycling filtered', 0, Object.keys(zoneActsByDateFromTab_([runRow])).length);
+}
+
+// ── dash-calc characterization (4 fns, pin vóór single-pass consolidatie) ──
+// 16-koloms actValues-rij (idx0..15). Deze fns filteren NIET op type.
+function _dcRow_(date, o) {
+  o = o || {};
+  var r = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  r[0] = date;
+  if (o.naam !== undefined) r[2]  = o.naam;
+  if (o.min  !== undefined) r[3]  = o.min;
+  if (o.ifv  !== undefined) r[7]  = o.ifv;
+  if (o.tss  !== undefined) r[8]  = o.tss;
+  if (o.ftp  !== undefined) r[12] = o.ftp;
+  if (o.gew  !== undefined) r[13] = o.gew;
+  return r;
+}
+function _dcDayOffset_(n) { return new Date(stripTime_(new Date()).getTime() - n * 86400000); }
+function _dcFindMaand_(arr, mk) { for (var i = 0; i < arr.length; i++) if (arr[i].maand === mk) return arr[i]; return null; }
+
+function testDashActuals_(ctx) {
+  var rows = [
+    _dcRow_(new Date(2025, 5, 10), { naam: 'Ochtendrit', min: 75, ifv: 0.82, tss: 85 }),
+    _dcRow_(new Date(2025, 5, 10), { naam: 'Avondrit',  min: 40, ifv: 0.70, tss: 45 }), // zelfde datum → eerste (nieuwste) wint
+    _dcRow_(new Date(2025, 5, 8),  { naam: '', min: 0 }),                                 // naam-fallback + lege tss/IF
+    _dcRow_('geen-datum', { naam: 'x', min: 99 })                                         // niet-Date → skip
+  ];
+  var m = dashActualsByDate_(rows);
+  assert_(ctx, 'actuals key-count', 2, Object.keys(m).length);
+  assert_(ctx, 'actuals nieuwste wint naam', 'Ochtendrit', m['2025-06-10'].naam);
+  assert_(ctx, 'actuals nieuwste wint dur', 75, m['2025-06-10'].duurMin);
+  assert_(ctx, 'actuals nieuwste wint tss', 85, m['2025-06-10'].tss);
+  assertClose_(ctx, 'actuals nieuwste wint IF', 0.82, m['2025-06-10'].ifReal, 0.0001);
+  assert_(ctx, 'actuals naam-fallback', 'Rit', m['2025-06-08'].naam);
+  assert_(ctx, 'actuals lege dur → 0', 0, m['2025-06-08'].duurMin);
+  assert_(ctx, 'actuals lege tss → null', null, m['2025-06-08'].tss);
+  assert_(ctx, 'actuals lege IF → null', null, m['2025-06-08'].ifReal);
+}
+
+function testDashStats_(ctx) {
+  var rows = [
+    _dcRow_(_dcDayOffset_(3),   { min: 60,  tss: 50 }),   // d7 + d28 + jaar
+    _dcRow_(_dcDayOffset_(5),   { min: 30,  tss: 20 }),   // d7 + d28 + jaar
+    _dcRow_(_dcDayOffset_(100), { min: 90,  tss: 70 }),   // jaar
+    _dcRow_(_dcDayOffset_(400), { min: 120, tss: 100 }),  // geen bucket (oudste)
+    _dcRow_('x', { min: 99, tss: 99 })                    // niet-Date → skip
+  ];
+  var s = dashStatsFromActivities_(rows);
+  assert_(ctx, 'stats d7 ritten', 2, s.stats.d7.ritten);
+  assert_(ctx, 'stats d7 min', 90, s.stats.d7.tijdMin);
+  assert_(ctx, 'stats d7 tss', 70, s.stats.d7.tss);
+  assert_(ctx, 'stats d28 ritten', 2, s.stats.d28.ritten);   // 100d/400d uitgesloten
+  assert_(ctx, 'stats d28 tss', 70, s.stats.d28.tss);
+  assert_(ctx, 'stats jaar ritten', 3, s.stats.jaar.ritten); // 400d uitgesloten
+  assert_(ctx, 'stats jaar min', 180, s.stats.jaar.tijdMin);
+  assert_(ctx, 'stats jaar tss', 140, s.stats.jaar.tss);
+  assert_(ctx, 'stats spanDagen', 400, s.spanDagen);
+  assert_(ctx, 'stats eersteDatum', formatDate(_dcDayOffset_(400), 'yyyy-MM-dd'), s.eersteDatum);
+  // maandtotalen: som-invariant t.o.v. maand-split (geen flake bij maandgrens)
+  var mr = 0, mt = 0;
+  s.maandTotalen.forEach(function (x) { mr += x.ritten; mt += x.tss; });
+  assert_(ctx, 'stats maand som-ritten', 4, mr);
+  assert_(ctx, 'stats maand som-tss', 240, mt);
+  var sorted = true;
+  for (var i = 1; i < s.maandTotalen.length; i++) if (s.maandTotalen[i - 1].maand < s.maandTotalen[i].maand) sorted = false;
+  assert_(ctx, 'stats maand sorted-desc', true, sorted);
+}
+
+function testDashBeginAnker_(ctx) {
+  var rows = [
+    _dcRow_(new Date(2025, 5, 10), { ftp: 275, gew: 70 }),
+    _dcRow_(new Date(2025, 2, 1),  { ftp: 260, gew: 71 }),
+    _dcRow_(new Date(2025, 0, 5),  { ftp: 240, gew: 72 }),  // oudste → anker
+    _dcRow_('x', { ftp: 999, gew: 99 })                     // niet-Date → skip
+  ];
+  var a = dashBeginAnker_(null, rows);
+  assert_(ctx, 'anker ftp', 240, a.ftp);
+  assert_(ctx, 'anker gewicht', 72, a.gewicht);
+  assert_(ctx, 'anker datum', '2025-01-05', formatDate(a.datum, 'yyyy-MM-dd'));
+  assert_(ctx, 'anker leeg → null', null, dashBeginAnker_(null, []));
+  var a2 = dashBeginAnker_(null, [_dcRow_(new Date(2025, 0, 5), {})]);
+  assert_(ctx, 'anker lege ftp → null', null, a2.ftp);
+  assert_(ctx, 'anker lege gew → null', null, a2.gewicht);
+}
+
+function testDashNiveauReeks_(ctx) {
+  var rows = [
+    _dcRow_(new Date(2025, 4, 15), { ftp: 270, gew: 68 }),  // mei: telt
+    _dcRow_(new Date(2025, 4, 2),  { ftp: 999 }),           // mei: gew leeg → skip
+    _dcRow_(new Date(2025, 2, 20), { ftp: 260, gew: 70 }),  // mrt: later → wint
+    _dcRow_(new Date(2025, 2, 10), { ftp: 250, gew: 70 }),  // mrt: vroeger → verliest
+    _dcRow_(new Date(2025, 0, 25), { ftp: 245, gew: 71 }),  // jan: later, MAAR anker overschrijft
+    _dcRow_(new Date(2025, 0, 5),  { ftp: 240, gew: 72 }),  // jan: oudste = anker
+    _dcRow_('x', { ftp: 1, gew: 1 })                        // niet-Date → skip
+  ];
+  var out = dashNiveauReeks_(null, rows);
+  assert_(ctx, 'niveau out[0] maand', '2025-01', out[0].maand);
+  assert_(ctx, 'niveau anker-overschrijft ftp', 240, out[0].ftp);   // 245 (later) verliest van anker 240
+  assert_(ctx, 'niveau anker-overschrijft gew', 72, out[0].gewicht);
+  var exp01 = Math.round(computeNiveau_(240, 72).niveau * 10) / 10;
+  assertClose_(ctx, 'niveau anker-niveau', exp01, out[0].niveau, 0.0001);
+  var mrt = _dcFindMaand_(out, '2025-03');
+  assert_(ctx, 'niveau mrt last-on-date ftp', 260, mrt.ftp);        // 03-20 wint van 03-10
+  assert_(ctx, 'niveau mrt gew', 70, mrt.gewicht);
+  var mei = _dcFindMaand_(out, '2025-05');
+  assert_(ctx, 'niveau mei null-gew-skip ftp', 270, mei.ftp);       // 999/leeg-gew genegeerd
+  assert_(ctx, 'niveau mei gew', 68, mei.gewicht);
+  var feb = _dcFindMaand_(out, '2025-02');
+  assert_(ctx, 'niveau feb gap ftp', null, feb.ftp);
+  assert_(ctx, 'niveau feb gap niveau', null, feb.niveau);
+  assert_(ctx, 'niveau lengte >= 6', true, out.length >= 6);        // jan..nu minstens
 }
