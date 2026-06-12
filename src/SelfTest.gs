@@ -36,6 +36,8 @@ function runSelfTest() {
   testPowerCurve_(ctx);
   testGoalProjection_(ctx);
   testActiveGoalProfile_(ctx);
+  testCtlAtWeek_(ctx);
+  testDoelTestWeken_(ctx);
   testArchetype_(ctx);
   testArchetypeLib_(ctx);
   testGoalWorkout_(ctx);
@@ -402,6 +404,31 @@ function testActiveGoalProfile_(ctx) {
   assert_(ctx, 'ftp dim dir', 'up', ftp.dims[0].dir);
   // ctlApproachWeeks_ met de ftp duur-target = eindig getal (bereikbaar pad).
   assert_(ctx, 'ftp target ctlWeeks finite', true, isFinite(ctlApproachWeeks_(45, 80, ftp.dims[0].target)));
+  // projectiemodus per profiel.
+  assert_(ctx, 'girona projectieMode gap', 'gap', GOAL_PROFILES_.girona.projectieMode);
+  assert_(ctx, 'ftp projectieMode test', 'test', GOAL_PROFILES_.ftp.projectieMode);
+}
+
+// ── FTP-test-projectie — ctlAtWeek_ (PMC-approach) + doelTestWeken_ (weken tot testdag) ──
+function testCtlAtWeek_(ctx) {
+  assert_(ctx, 'ctlAtWeek wk0=current', 50, ctlAtWeek_(50, 80, 0));
+  assert_(ctx, 'ctlAtWeek groot->plateau', 80, ctlAtWeek_(50, 80, 200));
+  var a = ctlAtWeek_(50, 80, 6), b = ctlAtWeek_(50, 80, 12);
+  assert_(ctx, 'ctlAtWeek monotoon stijgend', true, a > 50 && b > a && b < 80);
+  var dn = ctlAtWeek_(70, 50, 6);
+  assert_(ctx, 'ctlAtWeek dalend (cur>plateau)', true, dn < 70 && dn > 50);
+  assert_(ctx, 'ctlAtWeek null-guard', null, ctlAtWeek_(null, 80, 6));
+  assert_(ctx, 'ctlAtWeek neg-weken null', null, ctlAtWeek_(50, 80, -1));
+}
+function testDoelTestWeken_(ctx) {
+  // 2026-06-02 + 12*7 = 2026-08-25; vanaf 2026-06-11 = 75 dgn → ceil(75/7) = 11.
+  assert_(ctx, 'doelTestWeken normaal', 11, doelTestWeken_('2026-06-02', 12, '2026-06-11'));
+  // testdag al voorbij → clamp 0.
+  assert_(ctx, 'doelTestWeken voorbij->0', 0, doelTestWeken_('2026-06-02', 1, '2026-08-01'));
+  // exact veelvoud (7 dgn) → 1 week.
+  assert_(ctx, 'doelTestWeken ceil exact', 1, doelTestWeken_('2026-06-02', 1, '2026-06-02'));
+  assert_(ctx, 'doelTestWeken missing->null', null, doelTestWeken_(null, 12, '2026-06-11'));
+  assert_(ctx, 'doelTestWeken bad-dur->null', null, doelTestWeken_('2026-06-02', 0, '2026-06-11'));
 }
 
 // ── Fase 1 deel 1 — archetype-expander (puur) ──

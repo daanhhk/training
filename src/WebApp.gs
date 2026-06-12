@@ -456,14 +456,15 @@ function eftpFromActivities_(actValues) {
 // ════════════════════════════════════════════════════════════════
 // Swap-able doel-seam: generaliseert voorbij Girona. Per dim {metric, target, unit, dir}.
 var GOAL_PROFILES_ = {
-  girona: { key: 'girona', label: 'Girona', sub: '~90 km · 1200 hm/dag · lange klimmen', dims: [
+  girona: { key: 'girona', label: 'Girona', sub: '~90 km · 1200 hm/dag · lange klimmen', projectieMode: 'gap', dims: [
     { key: 'klim', label: 'Klimvermogen', metric: 'ftpWkg', target: 4.0, unit: 'W/kg', dir: 'up' },
     { key: 'duur', label: 'Duurvermogen', metric: 'ctl', target: 65, unit: 'CTL', dir: 'up' },
     { key: 'lang', label: 'Lange-rit', metric: 'longRideH', target: 4.0, unit: 'u', dir: 'up' }
   ] },
-  // FTP-doel: GEEN klim/lange-rit-target — de speculatieve ftpBandFromProjection_-band IS de
-  // doel-uitspraak (test-gereedheid). Eén duur-as (CTL) als solide volume-anker.
-  ftp: { key: 'ftp', label: 'FTP', sub: 'fitheid-opbouw · CTL-doel', dims: [
+  // FTP-doel: 'test'-projectiemodus — vaste testdatum + gegeven volume → "wat te verwachten op
+  // testdag". De duur-dim (CTL 65) blijft voor chain-robuustheid maar is ONGEBRUIKT in test-modus
+  // (geen gap-rij/target-lijn); de ftpBandFromProjection_-band (gevoed met ctlAtTest) IS de doel-uitspraak.
+  ftp: { key: 'ftp', label: 'FTP', sub: 'opbouw naar FTP-test', projectieMode: 'test', dims: [
     { key: 'duur', label: 'Duurvermogen', metric: 'ctl', target: 65, unit: 'CTL', dir: 'up' }
   ] }
 };
@@ -526,6 +527,30 @@ function ftpBandFromProjection_(currentFtp, currentCtl, plateauCtl, gewicht) {
   };
 }
 
+// CTL op week N via exp. PMC-benadering (tau 42d). week 0 = current; groot N → plateau;
+// current>plateau → dalend richting plateau. Finite guards; null bij ontbrekende/negatieve input.
+function ctlAtWeek_(currentCtl, plateauCtl, weeks) {
+  if (currentCtl == null || plateauCtl == null || weeks == null) return null;
+  var w = Number(weeks); if (!isFinite(w) || w < 0) return null;
+  return Math.round((plateauCtl + (currentCtl - plateauCtl) * Math.exp(-w * 7 / PROJ_TAU_DAYS_)) * 10) / 10;
+}
+
+// Hele weken (ceil) van vandaag tot doelStart + doelDuur*7 dagen (= testdag). Clamp ≥ 0; null bij
+// ontbrekende/ongeldige input. Kalender-datum-rekenkunde (DST-veilig).
+function doelTestWeken_(doelStartISO, doelDuurWeeks, todayISO) {
+  function parse(iso) {
+    if (!iso || typeof iso !== 'string') return null;
+    var m = iso.split('-'); if (m.length !== 3) return null;
+    var d = new Date(Number(m[0]), Number(m[1]) - 1, Number(m[2]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  var start = parse(doelStartISO), today = parse(todayISO), dur = Number(doelDuurWeeks);
+  if (!start || !today || !isFinite(dur) || dur <= 0) return null;
+  var test = new Date(start.getFullYear(), start.getMonth(), start.getDate() + dur * 7);
+  var days = Math.round((test.getTime() - today.getTime()) / 86400000);
+  return Math.max(0, Math.ceil(days / 7));
+}
+
 // ── Activiteiten-array recent-window helpers (newest-first; idx0=datum, idx3=duur-min, idx8=TSS).
 // Anker = nieuwste rit-datum (deterministisch/testbaar); venster = [anker − days, anker].
 function actParseDate_(v) {
@@ -585,7 +610,7 @@ function buildGoalProfile_(settings, inputs) {
     return { key: d.key, label: d.label, metric: d.metric, unit: d.unit, dir: d.dir,
              target: d.target, current: cur, gap: g.gap, onTrack: g.onTrack, pct: g.pct };
   });
-  return { key: prof.key, label: prof.label, sub: prof.sub || null, dims: dims };
+  return { key: prof.key, label: prof.label, sub: prof.sub || null, projectieMode: prof.projectieMode || 'gap', dims: dims };
 }
 
 // ── Dag-kaart bouwer (gedeeld door Vandaag + Kalender) ───────────
@@ -1196,11 +1221,16 @@ function getDashboardState() {
   // §d Doel-projectie: actieve doel-assen + projectie-inputs (PURE; client recomputet what-if inline).
   var projLongRideH = maxRecentRideH_(actValues, 90);
   var goalProfile = buildGoalProfile_(settings, { ftpWkg: niv.wkg, ctl: ctlNow, longRideH: projLongRideH });
+  var dStartISO = settings.doelStart ? formatDate(settings.doelStart, 'yyyy-MM-dd') : null;
   var projection = {
     currentCtl: (ctlNow != null ? Math.round(ctlNow * 10) / 10 : null),
     tssPerHour: tssPerHourRecent_(actValues, 42),
     weeklyHoursDefault: weeklyHoursRecent_(actValues, 42),
-    ftp: settings.ftp || null, gewicht: gewicht || null
+    ftp: settings.ftp || null, gewicht: gewicht || null,
+    testWeken: doelTestWeken_(dStartISO, settings.doelDuur, formatDate(new Date(), 'yyyy-MM-dd')),
+    testDatumISO: (dStartISO && settings.doelDuur)
+      ? formatDate(new Date(stripTime_(settings.doelStart).getFullYear(), stripTime_(settings.doelStart).getMonth(), stripTime_(settings.doelStart).getDate() + settings.doelDuur * 7), 'yyyy-MM-dd')
+      : null
   };
   var niveauBasis = niv.niveau;
   var conditieMod = computeConditieMod_(ctlNow, ctlRef);
