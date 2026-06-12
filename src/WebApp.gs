@@ -96,25 +96,79 @@ function readWellnessValues_() {
   return sh.getRange(2, 1, last - 1, WELL_HEADERS.length).getValues();
 }
 
-/** Activiteiten-tab → map dISO → {naam, duurMin, tss} (cycling, nieuwste wint).
- *  actValues (optioneel) = voor-gelezen readActiviteitenValues_() — anders zelf-lezen. */
-function dashActualsByDate_(actValues) {
-  if (!actValues) actValues = readActiviteitenValues_();
-  var map = {};
-  if (!actValues) return map;
-  var data = actValues;
-  data.forEach(function (r) {
+/**
+ * Single-pass scan over de Activiteiten-tab-array (idx0..15). Vult in ÉÉN
+ * iteratie de accumulators voor dashActualsByDate_ / dashStatsFromActivities_ /
+ * dashBeginAnker_ / dashNiveauReeks_ (READ-ONCE-THREAD). De vier outputs blijven
+ * byte-identiek aan de losse fns; deze collapse't 4 (5 incl. niveau's interne
+ * anker-call) full-passes naar 1. `empty` = de truthy-lege-actValues-tak van stats.
+ */
+function dashActivityScan_(actValues) {
+  var scan = {
+    actualsByDate: {},
+    stats: { d7: { tss: 0, tijdMin: 0, ritten: 0 }, d28: { tss: 0, tijdMin: 0, ritten: 0 }, jaar: { tss: 0, tijdMin: 0, ritten: 0 } },
+    maand: {}, oudsteT: null, oudsteRow: null, byMonth: {},
+    now: stripTime_(new Date()).getTime(),
+    empty: (!actValues || !actValues.length)
+  };
+  if (!actValues || !actValues.length) return scan;
+  actValues.forEach(function (r) {
     if (!(r[0] instanceof Date)) return;
-    var key = formatDate(r[0], 'yyyy-MM-dd');
-    if (map[key]) return; // nieuwste eerst → eerste hit wint
-    map[key] = {
-      naam: String(r[2] || 'Rit'),
-      duurMin: Number(r[3]) || 0,
-      tss: r[8] !== '' && r[8] != null ? Number(r[8]) : null,
-      ifReal: r[7] !== '' && r[7] != null ? Number(r[7]) : null   // IF (idx7) — coach-engine
-    };
+    var d = r[0];
+    var key = formatDate(d, 'yyyy-MM-dd');
+    var mk  = formatDate(d, 'yyyy-MM');
+    var t   = stripTime_(d).getTime();
+
+    // (1) actualsByDate — nieuwste-eerst → eerste hit per datum wint
+    if (!scan.actualsByDate[key]) {
+      scan.actualsByDate[key] = {
+        naam: String(r[2] || 'Rit'),
+        duurMin: Number(r[3]) || 0,
+        tss: r[8] !== '' && r[8] != null ? Number(r[8]) : null,
+        ifReal: r[7] !== '' && r[7] != null ? Number(r[7]) : null   // IF (idx7) — coach-engine
+      };
+    }
+
+    // (2) stats: d7/d28/jaar-buckets + maandtotalen + oudste t
+    var min = Number(r[3]) || 0;
+    var tss = (r[8] !== '' && r[8] != null) ? Number(r[8]) : 0;
+    var ageDays = (scan.now - t) / 86400000;
+    if (ageDays >= 0 && ageDays < 7)   { scan.stats.d7.tss   += tss; scan.stats.d7.tijdMin   += min; scan.stats.d7.ritten++; }
+    if (ageDays >= 0 && ageDays < 28)  { scan.stats.d28.tss  += tss; scan.stats.d28.tijdMin  += min; scan.stats.d28.ritten++; }
+    if (ageDays >= 0 && ageDays < 365) { scan.stats.jaar.tss += tss; scan.stats.jaar.tijdMin += min; scan.stats.jaar.ritten++; }
+    if (!scan.maand[mk]) scan.maand[mk] = { maand: mk, ritten: 0, tijdMin: 0, tss: 0 };
+    scan.maand[mk].ritten++; scan.maand[mk].tijdMin += min; scan.maand[mk].tss += tss;
+    if (scan.oudsteT === null || t < scan.oudsteT) scan.oudsteT = t;
+
+    // (3) oudste ROW (niveau-anker) — eerste-min-wint (strikt <, byte-identiek aan dashBeginAnker_)
+    if (!scan.oudsteRow || t < stripTime_(scan.oudsteRow[0]).getTime()) scan.oudsteRow = r;
+
+    // (4) byMonth (niveau) — laatste-op-datum met BEIDE ftp(idx12)+gewicht(idx13) gevuld
+    var ftp = (r[12] !== '' && r[12] != null) ? Number(r[12]) : null;
+    var gew = (r[13] !== '' && r[13] != null) ? Number(r[13]) : null;
+    if (ftp != null && gew != null) {
+      if (!scan.byMonth[mk] || t > scan.byMonth[mk].t) scan.byMonth[mk] = { t: t, ftp: ftp, gewicht: gew };
+    }
   });
-  return map;
+  return scan;
+}
+
+/** Oudste-rij → niveau/anker-object {datum, ftp, gewicht} (idx0/12/13), null bij geen rij. */
+function _ankerFromRow_(row) {
+  if (!row) return null;
+  return {
+    datum: row[0],
+    ftp: (row[12] !== '' && row[12] != null) ? Number(row[12]) : null,
+    gewicht: (row[13] !== '' && row[13] != null) ? Number(row[13]) : null
+  };
+}
+
+/** Activiteiten-tab → map dISO → {naam, duurMin, tss, ifReal} (nieuwste wint).
+ *  actValues (optioneel) = voor-gelezen readActiviteitenValues_() — anders zelf-lezen.
+ *  scan (optioneel) = gedeelde dashActivityScan_ (READ-ONCE-THREAD). */
+function dashActualsByDate_(actValues, scan) {
+  if (!scan) scan = dashActivityScan_(actValues || readActiviteitenValues_());
+  return scan.actualsByDate;
 }
 
 /** Alle weekplan_<maandag> snapshots → map dISO → entry. Volledige historie. */
@@ -193,37 +247,24 @@ function dashWeekdag_(d) {
 }
 
 // ── Stats (d7/d28/jaar + maandtotalen) ───────────────────────────
-function dashStatsFromActivities_(actValues) {
-  if (!actValues) actValues = readActiviteitenValues_();
-  var empty = { tss: 0, tijdMin: 0, ritten: 0 };
-  var res = { d7: { tss: 0, tijdMin: 0, ritten: 0 }, d28: { tss: 0, tijdMin: 0, ritten: 0 }, jaar: { tss: 0, tijdMin: 0, ritten: 0 } };
-  var maand = {};
-  if (!actValues || !actValues.length) return { stats: res, maandTotalen: [] };
-  var data = actValues;
-  var now = stripTime_(new Date()).getTime();
-  var oudste = null;
-  data.forEach(function (r) {
-    if (!(r[0] instanceof Date)) return;
-    var t = stripTime_(r[0]).getTime();
-    if (oudste === null || t < oudste) oudste = t;
-    var ageDays = (now - t) / 86400000;
-    var min = Number(r[3]) || 0;
-    var tss = (r[8] !== '' && r[8] != null) ? Number(r[8]) : 0;
-    if (ageDays >= 0 && ageDays < 7)   { res.d7.tss += tss; res.d7.tijdMin += min; res.d7.ritten++; }
-    if (ageDays >= 0 && ageDays < 28)  { res.d28.tss += tss; res.d28.tijdMin += min; res.d28.ritten++; }
-    if (ageDays >= 0 && ageDays < 365) { res.jaar.tss += tss; res.jaar.tijdMin += min; res.jaar.ritten++; }
-    var mk = formatDate(r[0], 'yyyy-MM');
-    if (!maand[mk]) maand[mk] = { maand: mk, ritten: 0, tijdMin: 0, tss: 0 };
-    maand[mk].ritten++; maand[mk].tijdMin += min; maand[mk].tss += tss;
-  });
-  ['d7','d28','jaar'].forEach(function (k) { res[k].tss = Math.round(res[k].tss); });
-  var maandArr = Object.keys(maand).sort().reverse().slice(0, 12).map(function (k) {
-    var m = maand[k]; m.tss = Math.round(m.tss); return m;
+//  scan (optioneel) = gedeelde dashActivityScan_ (READ-ONCE-THREAD); anders zelf-lezen.
+function dashStatsFromActivities_(actValues, scan) {
+  if (!scan) scan = dashActivityScan_(actValues || readActiviteitenValues_());
+  var res = {
+    d7:   { tss: Math.round(scan.stats.d7.tss),   tijdMin: scan.stats.d7.tijdMin,   ritten: scan.stats.d7.ritten },
+    d28:  { tss: Math.round(scan.stats.d28.tss),  tijdMin: scan.stats.d28.tijdMin,  ritten: scan.stats.d28.ritten },
+    jaar: { tss: Math.round(scan.stats.jaar.tss), tijdMin: scan.stats.jaar.tijdMin, ritten: scan.stats.jaar.ritten }
+  };
+  if (scan.empty) return { stats: res, maandTotalen: [] };
+  var maandArr = Object.keys(scan.maand).sort().reverse().slice(0, 12).map(function (k) {
+    var m = scan.maand[k];
+    return { maand: m.maand, ritten: m.ritten, tijdMin: m.tijdMin, tss: Math.round(m.tss) };
   });
   // Werkelijke historie-span: de Activiteiten-tab wordt door syncActivities
   // met getActivities(28) gevoed → ~28 dagen, dus "jaar" == d28. Geef de span
   // mee zodat de client het jaar-label eerlijk kan degraderen.
-  var spanDagen = oudste !== null ? Math.round((now - oudste) / 86400000) : 0;
+  var oudste = scan.oudsteT;
+  var spanDagen = oudste !== null ? Math.round((scan.now - oudste) / 86400000) : 0;
   return {
     stats: res, maandTotalen: maandArr,
     spanDagen: spanDagen,
@@ -247,22 +288,11 @@ function sumTssVanafDatum_(ss, startDate, actValues) {
 }
 
 /** Oudste Activiteiten-rij (= vroegste datum) → begin-anker voor niveau-historie.
- *  Kolommen: A datum(0), M FTP(12), N Gewicht(13). Null bij ontbreken/pre-backfill. */
-function dashBeginAnker_(ss, actValues) {
-  if (!actValues) actValues = readActiviteitenValues_();
-  if (!actValues || !actValues.length) return null;
-  var data = actValues;
-  var oudste = null;
-  data.forEach(function (r) {
-    if (!(r[0] instanceof Date)) return;
-    if (!oudste || stripTime_(r[0]).getTime() < stripTime_(oudste[0]).getTime()) oudste = r;
-  });
-  if (!oudste) return null;
-  return {
-    datum: oudste[0],
-    ftp: (oudste[12] !== '' && oudste[12] != null) ? Number(oudste[12]) : null,
-    gewicht: (oudste[13] !== '' && oudste[13] != null) ? Number(oudste[13]) : null
-  };
+ *  Kolommen: A datum(0), M FTP(12), N Gewicht(13). Null bij ontbreken/pre-backfill.
+ *  scan (optioneel) = gedeelde dashActivityScan_ (READ-ONCE-THREAD). */
+function dashBeginAnker_(ss, actValues, scan) {
+  if (!scan) scan = dashActivityScan_(actValues || readActiviteitenValues_());
+  return _ankerFromRow_(scan.oudsteRow);
 }
 
 /**
@@ -272,24 +302,16 @@ function dashBeginAnker_(ss, actValues) {
  * beginNiveau. Ontbrekende maand → niveau:null (chart interpoleert).
  * Shape: [{maand:'yyyy-MM', niveau:Number|null, ftp:Number|null, gewicht:Number|null}].
  */
-function dashNiveauReeks_(ss, actValues) {
-  if (!actValues) actValues = readActiviteitenValues_();
-  if (!actValues || !actValues.length) return [];
-  var data = actValues;
+function dashNiveauReeks_(ss, actValues, scan) {
+  if (!scan) scan = dashActivityScan_(actValues || readActiviteitenValues_());
 
-  var byMonth = {};   // 'yyyy-MM' → { t, ftp, gewicht } (laatste-op-datum met beide gevuld)
-  data.forEach(function (r) {
-    if (!(r[0] instanceof Date)) return;
-    var ftp = (r[12] !== '' && r[12] != null) ? Number(r[12]) : null;
-    var gew = (r[13] !== '' && r[13] != null) ? Number(r[13]) : null;
-    if (ftp == null || gew == null) return;
-    var mk = formatDate(r[0], 'yyyy-MM');
-    var t = stripTime_(r[0]).getTime();
-    if (!byMonth[mk] || t > byMonth[mk].t) byMonth[mk] = { t: t, ftp: ftp, gewicht: gew };
-  });
-
-  var anker = dashBeginAnker_(ss, actValues);
+  var anker = _ankerFromRow_(scan.oudsteRow);
   if (!anker || !anker.datum) return [];
+
+  // byMonth uit de gedeelde scan; clone vóór de anker-overwrite zodat scan.byMonth
+  // ongemoeid blijft (byte-identiek aan de oude lokale-byMonth-semantiek).
+  var byMonth = {};
+  Object.keys(scan.byMonth).forEach(function (k) { byMonth[k] = scan.byMonth[k]; });
   // Begin-ankermaand overschrijven zodat punt 1 EXACT beginNiveau is.
   if (anker.ftp) {
     byMonth[formatDate(anker.datum, 'yyyy-MM')] =
@@ -995,6 +1017,8 @@ function getDashboardState() {
   var settings = readSettings(ss);
   // PERF: lees Activiteiten + Wellness ÉÉN keer; thread door alle consumenten.
   var actValues = readActiviteitenValues_();
+  // PERF: scan de Activiteiten-array ÉÉN keer; alle dash-calc-consumenten lezen eruit.
+  var actScan = dashActivityScan_(actValues);
   var wellValues = readWellnessValues_();
   var weekStart = weekStartDate(new Date());
   var mesoWeek = getMesoWeek();
@@ -1006,7 +1030,7 @@ function getDashboardState() {
   var garminVerdict = garminHeuristic(weekTss, mesoWeek, macro.fase, fs);
 
   var planner = readPlanner(ss);
-  var actuals = dashActualsByDate_(actValues);
+  var actuals = dashActualsByDate_(actValues, actScan);
   var wpByDate = dashWeekplanByDate_();
   var disposities = dashDispositionsByDate_();
   var overrides = dashOverridesByDate_();
@@ -1147,7 +1171,7 @@ function getDashboardState() {
 
   // ── Vorm ──
   var reeks = dashVormReeks_(wellValues);
-  var statsBundle = dashStatsFromActivities_(actValues);
+  var statsBundle = dashStatsFromActivities_(actValues, actScan);
 
   // ── STAP 2: readiness→plan-overlay (read-side) ──────────────────────────────
   // Zet een readiness-coach (kind:'readiness') op de VANDAAG-dag. macro.fase draagt
@@ -1197,7 +1221,7 @@ function getDashboardState() {
   // reeks/stats blijven lokaal berekend (ctlRef/voortgang/readiness), maar gaan
   // niet meer mee als payload-velden.
   var vorm = {
-    niveauReeks: dashNiveauReeks_(ss, actValues),
+    niveauReeks: dashNiveauReeks_(ss, actValues, actScan),
     huidig: fs ? { vorm: Math.round(fs.form), vormZone: fs.label, ctl: Math.round(fs.ctl), atl: Math.round(fs.atl), ramp: fs.ramp != null ? Math.round(fs.ramp * 100) / 100 : null } : null
   };
   // Niveau-tab progressie-series (W/kg + fitheid·CTL) — hergebruikt vorm.niveauReeks
@@ -1240,7 +1264,7 @@ function getDashboardState() {
   // 2b-3: beginniveau-anker uit de oudste Activiteiten-rij (icu_ftp/icu_weight).
   // conditieModBegin = 0 (data-start = referentie; Wellness-tab reikt niet tot 2024).
   var DASH_MND_ = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
-  var anker = dashBeginAnker_(ss, actValues);
+  var anker = dashBeginAnker_(ss, actValues, actScan);
   var beginNiveau = null, beginLabel = null, niveauDelta = null;
   if (anker && anker.ftp) {
     var nivBegin = computeNiveau_(anker.ftp, anker.gewicht || gewicht);
