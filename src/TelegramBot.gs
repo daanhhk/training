@@ -856,7 +856,10 @@ function rpeAvondCheck() {
     var row = null;
     planner.forEach(function (p) { if (p.datum && stripTime_(p.datum).getTime() === today) row = p; });
     if (!row || row.train !== true) { Logger.log('rpeAvondCheck: geen geplande trainingsdag vandaag'); return; }
+    // Send-guard: meerdere timer-runs binnen het 20:00-venster mogen niet herhaald sturen.
+    if (getDocProp('rpePrompted_' + dISO, '')) { Logger.log('rpeAvondCheck: RPE-prompt al verstuurd voor ' + dISO); return; }
     sendRpePrompt(chatId, dISO, rpeSessieNaamVoorDatum(dISO));
+    setDocProp('rpePrompted_' + dISO, '1');   // alleen ná geslaagde send (sendRpePrompt throwt bij fout → catch, geen vlag)
   } catch (err) { console.error('rpeAvondCheck crashed: ' + (err && err.stack ? err.stack : err)); }
 }
 
