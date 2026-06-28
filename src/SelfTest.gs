@@ -59,6 +59,7 @@ function runSelfTest() {
   testDashStats_(ctx);
   testDashBeginAnker_(ctx);
   testDashNiveauReeks_(ctx);
+  testActivityToRow_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1087,7 +1088,7 @@ function testZoneDebtSheet_(ctx) {
   assert_(ctx, 'live source power', 'power', live.source);
 
   // Tab-rij (idx0 Datum, idx1 Type, idx15 Zone-tijden-JSON) → pseudo-activity.
-  var row = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  var row = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
   row[0] = new Date(2026, 0, 5);
   row[1] = 'Ride';
   row[ACT_ZONE_TIMES_IDX] = JSON.stringify(zt);
@@ -1101,7 +1102,7 @@ function testZoneDebtSheet_(ctx) {
   assert_(ctx, 'tab source power', 'power', tab ? tab.source : null);
 
   // Lege zone-cel → pseudo zonder data → actualZoneMinutes_ null (drijft coverageGap).
-  var emptyRow = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  var emptyRow = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
   emptyRow[0] = new Date(2026, 0, 6);
   emptyRow[1] = 'Ride';
   emptyRow[ACT_ZONE_TIMES_IDX] = '';
@@ -1111,7 +1112,7 @@ function testZoneDebtSheet_(ctx) {
   assert_(ctx, 'tab empty-cell → null zonemin', null, arr2 ? actualZoneMinutes_(arr2[0], null) : 'NOPE');
 
   // Niet-fiets (Run) wordt gefilterd (geen entry in de map).
-  var runRow = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  var runRow = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
   runRow[0] = new Date(2026, 0, 7);
   runRow[1] = 'Run';
   runRow[ACT_ZONE_TIMES_IDX] = JSON.stringify(zt);
@@ -1122,7 +1123,7 @@ function testZoneDebtSheet_(ctx) {
 // 16-koloms actValues-rij (idx0..15). Deze fns filteren NIET op type.
 function _dcRow_(date, o) {
   o = o || {};
-  var r = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+  var r = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
   r[0] = date;
   if (o.naam !== undefined) r[2]  = o.naam;
   if (o.min  !== undefined) r[3]  = o.min;
@@ -1226,4 +1227,37 @@ function testDashNiveauReeks_(ctx) {
   assert_(ctx, 'niveau feb gap ftp', null, feb.ftp);
   assert_(ctx, 'niveau feb gap niveau', null, feb.niveau);
   assert_(ctx, 'niveau lengte >= 6', true, out.length >= 6);        // jan..nu minstens
+}
+
+// ── activityToRow_ (pure mapper, 17-koloms) ─────────────────────────
+function testActivityToRow_(ctx) {
+  var zt = [{ id: 'Z1', secs: 600 }, { id: 'Z3', secs: 300 }];
+  var fx = {
+    id: 'i12345', start_date_local: '2026-06-10T07:30:00', type: 'Ride', name: 'Ochtendrit',
+    moving_time: 3600, distance: 30000, icu_average_watts: 210, icu_weighted_avg_watts: 225,
+    icu_intensity: 77, icu_training_load: 85, polarization_index: 1.83,
+    average_heartrate: 142, max_heartrate: 176, icu_ftp: 270, icu_weight: 70,
+    icu_rolling_ftp: 268, icu_zone_times: zt
+  };
+  var row = activityToRow_(fx);
+  assert_(ctx, 'a2r length=17', ACT_HEADERS.length, row.length);
+  assert_(ctx, 'a2r idx0 datum', '2026-06-10', formatDate(row[0], 'yyyy-MM-dd'));
+  assert_(ctx, 'a2r idx1 type', 'Ride', row[1]);
+  assert_(ctx, 'a2r idx2 naam', 'Ochtendrit', row[2]);
+  assert_(ctx, 'a2r idx3 duur-min', 60, row[3]);
+  assert_(ctx, 'a2r idx4 afstand-km', 30, row[4]);
+  assert_(ctx, 'a2r idx5 gem-W', 210, row[5]);
+  assert_(ctx, 'a2r idx6 norm-W', 225, row[6]);
+  assert_(ctx, 'a2r idx7 IF=percentage', 77, row[7]);
+  assert_(ctx, 'a2r idx8 TSS', 85, row[8]);
+  assert_(ctx, 'a2r idx9 gem-HR', 142, row[9]);
+  assert_(ctx, 'a2r idx10 max-HR', 176, row[10]);
+  assertClose_(ctx, 'a2r idx11 PI', 1.83, row[11], 0.0001);
+  assert_(ctx, 'a2r idx12 FTP', 270, row[12]);
+  assert_(ctx, 'a2r idx13 gewicht', 70, row[13]);
+  assert_(ctx, 'a2r idx14 rolling-FTP', 268, row[14]);
+  assert_(ctx, 'a2r idx15 zone-tijden JSON', JSON.stringify(zt), row[15]);
+  assert_(ctx, 'a2r idx16 id', 'i12345', row[16]);
+  assert_(ctx, 'a2r geen id → leeg', '', activityToRow_({ start_date_local: '2026-06-10T07:30:00' })[16]);
+  assert_(ctx, 'a2r numeriek id → String', '999', activityToRow_({ id: 999, start_date_local: '2026-06-10T07:30:00' })[16]);
 }

@@ -114,6 +114,43 @@ function syncAthleteZones() {
   }
 }
 
+/**
+ * Pure mapper: één intervals.icu activity → 17-element Activiteiten-rij (idx0..16).
+ * idx0-15 byte-identiek aan de oude inline-map (IF=percentage idx7, zone-tijden
+ * JSON idx15); idx16 = activity-`id` als string (upsert-sleutel, leeg zonder id).
+ */
+function activityToRow_(a) {
+  var avg  = powerAvg_(a);
+  var norm = powerNorm_(a);
+  var ifv  = a.icu_intensity ?? a.intensity ?? null;
+  var tss  = a.icu_training_load ?? a.training_load ?? a.tss ?? null;
+  var pi   = a.polarization_index ?? a.icu_polarization_index ?? null;
+  var ahr  = a.average_heartrate ?? a.avg_hr ?? null;
+  var mhr  = a.max_heartrate ?? a.max_hr ?? null;
+
+  return [
+    a.start_date_local ? new Date(a.start_date_local) : '',
+    a.type || '',
+    a.name || '',
+    a.moving_time != null ? Math.round(a.moving_time / 60) : '',
+    a.distance    != null ? Math.round(a.distance / 100) / 10 : '',
+    avg  != null ? avg  : '',
+    norm != null ? norm : '',
+    ifv  != null ? Math.round(ifv  * 100) / 100 : '',
+    tss  != null ? Math.round(tss) : '',
+    ahr  != null ? ahr  : '',
+    mhr  != null ? mhr  : '',
+    pi   != null ? Math.round(pi   * 100) / 100 : '',
+    a.icu_ftp         != null ? a.icu_ftp         : '',   // gezette FTP @ rit
+    a.icu_weight      != null ? a.icu_weight      : '',   // gewicht @ rit
+    a.icu_rolling_ftp != null ? a.icu_rolling_ftp : '',   // rolling/eFTP (2c)
+    // idx15 — icu_zone_times als JSON (0-API zone-debt); leeg zonder power-zonedata.
+    (a.icu_zone_times && a.icu_zone_times.length) ? JSON.stringify(a.icu_zone_times) : '',
+    // idx16 — activity-id (upsert-sleutel); leeg indien de respons geen id draagt.
+    a.id != null ? String(a.id) : ''
+  ];
+}
+
 function syncActivities() {
   var data = getActivities(ACT_HISTORY_DAYS);
   var ss = SpreadsheetApp.getActive();
@@ -137,36 +174,7 @@ function syncActivities() {
     return new Date(b.start_date_local) - new Date(a.start_date_local);
   });
 
-  var rows = data.map(function (a) {
-    var avg  = powerAvg_(a);
-    var norm = powerNorm_(a);
-    var ifv  = a.icu_intensity ?? a.intensity ?? null;
-    var tss  = a.icu_training_load ?? a.training_load ?? a.tss ?? null;
-    var pi   = a.polarization_index ?? a.icu_polarization_index ?? null;
-    var ahr  = a.average_heartrate ?? a.avg_hr ?? null;
-    var mhr  = a.max_heartrate ?? a.max_hr ?? null;
-
-    return [
-      a.start_date_local ? new Date(a.start_date_local) : '',
-      a.type || '',
-      a.name || '',
-      a.moving_time != null ? Math.round(a.moving_time / 60) : '',
-      a.distance    != null ? Math.round(a.distance / 100) / 10 : '',
-      avg  != null ? avg  : '',
-      norm != null ? norm : '',
-      ifv  != null ? Math.round(ifv  * 100) / 100 : '',
-      tss  != null ? Math.round(tss) : '',
-      ahr  != null ? ahr  : '',
-      mhr  != null ? mhr  : '',
-      pi   != null ? Math.round(pi   * 100) / 100 : '',
-      a.icu_ftp         != null ? a.icu_ftp         : '',   // gezette FTP @ rit
-      a.icu_weight      != null ? a.icu_weight      : '',   // gewicht @ rit
-      a.icu_rolling_ftp != null ? a.icu_rolling_ftp : '',   // rolling/eFTP (2c)
-      // idx15 — icu_zone_times als JSON (0-API zone-debt). Zelfde respons,
-      // geen extra API-call. Leeg wanneer de rit geen power-zonedata heeft.
-      (a.icu_zone_times && a.icu_zone_times.length) ? JSON.stringify(a.icu_zone_times) : ''
-    ];
-  });
+  var rows = data.map(activityToRow_);
 
   if (rows.length) {
     sh.getRange(2, 1, rows.length, ACT_HEADERS.length).setValues(rows);
