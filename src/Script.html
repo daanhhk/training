@@ -41,15 +41,32 @@
     e.textContent = '⚠️ Kon dashboard niet laden: ' + (err && err.message ? err.message : err);
   }
   function onState(s) {
-    state = s;
-    selectedDate = s.vandaag ? s.vandaag.dateISO : null;
+    selectedDate = s.vandaag ? s.vandaag.dateISO : null;   // INITIAL-ONLY (refresh reset de selectie niet)
     // Fase 2 — pre-select check-in-sheet uit opgeslagen waarden (heropenen toont ze).
-    if (s.readiness && s.readiness.checkin) {
+    if (s.readiness && s.readiness.checkin) {              // INITIAL-ONLY
       checkinSel = { slaap: s.readiness.checkin.slaap, benen: s.readiness.checkin.benen, stress: s.readiness.checkin.stress };
     }
-    document.getElementById('loading').style.display = 'none';
+    document.getElementById('loading').style.display = 'none';        // INITIAL-ONLY
     document.getElementById('bottomnav').style.display = 'flex';
     var ab = document.getElementById('appbar'); if (ab) ab.style.display = 'flex';
+    applyStateRender(s);                                   // state=s + appbar + 5 render-fns (gedeeld met refresh)
+    switchTab('schema');                                   // INITIAL-ONLY (refresh springt niet terug naar schema)
+    google.charts.load('current', { packages: ['corechart'] });       // INITIAL-ONLY (anders her-registreert drawNvTraj_)
+    google.charts.setOnLoadCallback(function () { chartsReady = true; drawNvTraj_(); });
+    maybeAutoOpenCheckin();                                // INITIAL-ONLY
+    // Fase 2 — fire-and-forget background-refresh: incr-sync de verse rit de tab in +
+    // her-render met verse 0-API state (serieel ná read-1 → geen race, geen tab-terugsprong).
+    google.script.run
+      .withSuccessHandler(onStateRefresh)
+      .withFailureHandler(function (e) { /* stil: de instant-state blijft staan */ })
+      .refreshActivities();
+  }
+
+  // Fase 2 — herhaalbare render-subset (idempotent): eerste boot via onState, background-
+  // refresh via onStateRefresh. GEEN initial-only init (selectedDate / display-toggles /
+  // switchTab / charts.load / maybeAutoOpenCheckin blijven in onState).
+  function applyStateRender(s) {
+    state = s;
     var aw = document.getElementById('appbar-week'); if (aw) aw.textContent = 'Week ' + isoWeek_(new Date());
     var an = document.getElementById('appbar-name'); if (an) an.textContent = (s.coachName || 'Coach');   // CSS uppercaset
     renderSchema();
@@ -57,10 +74,11 @@
     renderVorm();
     renderTrainingen();
     renderNiveau();
-    switchTab('schema');
-    google.charts.load('current', { packages: ['corechart'] });
-    google.charts.setOnLoadCallback(function () { chartsReady = true; drawNvTraj_(); });
-    maybeAutoOpenCheckin();
+  }
+
+  function onStateRefresh(s) {
+    applyStateRender(s);
+    console.log('[bg-refresh] state ververst');   // TEMP fase2-verify — verwijderen bij close-out
   }
 
   // Globale app-header: ISO-kalenderweek (client, pure date) + settings-stub.
