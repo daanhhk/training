@@ -61,6 +61,8 @@ function runSelfTest() {
   testDashNiveauReeks_(ctx);
   testActivityToRow_(ctx);
   testMergeById_(ctx);
+  testEftpFromActivities_(ctx);
+  testActAnchorDate_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1318,4 +1320,35 @@ function testMergeById_(ctx) {
   assert_(ctx, 'merge(f) updated', 1, rF.updated);
   assert_(ctx, 'merge(f) len', 2, rF.rows.length);
   assert_(ctx, 'merge(f) B blijft', true, rF.rows[0][ACT_ID_IDX] === 'B' || rF.rows[1][ACT_ID_IDX] === 'B');
+}
+
+// ── eftpFromActivities_ + actAnchorDate_ (volgorde-onafhankelijk) ────
+function testEftpFromActivities_(ctx) {
+  function eRow_(date, ftp14) {
+    var r = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+    r[0] = date; r[14] = ftp14; return r;
+  }
+  // ≥2 geldige idx14, verschillende timestamps, geshuffeld → hoogste-ts-FTP wint (niet positie)
+  var rows = [
+    eRow_(new Date(2025, 0, 10), 250),   // ouder, staat eerst
+    eRow_(new Date(2025, 3, 20), 275),   // nieuwste → wint (idx 1)
+    eRow_(new Date(2025, 2, 5),  260)
+  ];
+  assert_(ctx, 'eftp hoogste-ts wint', 275, eftpFromActivities_(rows));
+  // nieuwste rij ongeldige idx14 (0) → val terug op de nieuwste GELDIGE
+  assert_(ctx, 'eftp ongeldig genegeerd', 260, eftpFromActivities_([eRow_(new Date(2025, 3, 20), 0), eRow_(new Date(2025, 2, 5), 260)]));
+  // geen geldige idx14 → null; lege input → null
+  assert_(ctx, 'eftp geen geldige → null', null, eftpFromActivities_([eRow_(new Date(2025, 3, 20), ''), eRow_(new Date(2025, 2, 5), 0)]));
+  assert_(ctx, 'eftp lege input → null', null, eftpFromActivities_([]));
+}
+
+function testActAnchorDate_(ctx) {
+  function dRow_(date) {
+    var r = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+    r[0] = date; return r;
+  }
+  // geshuffeld → meest recente datum wint, niet de eerste rij
+  var a = actAnchorDate_([dRow_(new Date(2025, 0, 10)), dRow_(new Date(2025, 3, 20)), dRow_(new Date(2025, 2, 5))]);
+  assert_(ctx, 'anchor hoogste datum', '2025-04-20', formatDate(a, 'yyyy-MM-dd'));
+  assert_(ctx, 'anchor geen datum → null', null, actAnchorDate_([dRow_('x'), dRow_('')]));
 }

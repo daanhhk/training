@@ -469,11 +469,17 @@ function pcNormalize_(c, activities, ftp) {
 // eFTP (API-vrij): recentste niet-lege idx14 ("Rolling FTP") uit de Activiteiten-array (newest-first).
 function eftpFromActivities_(actValues) {
   if (!actValues || !actValues.length) return null;
+  // Volgorde-onafhankelijk: de geldige Rolling-FTP (idx14) van de rij met de HOOGSTE
+  // idx0-timestamp wint (niet de eerste array-positie). Geldigheids-check identiek.
+  var bestT = -Infinity, bestV = null;
   for (var i = 0; i < actValues.length; i++) {
     var v = actValues[i][14];
-    if (v !== '' && v != null && !isNaN(Number(v)) && Number(v) > 0) return Math.round(Number(v));
+    if (v === '' || v == null || isNaN(Number(v)) || Number(v) <= 0) continue;
+    var d0 = actValues[i][0];
+    var t = (d0 instanceof Date && !isNaN(d0.getTime())) ? d0.getTime() : -Infinity;  // ondateerbaar → laagste prio
+    if (bestV === null || t > bestT) { bestT = t; bestV = Number(v); }
   }
-  return null;
+  return bestV != null ? Math.round(bestV) : null;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -585,8 +591,14 @@ function actParseDate_(v) {
   var d = new Date(v); return isNaN(d.getTime()) ? null : stripTime_(d);
 }
 function actAnchorDate_(actValues) {
-  for (var i = 0; i < actValues.length; i++) { var d = actParseDate_(actValues[i][0]); if (d) return d; }
-  return null;
+  // Volgorde-onafhankelijk: de meest recente (hoogste) parseerbare idx0-datum, niet de
+  // eerste array-positie. Onder een newest-first tab byte-identiek aan "eerste rij".
+  var best = null;
+  for (var i = 0; i < actValues.length; i++) {
+    var d = actParseDate_(actValues[i][0]);
+    if (d && (best === null || d.getTime() > best.getTime())) best = d;
+  }
+  return best;
 }
 // max moving-time (uren) over ritten in laatste `days`.
 function maxRecentRideH_(actValues, days) {
