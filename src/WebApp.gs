@@ -112,6 +112,7 @@ function dashActivityScan_(actValues) {
     empty: (!actValues || !actValues.length)
   };
   if (!actValues || !actValues.length) return scan;
+  var actTByKey = {};   // per datum-key de winnaar-timestamp (idx0 incl. tijd) — volgorde-onafhankelijk
   actValues.forEach(function (r) {
     if (!(r[0] instanceof Date)) return;
     var d = r[0];
@@ -119,8 +120,11 @@ function dashActivityScan_(actValues) {
     var mk  = formatDate(d, 'yyyy-MM');
     var t   = stripTime_(d).getTime();
 
-    // (1) actualsByDate — nieuwste-eerst → eerste hit per datum wint
-    if (!scan.actualsByDate[key]) {
+    // (1) actualsByDate — HOOGSTE idx0-timestamp per datum wint (volgorde-onafhankelijk).
+    // NB: t is stripTime'd (middernacht) en scheidt same-day-ritten niet → vergelijk op d.getTime().
+    var tFull = d.getTime();
+    if (!(key in actTByKey) || tFull > actTByKey[key]) {
+      actTByKey[key] = tFull;
       scan.actualsByDate[key] = {
         naam: String(r[2] || 'Rit'),
         duurMin: Number(r[3]) || 0,

@@ -1138,18 +1138,20 @@ function _dcDayOffset_(n) { return new Date(stripTime_(new Date()).getTime() - n
 function _dcFindMaand_(arr, mk) { for (var i = 0; i < arr.length; i++) if (arr[i].maand === mk) return arr[i]; return null; }
 
 function testDashActuals_(ctx) {
+  // Twee ritten zelfde datum, verschillende idx0-tijd, in "verkeerde" volgorde (oudste
+  // eerst) → hoogste-timestamp wint ongeacht array-positie (pint volgorde-onafhankelijkheid).
   var rows = [
-    _dcRow_(new Date(2025, 5, 10), { naam: 'Ochtendrit', min: 75, ifv: 0.82, tss: 85 }),
-    _dcRow_(new Date(2025, 5, 10), { naam: 'Avondrit',  min: 40, ifv: 0.70, tss: 45 }), // zelfde datum → eerste (nieuwste) wint
-    _dcRow_(new Date(2025, 5, 8),  { naam: '', min: 0 }),                                 // naam-fallback + lege tss/IF
-    _dcRow_('geen-datum', { naam: 'x', min: 99 })                                         // niet-Date → skip
+    _dcRow_(new Date(2025, 5, 10, 7, 0),  { naam: 'Ochtendrit', min: 75, ifv: 0.82, tss: 85 }), // 07:00 (ouder, staat eerst)
+    _dcRow_(new Date(2025, 5, 10, 18, 0), { naam: 'Avondrit',   min: 40, ifv: 0.70, tss: 45 }), // 18:00 (nieuwer → wint)
+    _dcRow_(new Date(2025, 5, 8),  { naam: '', min: 0 }),                                         // naam-fallback + lege tss/IF
+    _dcRow_('geen-datum', { naam: 'x', min: 99 })                                                 // niet-Date → skip
   ];
   var m = dashActualsByDate_(rows);
   assert_(ctx, 'actuals key-count', 2, Object.keys(m).length);
-  assert_(ctx, 'actuals nieuwste wint naam', 'Ochtendrit', m['2025-06-10'].naam);
-  assert_(ctx, 'actuals nieuwste wint dur', 75, m['2025-06-10'].duurMin);
-  assert_(ctx, 'actuals nieuwste wint tss', 85, m['2025-06-10'].tss);
-  assertClose_(ctx, 'actuals nieuwste wint IF', 0.82, m['2025-06-10'].ifReal, 0.0001);
+  assert_(ctx, 'actuals hoogste-ts wint naam', 'Avondrit', m['2025-06-10'].naam);   // 18:00 wint, niet de eerste rij
+  assert_(ctx, 'actuals hoogste-ts wint dur', 40, m['2025-06-10'].duurMin);
+  assert_(ctx, 'actuals hoogste-ts wint tss', 45, m['2025-06-10'].tss);
+  assertClose_(ctx, 'actuals hoogste-ts wint IF', 0.70, m['2025-06-10'].ifReal, 0.0001);
   assert_(ctx, 'actuals naam-fallback', 'Rit', m['2025-06-08'].naam);
   assert_(ctx, 'actuals lege dur → 0', 0, m['2025-06-08'].duurMin);
   assert_(ctx, 'actuals lege tss → null', null, m['2025-06-08'].tss);
