@@ -241,6 +241,40 @@ function syncActivities() {
   }
 }
 
+/**
+ * Incrementele upsert-sync (fase-1 fundament; bouwsteen voor background-refresh A
+ * én webhook B). Leest de Activiteiten-tab, haalt de laatste `dagen` (default 7)
+ * activities op, merge't via mergeById_ (upsert op activity-id + minuut-fallback) en
+ * herschrijft de tab via dezelfde clear+setValues-machinerie als syncActivities.
+ * GEEN last_sync, GEEN generateProposal (fase 2). Returnt {added, updated}.
+ * NB: posities blijven behouden (geen re-sort); de eerste echte run migreert idx16
+ * over de hele tab — bewuste close-out (deze fase draait alleen diagIncrSyncDry, dry).
+ */
+function syncActivitiesIncremental_(dagen) {
+  dagen = dagen || 7;
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(ACTIVITEITEN_SHEET);
+  if (!sh) return { added: 0, updated: 0 };
+
+  var lastRow = sh.getLastRow();
+  var existing = (lastRow < 2) ? [] : sh.getRange(2, 1, lastRow - 1, ACT_HEADERS.length).getValues();
+
+  var fresh = getActivities(dagen) || [];
+  var merged = mergeById_(existing, fresh);
+
+  // Header idempotent (zelfde stijl als syncActivities) + clear + bulk write van merged.
+  sh.getRange(1, 1, 1, ACT_HEADERS.length).setValues([ACT_HEADERS])
+    .setFontWeight('bold').setBackground('#1f2937').setFontColor('#ffffff')
+    .setHorizontalAlignment('center');
+  var lr = sh.getLastRow();
+  if (lr > 1) sh.getRange(2, 1, lr - 1, ACT_HEADERS.length).clearContent();
+  if (merged.rows.length) {
+    sh.getRange(2, 1, merged.rows.length, ACT_HEADERS.length).setValues(merged.rows);
+    sh.getRange(2, 1, merged.rows.length, 1).setNumberFormat('dd-MM-yyyy');
+  }
+  return { added: merged.added, updated: merged.updated };
+}
+
 function syncWellness() {
   var data = getWellness(30);
   var ss = SpreadsheetApp.getActive();
