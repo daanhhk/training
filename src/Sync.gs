@@ -151,6 +151,20 @@ function activityToRow_(a) {
   ];
 }
 
+/**
+ * Sorteert Activiteiten-rij-arrays nieuwste-eerst op idx0 (datum). Stabiel + pure (kopie).
+ * COSMETISCH: de correctheid zit in de timestamp-reads (dashActualsByDate_ / eftpFrom-
+ * Activities_ / actAnchorDate_), niet in deze volgorde — append-only-writes mogen dit
+ * later laten vallen. Gedeeld door syncActivities + syncActivitiesIncremental_.
+ */
+function sortActivityRowsNewestFirst_(rows) {
+  return rows.slice().sort(function (a, b) {
+    var ta = (a[0] instanceof Date) ? a[0].getTime() : 0;
+    var tb = (b[0] instanceof Date) ? b[0].getTime() : 0;
+    return tb - ta;
+  });
+}
+
 /** Activity-id van een tab-rij (idx16) → string of '' (leeg = pre-migratie rij). */
 function _rowId_(r) {
   var v = r[ACT_ID_IDX];
@@ -228,12 +242,8 @@ function syncActivities() {
     sh.getRange(2, 1, lastRow - 1, ACT_HEADERS.length).clearContent();
   }
 
-  // Sorteer nieuwste eerst (rij 2 = meest recent)
-  data.sort(function (a, b) {
-    return new Date(b.start_date_local) - new Date(a.start_date_local);
-  });
-
-  var rows = data.map(activityToRow_);
+  // Rijen nieuwste-eerst (cosmetisch; gedeelde helper sortActivityRowsNewestFirst_).
+  var rows = sortActivityRowsNewestFirst_(data.map(activityToRow_));
 
   if (rows.length) {
     sh.getRange(2, 1, rows.length, ACT_HEADERS.length).setValues(rows);
@@ -268,9 +278,10 @@ function syncActivitiesIncremental_(dagen) {
     .setHorizontalAlignment('center');
   var lr = sh.getLastRow();
   if (lr > 1) sh.getRange(2, 1, lr - 1, ACT_HEADERS.length).clearContent();
-  if (merged.rows.length) {
-    sh.getRange(2, 1, merged.rows.length, ACT_HEADERS.length).setValues(merged.rows);
-    sh.getRange(2, 1, merged.rows.length, 1).setNumberFormat('dd-MM-yyyy');
+  var outRows = sortActivityRowsNewestFirst_(merged.rows);   // cosmetisch newest-first (gedeelde helper)
+  if (outRows.length) {
+    sh.getRange(2, 1, outRows.length, ACT_HEADERS.length).setValues(outRows);
+    sh.getRange(2, 1, outRows.length, 1).setNumberFormat('dd-MM-yyyy');
   }
   return { added: merged.added, updated: merged.updated };
 }

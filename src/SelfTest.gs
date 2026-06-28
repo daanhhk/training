@@ -63,6 +63,7 @@ function runSelfTest() {
   testMergeById_(ctx);
   testEftpFromActivities_(ctx);
   testActAnchorDate_(ctx);
+  testSortActivityRowsNewestFirst_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1351,4 +1352,23 @@ function testActAnchorDate_(ctx) {
   var a = actAnchorDate_([dRow_(new Date(2025, 0, 10)), dRow_(new Date(2025, 3, 20)), dRow_(new Date(2025, 2, 5))]);
   assert_(ctx, 'anchor hoogste datum', '2025-04-20', formatDate(a, 'yyyy-MM-dd'));
   assert_(ctx, 'anchor geen datum → null', null, actAnchorDate_([dRow_('x'), dRow_('')]));
+}
+
+// ── sortActivityRowsNewestFirst_ (cosmetisch, gedeeld) ──────────────
+function testSortActivityRowsNewestFirst_(ctx) {
+  function sRow_(date, tag) {
+    var r = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+    r[0] = date; r[2] = tag; return r;
+  }
+  var out = sortActivityRowsNewestFirst_([
+    sRow_(new Date(2025, 0, 10), 'oud'),
+    sRow_(new Date(2025, 3, 20), 'nieuw'),
+    sRow_(new Date(2025, 2, 5),  'mid')
+  ]);
+  assert_(ctx, 'sort newest [0]', 'nieuw', out[0][2]);
+  assert_(ctx, 'sort newest [1]', 'mid', out[1][2]);
+  assert_(ctx, 'sort newest [2]', 'oud', out[2][2]);
+  var inp = [sRow_(new Date(2025, 0, 1), 'a'), sRow_(new Date(2025, 5, 1), 'b')];
+  sortActivityRowsNewestFirst_(inp);
+  assert_(ctx, 'sort pure (input ongemoeid)', 'a', inp[0][2]);
 }
