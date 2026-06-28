@@ -151,6 +151,65 @@ function activityToRow_(a) {
   ];
 }
 
+/** Activity-id van een tab-rij (idx16) → string of '' (leeg = pre-migratie rij). */
+function _rowId_(r) {
+  var v = r[ACT_ID_IDX];
+  return (v != null && v !== '') ? String(v) : '';
+}
+
+/** Minuut-afgeronde timestamp-sleutel van een rij-datum (idx0) → number of null. */
+function rowMinuteKey_(d) {
+  if (!(d instanceof Date)) return null;
+  var t = d.getTime();
+  if (isNaN(t)) return null;
+  return Math.floor(t / 60000);
+}
+
+/**
+ * Pure upsert-merge: bestaande tab-rijen + verse activities → {rows, added, updated}.
+ * Match PRIMAIR op idx16 (activity-id). FALLBACK (alleen existing-rijen met lege id)
+ * op minuut-afgeronde idx0-timestamp → migreert pre-migratie rijen + zet de id erin.
+ * Match → vervang in-plaats (array-positie behouden, updated++); geen match → append
+ * (added++). Existing-rijen buiten de verse set blijven ongemoeid (NOOIT verwijderen).
+ * Volledig deterministisch (sleutels uit de data, geen now/today).
+ */
+function mergeById_(existingRows, freshActivities) {
+  var rows = (existingRows || []).map(function (r) { return r.slice(); });
+  var added = 0, updated = 0;
+  var byId = {}, byMin = {};
+
+  for (var i = 0; i < rows.length; i++) {
+    var rid = _rowId_(rows[i]);
+    if (rid) {
+      if (!(rid in byId)) byId[rid] = i;
+    } else {
+      var mk = rowMinuteKey_(rows[i][0]);   // alleen lege-id rijen doen mee aan de fallback
+      if (mk != null && !(mk in byMin)) byMin[mk] = i;
+    }
+  }
+
+  (freshActivities || []).forEach(function (a) {
+    var newRow = activityToRow_(a);
+    var id = _rowId_(newRow);
+    if (id && (id in byId)) {
+      rows[byId[id]] = newRow; updated++;
+      return;
+    }
+    var nmk = rowMinuteKey_(newRow[0]);
+    if (nmk != null && (nmk in byMin)) {
+      var pos = byMin[nmk];
+      rows[pos] = newRow; updated++;      // pre-migratie rij → nu mét id
+      if (id) byId[id] = pos;
+      delete byMin[nmk];
+      return;
+    }
+    rows.push(newRow); added++;
+    if (id) byId[id] = rows.length - 1;
+  });
+
+  return { rows: rows, added: added, updated: updated };
+}
+
 function syncActivities() {
   var data = getActivities(ACT_HISTORY_DAYS);
   var ss = SpreadsheetApp.getActive();

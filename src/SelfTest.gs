@@ -60,6 +60,7 @@ function runSelfTest() {
   testDashBeginAnker_(ctx);
   testDashNiveauReeks_(ctx);
   testActivityToRow_(ctx);
+  testMergeById_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1260,4 +1261,59 @@ function testActivityToRow_(ctx) {
   assert_(ctx, 'a2r idx16 id', 'i12345', row[16]);
   assert_(ctx, 'a2r geen id → leeg', '', activityToRow_({ start_date_local: '2026-06-10T07:30:00' })[16]);
   assert_(ctx, 'a2r numeriek id → String', '999', activityToRow_({ id: 999, start_date_local: '2026-06-10T07:30:00' })[16]);
+}
+
+// ── mergeById_ (pure upsert) ────────────────────────────────────────
+function _mkAct_(id, iso, extra) {
+  var a = { type: 'Ride', name: 'Rit', start_date_local: iso, moving_time: 3600, icu_training_load: 50 };
+  if (id != null) a.id = id;
+  if (extra) Object.keys(extra).forEach(function (k) { a[k] = extra[k]; });
+  return a;
+}
+function testMergeById_(ctx) {
+  // (a) verse id nog niet in tab → append
+  var rA = mergeById_([activityToRow_(_mkAct_('A', '2026-06-01T08:00:00'))], [_mkAct_('B', '2026-06-02T08:00:00')]);
+  assert_(ctx, 'merge(a) added', 1, rA.added);
+  assert_(ctx, 'merge(a) updated', 0, rA.updated);
+  assert_(ctx, 'merge(a) len', 2, rA.rows.length);
+  assert_(ctx, 'merge(a) nieuwe id', 'B', rA.rows[1][ACT_ID_IDX]);
+
+  // (b) verse id al in tab → update-in-plaats
+  var rB = mergeById_([activityToRow_(_mkAct_('A', '2026-06-01T08:00:00', { name: 'Oud' }))],
+                      [_mkAct_('A', '2026-06-01T08:00:00', { name: 'Nieuw' })]);
+  assert_(ctx, 'merge(b) added', 0, rB.added);
+  assert_(ctx, 'merge(b) updated', 1, rB.updated);
+  assert_(ctx, 'merge(b) len', 1, rB.rows.length);
+  assert_(ctx, 'merge(b) vervangen naam', 'Nieuw', rB.rows[0][2]);
+  assert_(ctx, 'merge(b) id behouden', 'A', rB.rows[0][ACT_ID_IDX]);
+
+  // (c) pre-migratie rij (lege id) matcht op minuut → fallback-update + id ingezet
+  var exC = [activityToRow_(_mkAct_(null, '2026-06-01T08:00:00'))];
+  assert_(ctx, 'merge(c) pre-id leeg', '', exC[0][ACT_ID_IDX]);
+  var rC = mergeById_(exC, [_mkAct_('A', '2026-06-01T08:00:30')]);   // zelfde minuut
+  assert_(ctx, 'merge(c) added', 0, rC.added);
+  assert_(ctx, 'merge(c) updated', 1, rC.updated);
+  assert_(ctx, 'merge(c) id gemigreerd', 'A', rC.rows[0][ACT_ID_IDX]);
+
+  // (d) twee ritten zelfde dag, andere id → beide, geen collision
+  var rD = mergeById_([], [_mkAct_('A', '2026-06-01T08:00:00'), _mkAct_('B', '2026-06-01T17:00:00')]);
+  assert_(ctx, 'merge(d) added', 2, rD.added);
+  assert_(ctx, 'merge(d) updated', 0, rD.updated);
+  assert_(ctx, 'merge(d) id0', 'A', rD.rows[0][ACT_ID_IDX]);
+  assert_(ctx, 'merge(d) id1', 'B', rD.rows[1][ACT_ID_IDX]);
+
+  // (e) lege verse set → no-op
+  var rE = mergeById_([activityToRow_(_mkAct_('A', '2026-06-01T08:00:00'))], []);
+  assert_(ctx, 'merge(e) added', 0, rE.added);
+  assert_(ctx, 'merge(e) updated', 0, rE.updated);
+  assert_(ctx, 'merge(e) len', 1, rE.rows.length);
+  assert_(ctx, 'merge(e) id', 'A', rE.rows[0][ACT_ID_IDX]);
+
+  // (f) existing buiten verse set → blijft staan
+  var rF = mergeById_([activityToRow_(_mkAct_('A', '2026-06-01T08:00:00')), activityToRow_(_mkAct_('B', '2026-06-02T08:00:00'))],
+                      [_mkAct_('A', '2026-06-01T08:00:00', { name: 'A2' })]);
+  assert_(ctx, 'merge(f) added', 0, rF.added);
+  assert_(ctx, 'merge(f) updated', 1, rF.updated);
+  assert_(ctx, 'merge(f) len', 2, rF.rows.length);
+  assert_(ctx, 'merge(f) B blijft', true, rF.rows[0][ACT_ID_IDX] === 'B' || rF.rows[1][ACT_ID_IDX] === 'B');
 }
