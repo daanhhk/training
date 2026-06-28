@@ -1588,6 +1588,19 @@ function regenerateWeb() {
 }
 
 /**
+ * Fase 2 — background-refresh entry (client fire-and-forget achter het openen).
+ * Incr-synct de laatste 7 dagen activiteiten de tab in (idempotente upsert, bewezen
+ * 478→478→478) + returnt de verse 0-API getDashboardState. GEEN generateProposal (geen
+ * herplan — getDashboardState leest de verse tab) en GEEN last_sync-stempel ("laatst
+ * gesynct" blijft van de laatste volledige syncAll/↻; dit is een activiteiten-only top-up).
+ */
+function refreshActivities() {
+  var r = syncActivitiesIncremental_(7);   // incr-write; {added,updated} = latere log-hook (niet in return)
+  var state = getDashboardState();         // 0-API, leest de verse tab
+  return state;
+}
+
+/**
  * v2b-A web-callable: push de pending voorstellen naar intervals.icu.
  * Returnt { pushedCount, skipped, errors } uit de UI-vrije core.
  */
