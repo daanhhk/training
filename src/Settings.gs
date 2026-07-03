@@ -95,7 +95,7 @@ var SETTINGS_DEFAULTS = {
   pendelAantal:         2
 };
 
-var DOEL_OPTIONS = ['FTP', 'Conditie', 'Beklimmingen', 'VO2max'];
+var DOEL_OPTIONS = ['FTP', 'Conditie', 'Beklimmingen', 'VO2max', 'Onderhoud'];
 var FASE_OPTIONS = ['build', 'maintain'];
 var PROFIEL_PRESET_OPTIONS = ['Amateur 3u', 'Gemiddeld 5u', 'Gevorderd 7u', 'Pro 10u+', 'Custom'];
 

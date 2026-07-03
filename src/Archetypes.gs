@@ -520,7 +520,16 @@ var PROFILES = {
           spreiding: { midweekMinGap: 1, weekendBlok: false, effortsInLangeRit: false },
           langeRitPerWeek: 1,
           // Base: sweetspot 0.55 > drempel 0.40 > vo2 0.10 (sweetspot-led/endurance); cap < #1 sweetspot 0.55.
-          volumeResponse: { vo2Slope: 0.04, vo2Cap: 0.38 } }
+          volumeResponse: { vo2Slope: 0.04, vo2Cap: 0.38 } },
+  // Fase 1 (scaffolding): maintenance-doel. Zelfde veld-shape als ftp; sweetspot/drempel-led, vo2 laagste;
+  // vast quotum 2/fase, geen lange rit, geen volume-vo2-ramp. Gedrag (fase-pin/quota-lock/debt-off/
+  // duur-cap) = Fase 2; projectie = Fase 3 (valt nu op girona via activeGoalProfile_-rest-tak).
+  onderhoud: { id: 'onderhoud', soort: 'capaciteit', intentGewichten: { drempel: 0.40, sweetspot: 0.40, vo2: 0.20 },
+          faseModulatie: GOAL_FASE_MOD_,
+          kwaliteitPerWeek: { Base: 2, Build: 2, Peak: 2 },
+          spreiding: { midweekMinGap: 2, weekendBlok: false, effortsInLangeRit: false },
+          langeRitPerWeek: 0,
+          volumeResponse: { vo2Slope: 0, vo2Cap: 0 } }
 };
 
 // settings.doel (DOEL_OPTIONS, Settings.gs) → profiel. Default klim (VO2max/Conditie → nog geen eigen profiel).
@@ -529,6 +538,7 @@ function profileForDoel_(doel) {
   if (doel === 'Beklimmingen') return PROFILES.klim;
   if (doel === 'VO2max') return PROFILES.vo2max;
   if (doel === 'Conditie') return PROFILES.conditie;
+  if (doel === 'Onderhoud') return PROFILES.onderhoud;
   return PROFILES.klim;   // onbekend → klim-fallback
 }
 

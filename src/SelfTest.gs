@@ -64,6 +64,7 @@ function runSelfTest() {
   testEftpFromActivities_(ctx);
   testActAnchorDate_(ctx);
   testSortActivityRowsNewestFirst_(ctx);
+  testOnderhoudProfiel_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1371,4 +1372,24 @@ function testSortActivityRowsNewestFirst_(ctx) {
   var inp = [sRow_(new Date(2025, 0, 1), 'a'), sRow_(new Date(2025, 5, 1), 'b')];
   sortActivityRowsNewestFirst_(inp);
   assert_(ctx, 'sort pure (input ongemoeid)', 'a', inp[0][2]);
+}
+
+// ── Onderhoud (5e doel) — scaffolding (Fase 1) ──────────────────────
+function testOnderhoudProfiel_(ctx) {
+  assert_(ctx, 'onderhoud in DOEL_OPTIONS', true, DOEL_OPTIONS.indexOf('Onderhoud') >= 0);
+  assert_(ctx, 'profileForDoel Onderhoud → id onderhoud', 'onderhoud', profileForDoel_('Onderhoud').id);
+  var p = PROFILES.onderhoud;
+  assertClose_(ctx, 'onderhoud drempel 0.40', 0.40, p.intentGewichten.drempel, 0.0001);
+  assertClose_(ctx, 'onderhoud sweetspot 0.40', 0.40, p.intentGewichten.sweetspot, 0.0001);
+  assertClose_(ctx, 'onderhoud vo2 0.20', 0.20, p.intentGewichten.vo2, 0.0001);
+  assert_(ctx, 'onderhoud vo2 laagste', true, p.intentGewichten.vo2 < p.intentGewichten.drempel && p.intentGewichten.vo2 < p.intentGewichten.sweetspot);
+  assert_(ctx, 'onderhoud kwaliteitPerWeek.Base 2', 2, p.kwaliteitPerWeek.Base);
+  assert_(ctx, 'onderhoud langeRitPerWeek 0', 0, p.langeRitPerWeek);
+  assert_(ctx, 'onderhoud vo2Slope 0', 0, p.volumeResponse.vo2Slope);
+  assert_(ctx, 'onderhoud vo2Cap 0', 0, p.volumeResponse.vo2Cap);
+  // REGRESSIE-guard: de 4 bestaande doel→profiel-mappings ongewijzigd.
+  assert_(ctx, 'regr FTP → ftp', 'ftp', profileForDoel_('FTP').id);
+  assert_(ctx, 'regr Conditie → conditie', 'conditie', profileForDoel_('Conditie').id);
+  assert_(ctx, 'regr Beklimmingen → klim', 'klim', profileForDoel_('Beklimmingen').id);
+  assert_(ctx, 'regr VO2max → vo2max', 'vo2max', profileForDoel_('VO2max').id);
 }
