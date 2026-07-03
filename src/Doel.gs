@@ -289,6 +289,13 @@ function eventFase_(events, refDate) {
  * uit de bestaande fase-logica (macro = bepaalFaseVoorDatum_-resultaat) + Events
  * + getVolumeTargets. Geen nieuwe drempels.
  */
+// Plan-card mode-label. Onderhoud-DOEL wint (hoogste prioriteit); anders de bestaande
+// event/maintain-logica ongewijzigd (4 doelen byte-identiek). PUUR — display-only.
+function planModeLabel_(settings, macro) {
+  if (settings && settings.doel === 'Onderhoud') return 'Onderhoud';
+  return macro.eventDriven ? 'Doel-gericht' : (settings.fase === 'maintain' ? 'Onderhoud' : 'Opbouw');
+}
+
 function buildPlanModel_(macro, settings, eventsData) {
   var today = stripTime_(new Date());
   var PHASES = [
@@ -324,7 +331,7 @@ function buildPlanModel_(macro, settings, eventsData) {
   var band = getVolumeTargets()[cur] || null;
 
   return {
-    modeLabel: macro.eventDriven ? 'Doel-gericht' : (settings.fase === 'maintain' ? 'Onderhoud' : 'Opbouw'),
+    modeLabel: planModeLabel_(settings, macro),
     eventName: macro.eventName || null,
     wekenTot: (macro.wekenTotEvent != null) ? macro.wekenTotEvent : null,
     dagenTot: dagenTot,

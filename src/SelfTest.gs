@@ -68,6 +68,7 @@ function runSelfTest() {
   testKorteArchetypes_(ctx);
   testOnderhoudArchetypeScope_(ctx);
   testOnderhoudWeekSim_(ctx);
+  testPlanModeLabel_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1485,4 +1486,13 @@ function testOnderhoudWeekSim_(ctx) {
   var qF = Object.keys(planF).filter(function (k) { return planF[k].role === 'quality'; });
   assert_(ctx, 'ftp Build quality >=1', true, qF.length >= 1);
   assert_(ctx, 'ftp debt-slot aanwezig (contrast met Onderhoud)', true, qF.some(function (k) { return planF[k].archetypeId == null; }));
+}
+
+// ── Fase 3: plan-card mode-label (Onderhoud-doel wint; 4 doelen ongewijzigd) ──
+function testPlanModeLabel_(ctx) {
+  assert_(ctx, 'modeLabel Onderhoud-doel', 'Onderhoud', planModeLabel_({ doel: 'Onderhoud', fase: 'build' }, { eventDriven: false }));
+  assert_(ctx, 'modeLabel Onderhoud wint van event', 'Onderhoud', planModeLabel_({ doel: 'Onderhoud' }, { eventDriven: true }));
+  assert_(ctx, 'modeLabel FTP → Opbouw', 'Opbouw', planModeLabel_({ doel: 'FTP', fase: 'build' }, { eventDriven: false }));
+  assert_(ctx, 'modeLabel FTP event → Doel-gericht', 'Doel-gericht', planModeLabel_({ doel: 'FTP' }, { eventDriven: true }));
+  assert_(ctx, 'modeLabel FTP maintain → Onderhoud (bestaand)', 'Onderhoud', planModeLabel_({ doel: 'FTP', fase: 'maintain' }, { eventDriven: false }));
 }
