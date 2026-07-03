@@ -65,6 +65,8 @@ function runSelfTest() {
   testActAnchorDate_(ctx);
   testSortActivityRowsNewestFirst_(ctx);
   testOnderhoudProfiel_(ctx);
+  testKorteArchetypes_(ctx);
+  testOnderhoudArchetypeScope_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1392,4 +1394,49 @@ function testOnderhoudProfiel_(ctx) {
   assert_(ctx, 'regr Conditie → conditie', 'conditie', profileForDoel_('Conditie').id);
   assert_(ctx, 'regr Beklimmingen → klim', 'klim', profileForDoel_('Beklimmingen').id);
   assert_(ctx, 'regr VO2max → vo2max', 'vo2max', profileForDoel_('VO2max').id);
+}
+
+// ── Korte quality-archetypes (Fase 2a, ~32-40 min voor Onderhoud) ───
+function testKorteArchetypes_(ctx) {
+  function byId_(id) { return ARCHETYPES.filter(function (a) { return a.id === id; })[0]; }
+  var t28 = byId_('threshold_2x8'), s210 = byId_('sweetspot_2x10');
+  assert_(ctx, 'threshold_2x8 bestaat', true, !!t28);
+  assert_(ctx, 'threshold_2x8 effectTag drempel', true, !!t28 && t28.effectTags.indexOf('drempel') >= 0);
+  assert_(ctx, 'threshold_2x8 max 45', 45, t28.duurRange[1]);
+  assert_(ctx, 'threshold_2x8 min in [30,34]', true, t28.duurRange[0] >= 30 && t28.duurRange[0] <= 34);
+  assert_(ctx, 'sweetspot_2x10 bestaat', true, !!s210);
+  assert_(ctx, 'sweetspot_2x10 effectTag sweetspot', true, !!s210 && s210.effectTags.indexOf('sweetspot') >= 0);
+  assert_(ctx, 'sweetspot_2x10 max 45', 45, s210.duurRange[1]);
+  assert_(ctx, 'sweetspot_2x10 min in [32,37]', true, s210.duurRange[0] >= 32 && s210.duurRange[0] <= 37);
+  // expandeerbaar bij bt=40 → geldig workout ≤45 met het drempel/sweetspot-werkblok (numerieke pct).
+  var cE = { ftp: 275, lthr: 178, doelMin: 40, mesoFactor: 1.0, faseOffset: 0 };
+  var woT = expandArchetype_(t28, cE), woS = expandArchetype_(s210, cE);
+  assert_(ctx, 't28 exp ≤45 + numeriek', true, woT.totaalMin > 0 && woT.totaalMin <= 45 && woT.blokken.every(function (b) { return b.pctLo > 0 && b.pctHi >= b.pctLo; }));
+  assert_(ctx, 't28 drempelwerk aanwezig', true, woT.blokken.some(function (b) { return b.pctLo === 98 && b.pctHi === 105; }));
+  assert_(ctx, 's210 exp ≤45 + numeriek', true, woS.totaalMin > 0 && woS.totaalMin <= 45 && woS.blokken.every(function (b) { return b.pctLo > 0 && b.pctHi >= b.pctLo; }));
+  assert_(ctx, 's210 sweetspotwerk aanwezig', true, woS.blokken.some(function (b) { return b.pctLo === 88 && b.pctHi === 92; }));
+  // DRIFT-guard: bij bt=80 kiest goalWorkout_ NIET de korte archetypes (duurRange sluit ze uit).
+  var g = goalWorkout_(profileForDoel_('FTP'), 'Build', 80, []);
+  assert_(ctx, 'geen korte-arch bij bt=80', true, !!g && g.archetypeId !== 'threshold_2x8' && g.archetypeId !== 'sweetspot_2x10');
+}
+
+// ── Fase 2b: korte archetypes profiel-gescoped (restrictTo → onderhoud) ──
+function testOnderhoudArchetypeScope_(ctx) {
+  var shortIds = ['threshold_2x8', 'sweetspot_2x10'];
+  function byId_(id) { return ARCHETYPES.filter(function (a) { return a.id === id; })[0]; }
+  assert_(ctx, 'threshold_2x8 restrictTo onderhoud', true, byId_('threshold_2x8').restrictTo.indexOf('onderhoud') >= 0);
+  assert_(ctx, 'sweetspot_2x10 restrictTo onderhoud', true, byId_('sweetspot_2x10').restrictTo.indexOf('onderhoud') >= 0);
+  assert_(ctx, 'threshold_2x20 geen restrictTo', true, byId_('threshold_2x20').restrictTo == null);
+  // intentHaalbaar_ EENS met de pool: onderhoud ziet kort drempel/sweetspot @40, klim NIET.
+  assert_(ctx, 'haalbaar drempel@40 onderhoud', true, intentHaalbaar_('drempel', 40, 'onderhoud'));
+  assert_(ctx, 'haalbaar drempel@40 klim NIET', false, intentHaalbaar_('drempel', 40, 'klim'));
+  assert_(ctx, 'haalbaar sweetspot@40 onderhoud', true, intentHaalbaar_('sweetspot', 40, 'onderhoud'));
+  assert_(ctx, 'haalbaar sweetspot@40 klim NIET', false, intentHaalbaar_('sweetspot', 40, 'klim'));
+  // integratie: onderhoud@40 → kort quality-archetype (niet null/recovery); ftp/klim@40 → niet de korte.
+  var gO = goalWorkout_(profileForDoel_('Onderhoud'), 'Base', 40, []);
+  assert_(ctx, 'onderhoud@40 → kort archetype', true, !!gO && shortIds.indexOf(gO.archetypeId) >= 0 && gO.type !== 'recovery');
+  var gF = goalWorkout_(profileForDoel_('FTP'), 'Build', 40, []);
+  assert_(ctx, 'ftp@40 geen kort archetype', true, !gF || shortIds.indexOf(gF.archetypeId) < 0);
+  var gK = goalWorkout_(profileForDoel_('Beklimmingen'), 'Build', 40, []);
+  assert_(ctx, 'klim@40 geen kort archetype', true, !gK || shortIds.indexOf(gK.archetypeId) < 0);
 }

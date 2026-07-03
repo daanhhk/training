@@ -250,6 +250,16 @@ var ARCHETYPES = [
     fill: { zone: 2, pct: 65 },
     naam: 'Sweet Spot kort 2×12', focus: 'sweet spot',
     eindopmerking: 'Korte sweet-spot dosis — past in een doordeweekse sessie.' },
+  // Onderhoud (Fase 2a): korte sweetspot binnen een 45-min-cap. Min = 6+2×(10+2)+5 = 35.
+  { id: 'sweetspot_2x10', structuurtype: 'intervals', effectTags: ['sweetspot'], zone: 4,
+    restrictTo: ['onderhoud'],   // Fase 2b: alleen zichtbaar voor het onderhoud-profiel (4 doelen byte-identiek)
+    duurRange: [35, 45],
+    warmup: { durMin: 6, pctLo: 55, pctHi: 70 },
+    core: [{ kind: 'int', label: 'Sweet Spot', reps: 2, onMin: 10, onPctLo: 88, onPctHi: 92, offMin: 2, offPct: 50 }],
+    cooldown: { durMin: 5, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Sweet Spot 2×10 kort', focus: 'sweet spot',
+    eindopmerking: 'Korte sweet-spot-onderhoudsdosis — twee blokken binnen 30-45 min.' },
   // ── VO2 ──
   { id: 'vo2_long', structuurtype: 'intervals', effectTags: ['vo2'], zone: 5,
     duurRange: [65, 100],
@@ -353,6 +363,16 @@ var ARCHETYPES = [
     fill: { zone: 2, pct: 65 },
     naam: 'Drempel 2×20', focus: 'threshold',
     eindopmerking: 'Twee lange drempelblokken — de basis.' },
+  // Onderhoud (Fase 2a): kort drempel binnen een 45-min-cap. Min = 7+2×(8+3)+4 = 33.
+  { id: 'threshold_2x8', structuurtype: 'intervals', effectTags: ['drempel'], zone: 4,
+    restrictTo: ['onderhoud'],   // Fase 2b: alleen zichtbaar voor het onderhoud-profiel (4 doelen byte-identiek)
+    duurRange: [33, 45],
+    warmup: { durMin: 7, pctLo: 55, pctHi: 78 },
+    core: [{ kind: 'int', label: 'Drempel', reps: 2, onMin: 8, onPctLo: 98, onPctHi: 105, offMin: 3, offPct: 55 }],
+    cooldown: { durMin: 4, pctLo: 45, pctHi: 55 },
+    fill: { zone: 2, pct: 65 },
+    naam: 'Drempel 2×8 kort', focus: 'threshold',
+    eindopmerking: 'Korte drempel-onderhoudsdosis — twee blokken binnen 30-45 min.' },
   { id: 'threshold_4x10', structuurtype: 'intervals', effectTags: ['drempel'], zone: 4,
     duurRange: [77, 110],
     warmup: { durMin: 15, pctLo: 55, pctHi: 75 },
@@ -567,10 +587,19 @@ function volumeModulatie(V, fase, profiel) {
   return z;
 }
 
+// Fase 2b: profiel-scoping van de archetype-pool. restrictTo afwezig → true (4 doelen byte-identiek);
+// aanwezig → alleen zichtbaar voor de genoemde profiel-id's. GEDEELD door intentHaalbaar_ + goalWorkout_
+// zodat beide de pool IDENTIEK zien (anders: intent "haalbaar" maar archetype uitgefilterd → skip).
+function archetypeAllowedForProfile_(a, profielId) {
+  return !a.restrictTo || a.restrictTo.indexOf(profielId) !== -1;
+}
+
 // C1 (fase 1b): bestaat er een archetype van dit intent dat binnen beschikbareTijd past? PUUR.
-function intentHaalbaar_(intent, beschikbareTijd) {
+// profielId (Fase 2b): scope de pool per profiel (restrictTo-hek) consistent met goalWorkout_.
+function intentHaalbaar_(intent, beschikbareTijd, profielId) {
   return ARCHETYPES.some(function (a) {
-    return a.effectTags.indexOf(intent) >= 0 && beschikbareTijd >= a.duurRange[0] && beschikbareTijd <= a.duurRange[1];
+    return a.effectTags.indexOf(intent) >= 0 && beschikbareTijd >= a.duurRange[0] && beschikbareTijd <= a.duurRange[1] &&
+      archetypeAllowedForProfile_(a, profielId);
   });
 }
 
@@ -580,7 +609,7 @@ function intentHaalbaar_(intent, beschikbareTijd) {
 function goalPickIntent_(profiel, fase, vermijdIntent, beschikbareTijd, dekking, V) {
   var w = goalEffWeights_(profiel, fase, V);
   var intents = GOAL_KWALITEIT_INTENTS_.filter(function (i) {
-    return beschikbareTijd == null || intentHaalbaar_(i, beschikbareTijd);
+    return beschikbareTijd == null || intentHaalbaar_(i, beschikbareTijd, profiel && profiel.id);
   });
   if (!intents.length) intents = GOAL_KWALITEIT_INTENTS_.slice();
   // Pass 1b: in Base ONDER 't volume-plafond krijgt vo2 GEEN coverage-boost — een anaerobic-gat
@@ -621,7 +650,8 @@ function goalWorkout_(profiel, fase, beschikbareTijd, recency, dekking, V) {
   // (2) filter: effectTag == intent ÉN duurRange ⊇ beschikbareTijd.
   var kandidaten = ARCHETYPES.filter(function (a) {
     return a.effectTags.indexOf(intent) >= 0 &&
-      beschikbareTijd >= a.duurRange[0] && beschikbareTijd <= a.duurRange[1];
+      beschikbareTijd >= a.duurRange[0] && beschikbareTijd <= a.duurRange[1] &&
+      archetypeAllowedForProfile_(a, profiel.id);
   });
   if (!kandidaten.length) return null;
 
