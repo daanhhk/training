@@ -3,7 +3,7 @@
 // unless failed==0 AND passed>=BASELINE. Autonomous loop: node test-gate.mjs
 import { execSync } from 'node:child_process';
 
-const BASELINE = 871;
+const BASELINE = 881;
 
 try {
   console.log('==> clasp push -f');

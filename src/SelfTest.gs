@@ -67,6 +67,7 @@ function runSelfTest() {
   testOnderhoudProfiel_(ctx);
   testKorteArchetypes_(ctx);
   testOnderhoudArchetypeScope_(ctx);
+  testOnderhoudWeekSim_(ctx);
 
   Logger.log('SELFTEST: ' + ctx.passed + ' passed, ' + ctx.failed + ' failed');
   ctx.failures.forEach(function (f) {
@@ -1439,4 +1440,49 @@ function testOnderhoudArchetypeScope_(ctx) {
   assert_(ctx, 'ftp@40 geen kort archetype', true, !gF || shortIds.indexOf(gF.archetypeId) < 0);
   var gK = goalWorkout_(profileForDoel_('Beklimmingen'), 'Build', 40, []);
   assert_(ctx, 'klim@40 geen kort archetype', true, !gK || shortIds.indexOf(gK.archetypeId) < 0);
+}
+
+// ── Fase 2: Onderhoud gedrag-kern (fase-pin + quota 2 + debt-off + 45-cap) ──
+function testOnderhoudWeekSim_(ctx) {
+  // (a) fase-pin: Onderhoud → Base (overrult stale→Test); 4 doelen passthrough.
+  assert_(ctx, 'effFase Onderhoud stale→Base', 'Base', effectiveMacroFase_('Test', { doel: 'Onderhoud' }));
+  assert_(ctx, 'effFase FTP Peak passthrough', 'Peak', effectiveMacroFase_('Peak', { doel: 'FTP' }));
+  assert_(ctx, 'effFase FTP Test passthrough', 'Test', effectiveMacroFase_('Test', { doel: 'FTP' }));
+
+  // (b) week-sim via de allocator op de gepinde Base-fase; ruime beschikbaarheid (bt≥60 → 45-cap bindt).
+  function dW(idx, type, minuten) {
+    return { dagIdx: idx, dag: 'd' + idx, train: true, datum: new Date(2026, 5, 8 + idx),
+             minuten: minuten, type: type, gedaan: false, voorgesteldType: '' };
+  }
+  function byId_(id) { return ARCHETYPES.filter(function (a) { return a.id === id; })[0]; }
+  var week = [dW(0, 'vrij', 60), dW(1, 'vrij', 75), dW(2, 'vrij', 90), dW(3, 'vrij', 60),
+              dW(4, 'vrij', 75), dW(5, 'weekend', 120), dW(6, 'weekend', 90)];
+  var dek = { low: false, high: false, anaerobic: false };
+  var today = new Date(2026, 5, 8);
+  var debt = { low: 0, high: 30, anaerobic: 0 };   // zou ZONDER debt-off een quality-slot claimen
+  var plan = allocateQualityWeek_(week, PROFILES.onderhoud, 'Base', dek, [], null, debt, { doel: 'Onderhoud', pendelDuurMin: 80 }, today, false, null);
+
+  var qKeys = Object.keys(plan).filter(function (k) { return plan[k].role === 'quality'; });
+  assert_(ctx, 'onderhoud exact 2 quality', 2, qKeys.length);
+  var typesOk = true, capOk = true, archOk = true;
+  qKeys.forEach(function (k) {
+    var p = plan[k];
+    if (['threshold', 'sweet_spot', 'vo2max'].indexOf(p.type) < 0) typesOk = false;   // niet recovery/skip
+    if (p.archetypeId == null) archOk = false;                                          // debt-slot zou archetypeId:null zijn
+    var rec = p.archetypeId ? byId_(p.archetypeId) : null;
+    if (!rec || rec.duurRange[0] > 45) capOk = false;                                   // korte archetype: past ≤45 (de cap)
+  });
+  assert_(ctx, 'onderhoud quality types (geen recovery)', true, typesOk);
+  assert_(ctx, 'onderhoud alle quality ≤45 (korte arch)', true, capOk);
+  assert_(ctx, 'onderhoud geen debt-slot (arch gezet)', true, archOk);
+  var geenLang = Object.keys(plan).every(function (k) {
+    return plan[k].role !== 'longride' && plan[k].role !== 'longride_efforts' && plan[k].type !== 'combo_long_with_efforts';
+  });
+  assert_(ctx, 'onderhoud geen lange-rit (langeRitPerWeek 0)', true, geenLang);
+
+  // (c) REGRESSIE-contrast: FTP-week ongemoeid — debt AAN (debt-slot met archetypeId:null), bt-klem geen effect.
+  var planF = allocateQualityWeek_(week, PROFILES.ftp, 'Build', dek, [], null, debt, { doel: 'FTP', pendelDuurMin: 80 }, today, false, null);
+  var qF = Object.keys(planF).filter(function (k) { return planF[k].role === 'quality'; });
+  assert_(ctx, 'ftp Build quality >=1', true, qF.length >= 1);
+  assert_(ctx, 'ftp debt-slot aanwezig (contrast met Onderhoud)', true, qF.some(function (k) { return planF[k].archetypeId == null; }));
 }

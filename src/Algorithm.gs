@@ -62,6 +62,16 @@ function snapshotDayAction_(dISO, todayISO, hasPrev, train, voorgesteldType) {
   return (train && voorgesteldType) ? 'rebuild' : 'skip';
 }
 
+/**
+ * Fase 2 — Onderhoud-fase-pin: pint de ENGINE-macrofase op 'Base' als doel === 'Onderhoud'
+ * (→ allocActive TRUE + een eerste-klas fase, geen missing-key), anders passthrough. PUUR.
+ * Alléén de engine-allocatiebron (generateProposal → assignWorkouts → allocateQualityWeek_) wordt
+ * hierdoor gewrapt; de payload/display-fase-sites tonen de echte computeMacroPhase-uitkomst (label = Fase 3).
+ */
+function effectiveMacroFase_(fase, settings) {
+  return (settings && settings.doel === 'Onderhoud') ? 'Base' : fase;
+}
+
 function generateProposal() {
   cleanupOldProposals_();
 
@@ -124,7 +134,7 @@ function generateProposal() {
   var taperCtx = macro.taperEventDate
     ? { datum: macro.taperEventDate, venster: macro.taperVenster, isTrip: !!macro.taperIsTrip }
     : null;
-  assignWorkouts(tePlannen, settings, mesoWeek, macro.macroFase, dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, taperCtx, days);
+  assignWorkouts(tePlannen, settings, mesoWeek, effectiveMacroFase_(macro.macroFase, settings), dekking, wellness, klimType, recentHard, feedback.debt, isTripEvent, taperCtx, days);
 
   // Sync voorgesteldType terug naar planner (full days array)
   var byIdx = {};
@@ -905,8 +915,9 @@ function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recent
     }
   }
 
-  // 2. debt pre-claim (één slot met de debt-type).
-  if (remaining > 0 && debt) {
+  // 2. debt pre-claim (één slot met de debt-type). Fase 2: profiel.debtEnabled:false (Onderhoud)
+  //    zet 'm uit — de week-allocator krijgt raw debt (regel ~1020), dus hier apart gaten.
+  if (remaining > 0 && debt && (profiel.debtEnabled !== false)) {
     var dp = debtPreferredType_(debt, doel, macroFase);
     if (dp && dp !== 'long_z2' && dp !== 'recovery') {
       var anc2 = hardAnchors_();
@@ -929,7 +940,7 @@ function allocateQualityWeek_(days, profiel, macroFase, dekking, recency, recent
     if (!sel) break;
     // Pass 1: Base loopt nu via dezelfde goalWorkout_-keuze als Build/Peak (was hardcoded
     // sweet_spot), mét de weekvolume-laag (weekV) → Base polariseert (vo2 verschijnt bij hoog volume).
-    var bt = (sel.type === 'pendel') ? (settings.pendelDuurMin || 80) : sel.minuten;
+    var bt = Math.min((sel.type === 'pendel') ? (settings.pendelDuurMin || 80) : sel.minuten, (profiel && profiel.maxDuurMin) || Infinity);   // Fase 2: maxDuurMin-cap (Onderhoud 45); geen veld → Infinity → 4 doelen byte-identiek
     var gw = goalWorkout_(profiel, macroFase, bt, rec, cov, weekV);
     if (gw) {
       plan[sel.dagIdx] = { role: 'quality', type: gw.type, archetypeId: gw.archetypeId };
@@ -986,7 +997,7 @@ function assignWorkouts(days, settings, mesoWeek, macroFase, dekking, wellness, 
   var lastHardDate = recentHardDate ? stripTime_(recentHardDate) : null;
   // Debt-weging alleen in opbouwfasen (niet tijdens taper/recovery —
   // dan geen compensatie-intensiteit forceren; herstel respecteren).
-  var debtActief = !!debt && !taperActief && !isEventRecovery && !isRecovery;
+  var debtActief = !!debt && !taperActief && !isEventRecovery && !isRecovery && (profileForDoel_(settings.doel).debtEnabled !== false);   // Fase 2: profiel-gate (Onderhoud debtEnabled:false); geen veld → undefined !== false → true
   var debtWerk = debtActief ? { low: debt.low, high: debt.high, anaerobic: debt.anaerobic } : null;
   // C4: week-brede kwaliteitsplaatsing actief in Base/Build/Peak (NIET Recovery/Test/event-recovery).
   var allocActive = !isEventRecovery && !isRecovery && !isTestWeek && (macroFase === 'Base' || macroFase === 'Build' || macroFase === 'Peak');

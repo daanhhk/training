@@ -549,7 +549,7 @@ var PROFILES = {
           kwaliteitPerWeek: { Base: 2, Build: 2, Peak: 2 },
           spreiding: { midweekMinGap: 2, weekendBlok: false, effortsInLangeRit: false },
           langeRitPerWeek: 0,
-          volumeResponse: { vo2Slope: 0, vo2Cap: 0 } }
+          volumeResponse: { vo2Slope: 0, vo2Cap: 0 }, maxDuurMin: 45, debtEnabled: false }
 };
 
 // settings.doel (DOEL_OPTIONS, Settings.gs) → profiel. Default klim (VO2max/Conditie → nog geen eigen profiel).
